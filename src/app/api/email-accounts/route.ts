@@ -164,13 +164,20 @@ export async function POST(req: Request) {
   });
   if (existing) return NextResponse.json({ error: "This email is already connected" }, { status: 409 });
 
+  const finalImapPort = imapPort ? parseInt(String(imapPort)) : undefined;
+  const { imapHost: derivedImapHost, imapPort: derivedImapPortNum, provider: seedProvider } = deriveImapConfig(email, imapHost, finalImapPort, smtpHost);
+  const finalImapPortVal = finalImapPort || derivedImapPortNum;
+  const finalImapUser = imapUser || smtpUser;
+  const finalImapPass = imapPass || smtpPass;
+  const finalImapHost = imapHost || derivedImapHost;
+
   const account = await prisma.emailAccount.create({
     data: {
       email, provider,
       smtpHost: smtpHost || null, smtpPort: smtpPort ? parseInt(smtpPort) : null,
       smtpUser: smtpUser || null, smtpPass: smtpPass || null,
-      imapHost: imapHost || null, imapPort: imapPort ? parseInt(imapPort) : null,
-      imapUser: imapUser || null, imapPass: imapPass || null,
+      imapHost: finalImapHost || null, imapPort: finalImapPortVal ? parseInt(String(finalImapPortVal)) : null,
+      imapUser: finalImapUser || null, imapPass: finalImapPass || null,
       gmailToken: gmailToken || null,
       dailySendLimit: dailySendLimit || 50,
       warmupEnabled: provider === "Gmail",
@@ -178,12 +185,6 @@ export async function POST(req: Request) {
       userId: session.user.id,
     },
   });
-
-  const finalImapPort = imapPort ? parseInt(String(imapPort)) : undefined;
-  const { imapHost: finalImapHost, imapPort: finalImapPortNum, provider: seedProvider } = deriveImapConfig(email, imapHost, finalImapPort, smtpHost);
-  const finalImapPortVal = finalImapPort || finalImapPortNum;
-  const finalImapUser = imapUser || smtpUser;
-  const finalImapPass = imapPass || smtpPass;
 
   if (finalImapHost && finalImapUser && finalImapPass) {
     await prisma.seedMailbox.upsert({

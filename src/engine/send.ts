@@ -46,6 +46,18 @@ export async function sendEmail(opts: SendOptions) {
 
   const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
 
+  // Open/click tracking work by having the recipient's mail client load a URL
+  // from the public internet. A localhost URL is only reachable from this
+  // machine, so tracking silently never fires. This can't be auto-fixed (it
+  // needs a real deployed URL or a tunnel like ngrok), but it should at least
+  // be loud in the logs instead of failing invisibly.
+  if ((opts.openTracking || opts.clickTracking) && baseUrl.includes("localhost")) {
+    console.warn(
+      `[tracking] NEXT_PUBLIC_URL is set to "${baseUrl}" — open/click tracking links will be unreachable from recipients' inboxes. ` +
+      `Set NEXT_PUBLIC_URL to a public URL (deployed domain or ngrok tunnel) for tracking to work.`
+    );
+  }
+
   let html = opts.htmlBody;
   // Convert plain-text newlines to HTML breaks for proper rendering in email clients
   if (html && !html.match(/<br|<p|<div|<li|<h[1-6]/i)) {
@@ -61,7 +73,7 @@ export async function sendEmail(opts: SendOptions) {
     : "";
 
   const body = html + trackingPixel;
-  const fromName = opts.fromName || account.email;
+  const fromName = opts.fromName || account.displayName || account.email;
 
   let sendResult: { messageId: string; threadId: string };
 

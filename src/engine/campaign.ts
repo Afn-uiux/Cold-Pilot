@@ -53,10 +53,25 @@ function isWithinSchedule(campaign: { startDate: Date | null; endDate: Date | nu
   return false;
 }
 
-// Track last send time per campaign across ticks
-const lastSendTimeByCampaign = new Map<string, number>();
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+const runningCampaigns = new Set<string>();
 
 export async function executeCampaign(campaignId: string) {
+  if (runningCampaigns.has(campaignId)) {
+    return { sent: 0, errors: 0, skipped: 0, reason: "already_running" };
+  }
+  runningCampaigns.add(campaignId);
+  try {
+    return await executeCampaignInner(campaignId);
+  } finally {
+    runningCampaigns.delete(campaignId);
+  }
+}
+
+async function executeCampaignInner(campaignId: string) {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
     include: {
@@ -116,6 +131,12 @@ export async function executeCampaign(campaignId: string) {
   const minGap = (campaign.minTimeBetween || 0) * 60 * 1000;
   const maxExtra = (campaign.randomExtraTime || 0) * 60 * 1000;
 
+  // Per-email pacing: nextAllowed tracks the earliest time the NEXT send for
+  // this campaign may go out, persisted in the database so it survives restarts.
+  // Every additional due lead within the same tick actually waits out the
+  // remaining gap via a real timer before sending.
+  let nextAllowed = campaign.nextAllowedSendAt ? campaign.nextAllowedSendAt.getTime() : 0;
+
   // Slow ramp: start at 1/day, +2 each day
   let campaignCap = campaign.dailySendLimit || 30;
   if (campaign.slowRamp && campaign.rampStart) {
@@ -144,6 +165,11 @@ export async function executeCampaign(campaignId: string) {
     const account = accounts.find(a => a.id === lead.sendingAccountId) || accounts[emailCount % accounts.length];
     const currentStepIdx = lead.currentStep || 0;
     const step = emailSteps[currentStepIdx];
+    // Hoisted so both Phase 1 (initial send) and Phase 2 (follow-ups) can use
+    // it — it was previously declared only inside Phase 1's try block, so
+    // every follow-up send threw "accountSignature is not defined" and was
+    // silently swallowed by the catch block below as a failed/rolled-back send.
+    const accountSignature = (account as any)?.signature || "";
 
     if (!step) {
       // All steps completed — mark lead as done
@@ -153,15 +179,20 @@ export async function executeCampaign(campaignId: string) {
       continue;
     }
 
+    // Refuse to send a genuinely blank email (no subject and no body)
+    const stepHasContent = Boolean(step.subject?.trim()) || Boolean(step.bodyHtml?.trim());
+    if (!stepHasContent) {
+      console.error(`[campaign] step ${step.id} (order ${step.order}) has no subject or body — skipping send for lead ${lead.id}`);
+      skipped++;
+      continue;
+    }
+
     // Daily cap check (includes emails sent in previous ticks today)
     if (todaySent + emailCount >= campaignCap) { skipped++; continue; }
 
-    // Time gap pacing — persists across ticks via shared Map
-    const lastTick = lastSendTimeByCampaign.get(campaignId) || 0;
-    if (lastTick > 0) {
-      const gap = minGap + (maxExtra > 0 ? Math.random() * maxExtra : 0);
-      if (Date.now() - lastTick < gap) { skipped++; continue; }
-    }
+    // Time gap pacing — actually wait out any remaining gap
+    const waitMs = nextAllowed - Date.now();
+    if (waitMs > 0) await sleep(waitMs);
 
     // Phase 1: Send initial email to pending leads
     if (lead.status === "pending" && currentStepIdx === 0) {
@@ -173,7 +204,6 @@ export async function executeCampaign(campaignId: string) {
       if (claimResult.count === 0) { skipped++; continue; }
 
       try {
-        const accountSignature = (account as any)?.signature || "";
         const vars = {
           firstName: lead.firstName || "",
           lastName: lead.lastName || "",
@@ -204,6 +234,7 @@ export async function executeCampaign(campaignId: string) {
           to: lead.email,
           subject,
           htmlBody,
+          fromName: account.displayName || undefined,
           emailAccountId: account.id,
           leadId: lead.id,
           campaignStepId: step.id,
@@ -214,7 +245,8 @@ export async function executeCampaign(campaignId: string) {
 
         sent++;
         emailCount++;
-        lastSendTimeByCampaign.set(campaignId, Date.now());
+        nextAllowed = Date.now() + minGap + (maxExtra > 0 ? Math.random() * maxExtra : 0);
+        await prisma.campaign.update({ where: { id: campaignId }, data: { nextAllowedSendAt: new Date(nextAllowed) } });
       } catch (err: any) {
         console.error(`Failed to send initial to ${lead.email}:`, err);
         const bounce = categorizeBounce(err);
@@ -305,6 +337,7 @@ export async function executeCampaign(campaignId: string) {
           to: lead.email,
           subject: fupSubject,
           htmlBody: fupBody,
+          fromName: account.displayName || undefined,
           emailAccountId: account.id,
           leadId: lead.id,
           campaignStepId: step.id,
@@ -317,7 +350,8 @@ export async function executeCampaign(campaignId: string) {
 
         sent++;
         emailCount++;
-        lastSendTimeByCampaign.set(campaignId, Date.now());
+        nextAllowed = Date.now() + minGap + (maxExtra > 0 ? Math.random() * maxExtra : 0);
+        await prisma.campaign.update({ where: { id: campaignId }, data: { nextAllowedSendAt: new Date(nextAllowed) } });
       } catch (err: any) {
         console.error(`Failed to send follow-up to ${lead.email}:`, err);
         const bounce = categorizeBounce(err);
@@ -335,10 +369,14 @@ export async function executeCampaign(campaignId: string) {
           }).catch(() => {});
           dispatchWebhookEvent({ event: "bounce", userId: campaign.userId, data: { leadId: lead.id, email: lead.email, reason: bounce.type } }).catch(() => {});
         }
-        // Roll back the optimistic claim so the lead can be retried
+        // Roll back the optimistic claim so the lead can be retried. Note:
+        // lastSentAt is deliberately left untouched here — a follow-up send
+        // requires lastSentAt to be set at all (see the "Phase 2" condition
+        // above), so nulling it on error would permanently stop this lead
+        // from ever being retried instead of just delaying it.
         await prisma.lead.update({
           where: { id: lead.id },
-          data: { currentStep: currentStepIdx, status: "sent", lastSentAt: null },
+          data: { currentStep: currentStepIdx, status: "sent" },
         });
         errors++;
       }
@@ -447,6 +485,8 @@ export async function checkForReplies(userId: string) {
       replied += await checkGmailAccountReplies(account);
     } else if (account.imapHost && account.imapUser && account.imapPass) {
       replied += await checkImapAccountReplies(account);
+    } else {
+      console.log(`[reply] Skipping ${account.email}: no gmailToken and no IMAP creds`);
     }
   }
 
@@ -464,8 +504,11 @@ async function checkGmailAccountReplies(account: any): Promise<number> {
       threadId: { not: null },
     },
     select: { threadId: true, id: true, leadId: true },
-    take: 50,
+    orderBy: { sentAt: "desc" },
+    take: 300,
   });
+
+  console.log(`[reply] Gmail check for ${account.email}: ${sentLogs.length} pending threads`);
 
   for (const log of sentLogs) {
     if (!log.threadId) continue;
@@ -475,7 +518,28 @@ async function checkGmailAccountReplies(account: any): Promise<number> {
         const ok = await processReply(log, account, threadResult.subject, threadResult.body);
         if (ok) replied++;
       }
-    } catch (err) {
+    } catch (err: any) {
+      // An expired/revoked refresh token fails the same way for every thread
+      // in this account and was previously only ever logged to the server
+      // console, so the user had no way of knowing reply detection had
+      // silently stopped working. Surface it on the account and stop
+      // burning through the rest of this account's threads on the same
+      // dead token.
+      const authFailed = err?.code === 401 || err?.code === "EAUTH" ||
+        (typeof err?.message === "string" && (err.message.includes("invalid_grant") || err.message.includes("invalid_token")));
+      if (authFailed) {
+        console.error(`Gmail auth failed for ${account.email}, marking account as needing reconnection:`, err?.message || err);
+        try {
+          await prisma.emailAccount.update({ where: { id: account.id }, data: { status: "error" } });
+        } catch {}
+        createNotification({
+          userId: account.userId,
+          type: "account_error",
+          title: "Reconnect your email account",
+          message: `${account.email} needs to be reconnected — reply detection has stopped working for it.`,
+        }).catch(() => {});
+        break;
+      }
       console.error(`Gmail reply check failed for thread ${log.threadId}:`, err);
     }
   }
@@ -535,10 +599,12 @@ async function checkImapAccountReplies(account: any): Promise<number> {
       messageId: { not: null },
     },
     select: { id: true, leadId: true, messageId: true, threadId: true, subject: true },
-    take: 50,
+    take: 300,
   });
 
   if (sentLogs.length === 0) return 0;
+
+  console.log(`[reply] IMAP check for ${account.email}: ${sentLogs.length} pending logs`);
 
   const client = new ImapFlow({
     host: account.imapHost,
@@ -552,55 +618,89 @@ async function checkImapAccountReplies(account: any): Promise<number> {
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
     try {
-      // Search for messages received in the last 7 days (limit to 200 for performance)
       const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const allUids = (await client.search({ since }) || []);
-      const uids = allUids.slice(-200);
+      const uids = allUids.slice(-300);
+      console.log(`[reply] IMAP INBOX: ${uids.length} messages in last 7 days`);
 
-      for await (const msg of client.fetch(uids, { headers: true, source: true })) {
-        const hdrs: Map<string, string> | undefined = msg.headers as any;
-        if (!hdrs) continue;
-        const from = (hdrs.get("from") || "") as string;
+      let checkedCount = 0;
+      let matchAttempts = 0;
+
+      // We only need the raw source to parse headers — msg.headers in ImapFlow
+      // is a Buffer, not a Map, so we parse headers from msg.source instead.
+      for await (const msg of client.fetch(uids, { uid: true, source: true })) {
+        checkedCount++;
+        const rawSource = msg.source?.toString() || "";
+        if (!rawSource) continue;
+
+        // Parse headers from raw source (everything before the first blank line)
+        const headerEnd = rawSource.indexOf("\r\n\r\n");
+        const headerBlock = headerEnd >= 0 ? rawSource.slice(0, headerEnd) : rawSource;
+        const headerLines = headerBlock.split(/\r?\n/);
+
+        // Fold headers: continuation lines (starting with whitespace) belong to the previous header
+        const headers: Record<string, string> = {};
+        let currentKey = "";
+        for (const line of headerLines) {
+          if (/^\s/.test(line) && currentKey) {
+            headers[currentKey] += " " + line.trim();
+          } else {
+            const colonIdx = line.indexOf(":");
+            if (colonIdx > 0) {
+              currentKey = line.slice(0, colonIdx).toLowerCase().trim();
+              headers[currentKey] = line.slice(colonIdx + 1).trim();
+            }
+          }
+        }
+
+        const from = headers["from"] || "";
         if (from.toLowerCase().includes(account.email.toLowerCase())) continue;
 
-        const inReplyTo = (hdrs.get("in-reply-to") || "") as string;
-        const references = (hdrs.get("references") || "") as string;
-        const replySubject = (hdrs.get("subject") || "") as string;
-        const rawSource = msg.source?.toString() || "";
-        // Extract body: find first double-newline after headers, skip MIME parts
+        const inReplyTo = headers["in-reply-to"] || "";
+        const references = headers["references"] || "";
+
+        if (!inReplyTo && !references) continue;
+
+        matchAttempts++;
+        const replySubject = headers["subject"] || "";
+
+        // Extract body from raw source
         let replyBody = "";
-        const bodyStart = rawSource.indexOf("\n\n");
-        if (bodyStart >= 0) {
-          const afterHeaders = rawSource.slice(bodyStart + 2);
-          // Try to find text/plain content between MIME boundaries
+        if (headerEnd >= 0) {
+          const afterHeaders = rawSource.slice(headerEnd + 4);
           const textMatch = afterHeaders.match(/Content-Type:\s*text\/plain[^]*?\n\n([^]*?)(?:\n--|\n\.\n|$)/i);
           if (textMatch && textMatch[1]) {
             replyBody = textMatch[1].trim().slice(0, 2000);
           } else {
-            // Fallback: take content after double newline, strip HTML tags
             replyBody = afterHeaders.replace(/<[^>]*>/g, "").trim().slice(0, 2000);
           }
         }
 
-        // Check if this message is a reply to one of our sent emails
+        // Normalize angle brackets for matching
+        const normId = (id: string) => id.replace(/[<>]/g, "").trim();
         const matchedLog = sentLogs.find(l =>
-          l.messageId && (inReplyTo.includes(l.messageId) || references.includes(l.messageId))
+          l.messageId && (
+            inReplyTo.includes(normId(l.messageId)) || references.includes(normId(l.messageId))
+          )
         );
         if (!matchedLog) continue;
 
+        console.log(`[reply] IMAP matched reply to log ${matchedLog.id} from ${from}`);
         const ok = await processReply(
-          { id: matchedLog.id, leadId: matchedLog.leadId, threadId: matchedLog.threadId || msg.id || null },
+          { id: matchedLog.id, leadId: matchedLog.leadId, threadId: matchedLog.threadId || msg.uid?.toString() || null },
           account,
           replySubject,
           replyBody,
         );
         if (ok) replied++;
       }
+
+      console.log(`[reply] IMAP done: checked=${checkedCount} withReplyHeaders=${matchAttempts} replied=${replied}`);
     } finally {
       lock.release();
     }
-  } catch (err) {
-    console.error(`IMAP reply check failed for ${account.email}:`, err);
+  } catch (err: any) {
+    console.error(`[reply] IMAP failed for ${account.email}:`, err?.message || err);
   } finally {
     try { await client.logout(); } catch {}
   }

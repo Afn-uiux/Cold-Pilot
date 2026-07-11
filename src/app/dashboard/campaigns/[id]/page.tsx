@@ -787,12 +787,23 @@ function AnalyticsTab({ campaignId, state, onPublish, onPause, onResume }: { cam
   const [variantToggles, setVariantToggles] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    fetch(`/api/stats?campaignId=${campaignId}&range=all`)
-      .then(r => r.json())
-      .then(data => setStats(data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [campaignId]);
+    let active = true;
+
+    function fetchStats() {
+      fetch(`/api/stats?campaignId=${campaignId}&range=all`)
+        .then(r => r.json())
+        .then(data => { if (active) setStats(data); })
+        .catch(() => {})
+        .finally(() => { if (active) setLoading(false); });
+    }
+
+    fetchStats();
+
+    // Auto-refresh every 30 seconds while viewing an active campaign
+    const interval = state === "active" ? setInterval(fetchStats, 30_000) : null;
+
+    return () => { active = false; if (interval) clearInterval(interval); };
+  }, [campaignId, state]);
 
   function toggleVariant(key: string) {
     setVariantToggles(prev => ({ ...prev, [key]: !prev[key] }));
@@ -1217,11 +1228,11 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
     }).catch(() => {}).finally(() => setLoading(false));
   }, [campaignId]);
 
-  async function save() {
+  async function save(): Promise<boolean> {
     setSaving(true);
     setMsg("");
     try {
-      await fetch(`/api/campaigns?id=${campaignId}`, {
+      const res = await fetch(`/api/campaigns?id=${campaignId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1242,19 +1253,36 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
           bccAddresses,
         }),
       });
+      if (!res.ok) {
+        const err = await res.text().catch(() => "");
+        setMsg(`Failed to save: ${err.slice(0, 150) || res.status}`);
+        setSaving(false);
+        return false;
+      }
       setMsg("Settings saved");
       setTimeout(() => setMsg(""), 3000);
-    } catch { setMsg("Failed to save"); }
-    setSaving(false);
+      setSaving(false);
+      return true;
+    } catch (e: any) {
+      setMsg(`Failed to save: ${e?.message || "network error"}`);
+      setSaving(false);
+      return false;
+    }
   }
 
   async function launch() {
-    await save();
-    await fetch(`/api/campaigns?id=${campaignId}`, {
+    const ok = await save();
+    if (!ok) return;
+    const res = await fetch(`/api/campaigns?id=${campaignId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "active" }),
     });
+    if (!res.ok) {
+      const err = await res.text().catch(() => "");
+      setMsg(`Failed to launch: ${err.slice(0, 150) || res.status}`);
+      return;
+    }
     window.location.reload();
   }
 

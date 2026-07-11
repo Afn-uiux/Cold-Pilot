@@ -228,6 +228,7 @@ model Campaign {
   disableBounceProtect Boolean @default(false)
   ccAddresses       String   @default("")
   bccAddresses      String   @default("")
+  nextAllowedSendAt DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

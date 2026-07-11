@@ -14,18 +14,26 @@ export async function register() {
 
       if (campaigns.length === 0) return;
 
-      for (const c of campaigns) {
+      console.log(`[scheduler] tick: ${campaigns.length} active campaign(s)`);
+
+      await Promise.allSettled(campaigns.map(async (c: { id: string; userId: string }) => {
         try {
-          await executeCampaign(c.id);
+          const result = await executeCampaign(c.id);
+          if (result && (result.sent > 0 || result.errors > 0)) {
+            console.log(`[scheduler] campaign ${c.id}: sent=${result.sent} errors=${result.errors} skipped=${result.skipped}`);
+          }
         } catch (e) {
           console.error(`[scheduler] campaign ${c.id}:`, e);
         }
-      }
+      }));
 
-      const userIds = [...new Set(campaigns.map(c => c.userId))];
-      for (const uid of userIds) {
+      const userIds = [...new Set(campaigns.map((c: { id: string; userId: string }) => c.userId))];
+      for (const uid of userIds as string[]) {
         try {
-          await checkForReplies(uid);
+          const result = await checkForReplies(uid);
+          if (result && result.replied > 0) {
+            console.log(`[scheduler] replies ${uid}: ${result.replied} new`);
+          }
         } catch (e) {
           console.error(`[scheduler] replies ${uid}:`, e);
         }
