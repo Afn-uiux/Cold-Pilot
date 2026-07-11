@@ -1,0 +1,460 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  // For production: change to "postgresql" and update DATABASE_URL in .env
+}
+
+model User {
+  id                  String   @id @default(cuid())
+  name                String?
+  email               String   @unique
+  emailVerified       DateTime?
+  image               String?
+  password            String?
+  completedOnboarding Boolean  @default(false)
+  totpSecret          String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  campaigns     Campaign[]
+  leads         Lead[]
+  emailAccounts EmailAccount[]
+  templates     Template[]
+  groups        Group[]
+  apiKeys       ApiKey[]
+  webhooks      Webhook[]
+  integrations  Integration[]
+  pipelines     Pipeline[]
+  deals         Deal[]
+  tasks         Task[]
+  notifications Notification[]
+  suppressions  Suppression[]
+  accounts      Account[]
+  sessions      Session[]
+  seedMailboxes SeedMailbox[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model EmailAccount {
+  id             String  @id @default(cuid())
+  userId         String
+  email          String
+  provider       String
+  smtpHost       String?
+  smtpPort       Int?
+  smtpUser       String?
+  smtpPass       String?
+  imapHost       String?
+  imapPort       Int?
+  imapUser       String?
+  imapPass       String?
+  gmailClientId  String?
+  gmailSecret    String?
+  gmailToken     String?
+  microsoftToken String?
+  microsoftRefreshToken String?
+  displayName    String?
+  domain         String?
+  warmupEnabled  Boolean @default(false)
+  warmupBase     Int     @default(5)
+  warmupIncrease Int     @default(1)
+  warmupMax      Int     @default(10)
+  warmupDays     Int     @default(127)
+  warmupFilterTag    String  @default("")
+  disableSlowWarmup  Boolean @default(false)
+  warmupReplyRate    Int     @default(30)
+  readEmulation       Boolean @default(false)
+  warmupOpenRate      Int     @default(100)
+  warmupSpamProtection Int    @default(100)
+  warmupMarkImportant  Int    @default(0)
+  customTrackingDomain     String  @default("")
+  warmupCustomTrackingDomain Boolean @default(false)
+  warmupStartTime    String  @default("08:00")
+  warmupEndTime   String @default("17:00")
+  minWaitTime    Int     @default(60)
+  timezone       String  @default("UTC")
+  warmupPoolType String  @default("premium")
+  warmupAiEnabled Boolean @default(false)
+  healthScore    Float   @default(100)
+  healthState    String  @default("healthy")
+  isPaused       Boolean @default(false)
+  warmupWeek     Int     @default(1)
+  currentDailyVolume Int  @default(5)
+  targetDailyVolume Int  @default(50)
+  dailySendLimit    Int       @default(30)
+  warmupStartedAt DateTime?
+  lastHealthCheckAt DateTime?
+  status         String  @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailLogs     EmailLog[]
+  warmupLogs    WarmupLog[]
+  warmupContent WarmupContent[]
+}
+
+model SeedMailbox {
+  id        String   @id @default(cuid())
+  userId    String
+  email     String   @unique
+  smtpHost  String
+  smtpPort  Int      @default(587)
+  smtpUser  String
+  smtpPass  String
+  imapHost  String
+  imapPort  Int      @default(993)
+  imapUser  String
+  imapPass  String
+  provider  String   @default("other")
+  isActive  Boolean  @default(true)
+  lastUsed  DateTime?
+  emailsReceivedTotal Int @default(0)
+  repliesSentTotal    Int @default(0)
+  spamRescuesTotal    Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warmupLogs    WarmupLog[]
+  warmupContent WarmupContent[]
+}
+
+model WarmupLog {
+  id               String    @id @default(cuid())
+  senderMailboxId  String
+  seedMailboxId    String
+  messageId        String?
+  subject          String?
+  bodyPreview      String?
+  sentAt           DateTime?
+  receivedAt       DateTime?
+  repliedAt        DateTime?
+  foundInSpam      Boolean   @default(false)
+  rescuedFromSpam  Boolean   @default(false)
+  markedImportant  Boolean   @default(false)
+  replyReceived    Boolean   @default(false)
+  status           String    @default("sent")
+  createdAt        DateTime  @default(now())
+
+  senderMailbox EmailAccount @relation(fields: [senderMailboxId], references: [id], onDelete: Cascade)
+  seedMailbox   SeedMailbox  @relation(fields: [seedMailboxId], references: [id], onDelete: Cascade)
+}
+
+model WarmupContent {
+  id              String   @id @default(cuid())
+  senderMailboxId String
+  seedMailboxId   String
+  contentHash     String
+  subjectPreview  String
+  bodyPreview     String
+  contentSource   String   @default("templates")
+  usedAt          DateTime @default(now())
+
+  senderMailbox EmailAccount @relation(fields: [senderMailboxId], references: [id], onDelete: Cascade)
+  seedMailbox   SeedMailbox  @relation(fields: [seedMailboxId], references: [id], onDelete: Cascade)
+
+  @@unique([senderMailboxId, seedMailboxId, contentHash])
+  @@index([senderMailboxId])
+}
+
+model Campaign {
+  accountIds       String  @default("[]")
+  id               String   @id @default(cuid())
+  userId           String
+  name             String
+  status           String   @default("draft")
+  openTracking     Boolean  @default(false)
+  clickTracking    Boolean  @default(false)
+  conversionValue  Float    @default(0)
+  dailySendLimit   Int      @default(30)
+  slowRamp         Boolean  @default(false)
+  rampStart        DateTime?
+  startDate         DateTime?
+  endDate           DateTime?
+  noEndDate         Boolean  @default(true)
+  stopOnReply       Boolean  @default(true)
+  plainTextOnly     Boolean  @default(false)
+  firstEmailPlainText Boolean @default(false)
+  crmOwner          String   @default("")
+  customTags        String   @default("[]")
+  minTimeBetween    Int      @default(15)
+  randomExtraTime   Int      @default(9)
+  maxNewLeads       Int?
+  prioritizeNewLeads Boolean @default(false)
+  providerMatching  Boolean  @default(false)
+  espRouting        Boolean  @default(false)
+  stopOnCompanyReply Boolean @default(false)
+  stopOnAutoReply   Boolean  @default(false)
+  unsubscribeHeader Boolean  @default(true)
+  enableRiskyEmails Boolean  @default(false)
+  disableBounceProtect Boolean @default(false)
+  ccAddresses       String   @default("")
+  bccAddresses      String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps     CampaignStep[]
+  leads     Lead[]
+  schedules CampaignSchedule[]
+}
+
+model CampaignSchedule {
+  id              String   @id @default(cuid())
+  campaignId      String
+  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name            String   @default("New schedule")
+  startTime       String   @default("09:00")
+  endTime         String   @default("18:00")
+  timezone        String   @default("America/New_York")
+  days            String   @default("[true,true,true,true,true,false,false]")
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model CampaignStep {
+  id               String  @id @default(cuid())
+  campaignId       String
+  order            Int
+  type             String
+  subject          String?
+  bodyHtml         String?
+  delayDays        Int?
+  delayUnit        String  @default("days")
+  conditions       String?
+  templateId       String?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+model Lead {
+  id              String   @id @default(cuid())
+  userId          String
+  campaignId      String?
+  email           String
+  firstName       String?
+  lastName        String?
+  company         String?
+  title           String?
+  phone           String?
+  personalization String?
+  website         String?
+  location        String?
+  status          String   @default("pending")
+  currentStep     Int      @default(0)
+  sendingAccountId String?
+  lastSentAt      DateTime?
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign  Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  emailLogs EmailLog[]
+  groups    LeadGroup[]
+}
+
+model EmailLog {
+  id             String   @id @default(cuid())
+  leadId         String
+  campaignStepId String?
+  emailAccountId String?
+  type           String
+  status         String
+  subject        String?
+  bodyHtml       String?
+  threadId       String?
+  messageId      String?
+  sentAt         DateTime @default(now())
+  openedAt       DateTime?
+  repliedAt      DateTime?
+  clickedAt      DateTime?
+  error          String?
+  bounceCategory String?
+
+  lead         Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  emailAccount EmailAccount?  @relation(fields: [emailAccountId], references: [id], onDelete: SetNull)
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leads LeadGroup[]
+}
+
+model Pipeline {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  stages    String   @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deals Deal[]
+}
+
+model Deal {
+  id         String   @id @default(cuid())
+  userId     String
+  pipelineId String
+  leadId     String?
+  name       String
+  value      Float    @default(0)
+  stage      String   @default("interested")
+  status     String   @default("open")
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+}
+
+model Task {
+  id        String   @id @default(cuid())
+  userId    String
+  dealId    String?
+  title     String
+  done      Boolean  @default(false)
+  dueDate   DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deal Deal? @relation(fields: [dealId], references: [id], onDelete: SetNull)
+}
+
+model Integration {
+  id        String   @id @default(cuid())
+  userId    String
+  provider  String
+  label     String?
+  config    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+}
+
+model Webhook {
+  id        String   @id @default(cuid())
+  userId    String
+  url       String
+  events    String   @default("[\"open\",\"click\",\"reply\",\"bounce\"]")
+  secret    String?
+  active    Boolean  @default(true)
+  lastStatus Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  key       String   @unique
+  scopes    String   @default("read")
+  lastUsedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String?
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LeadGroup {
+  leadId  String
+  groupId String
+
+  lead  Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, groupId])
+}
+
+model Suppression {
+  id        String   @id @default(cuid())
+  userId    String
+  email     String
+  reason    String
+  type      String   @default("manual")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, email])
+}
+
+model Template {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  subject   String
+  bodyHtml  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

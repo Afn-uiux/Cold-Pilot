@@ -1,0 +1,137 @@
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { reconcileWarmupSchedules, processDueWarmupSends, saveHealthLog } from "@/engine/warmup";
+
+export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const { emailAccountId, action } = body;
+
+  const account = await prisma.emailAccount.findFirst({
+    where: { id: emailAccountId, userId: session.user.id },
+  });
+  if (!account) {
+    return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  }
+
+  switch (action) {
+    case "toggle": {
+      const enabled = !account.warmupEnabled;
+      const updated = await prisma.emailAccount.update({
+        where: { id: emailAccountId },
+        data: {
+          warmupEnabled: enabled,
+          warmupStartedAt: enabled ? (account.warmupStartedAt || new Date()) : undefined,
+        },
+      });
+      return NextResponse.json({ warmupEnabled: updated.warmupEnabled });
+    }
+
+    case "settings": {
+      const {
+        warmupBase, warmupIncrease, warmupMax, warmupDays,
+        warmupStartTime, warmupEndTime, minWaitTime, timezone,
+        targetDailyVolume, warmupPoolType,
+      } = body;
+
+      const data: Record<string, any> = {};
+      if (warmupBase !== undefined) data.warmupBase = warmupBase;
+      if (warmupIncrease !== undefined) data.warmupIncrease = warmupIncrease;
+      if (warmupMax !== undefined) data.warmupMax = warmupMax;
+      if (warmupDays !== undefined) data.warmupDays = warmupDays;
+      if (warmupStartTime !== undefined) data.warmupStartTime = warmupStartTime;
+      if (warmupEndTime !== undefined) data.warmupEndTime = warmupEndTime;
+      if (minWaitTime !== undefined) data.minWaitTime = minWaitTime;
+      if (timezone !== undefined) data.timezone = timezone;
+      if (targetDailyVolume !== undefined) data.targetDailyVolume = targetDailyVolume;
+      if (warmupPoolType !== undefined) data.warmupPoolType = warmupPoolType;
+
+      await prisma.emailAccount.update({
+        where: { id: emailAccountId },
+        data,
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    case "tick": {
+      const { sent, failed } = await processDueWarmupSends();
+      const seeded = await reconcileWarmupSchedules();
+      return NextResponse.json({ sent, failed, seeded });
+    }
+
+    case "health": {
+      await saveHealthLog(emailAccountId);
+      const updated = await prisma.emailAccount.findUnique({
+        where: { id: emailAccountId },
+        select: { healthScore: true, healthState: true, isPaused: true },
+      });
+      return NextResponse.json(updated);
+    }
+
+    default:
+      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  }
+}
+
+export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const url = new URL(req.url);
+  const emailAccountId = url.searchParams.get("accountId");
+
+  if (emailAccountId) {
+    const account = await prisma.emailAccount.findFirst({
+      where: { id: emailAccountId, userId: session.user.id },
+      select: {
+        id: true, email: true, warmupEnabled: true, warmupBase: true,
+        warmupIncrease: true, warmupMax: true, warmupDays: true,
+        warmupStartTime: true, warmupEndTime: true, minWaitTime: true,
+        timezone: true, warmupPoolType: true, healthScore: true,
+        healthState: true, isPaused: true, warmupWeek: true,
+        currentDailyVolume: true, targetDailyVolume: true,
+        warmupStartedAt: true, lastHealthCheckAt: true,
+      },
+    });
+
+    if (!account) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+
+    // Get stats
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [sentToday, sentTotal, spamCount, replyCount, scheduledCount] = await Promise.all([
+      prisma.warmupLog.count({ where: { senderMailboxId: emailAccountId, sentAt: { gte: todayStart }, status: "sent" } }),
+      prisma.warmupLog.count({ where: { senderMailboxId: emailAccountId, status: "sent" } }),
+      prisma.warmupLog.count({ where: { senderMailboxId: emailAccountId, foundInSpam: true } }),
+      prisma.warmupLog.count({ where: { senderMailboxId: emailAccountId, replyReceived: true } }),
+      prisma.warmupLog.count({ where: { senderMailboxId: emailAccountId, status: "scheduled" } }),
+    ]);
+
+    return NextResponse.json({
+      ...account,
+      stats: { sentToday, sentTotal, spamCount, replyCount, scheduledCount },
+    });
+  }
+
+  // List all accounts with warmup info
+  const accounts = await prisma.emailAccount.findMany({
+    where: { userId: session.user.id },
+    select: {
+      id: true, email: true, warmupEnabled: true, healthScore: true,
+      healthState: true, isPaused: true, currentDailyVolume: true,
+      targetDailyVolume: true, warmupWeek: true, status: true,
+    },
+  });
+
+  return NextResponse.json(accounts);
+}

@@ -1,0 +1,35 @@
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const templates = await prisma.template.findMany({
+    where: { userId: session.user.id },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return NextResponse.json(templates);
+}
+
+export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { name, subject, bodyHtml } = await req.json();
+  if (!name || !subject) {
+    return NextResponse.json({ error: "Name and subject are required" }, { status: 400 });
+  }
+
+  const template = await prisma.template.create({
+    data: { name, subject, bodyHtml: bodyHtml || "", userId: session.user.id },
+  });
+
+  return NextResponse.json(template);
+}

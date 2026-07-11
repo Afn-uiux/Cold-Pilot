@@ -1,0 +1,147 @@
+"use client";
+
+import { useState } from "react";
+import ApiKeysSection from "@/components/api-keys-section";
+import WebhooksSection from "@/components/webhooks-section";
+import IntegrationsSection from "@/components/integrations-section";
+
+const TABS = ["Profile", "Team", "Billing", "Integrations", "API Keys"];
+
+export default function SettingsTabs({ user }: { user: { name: string | null; email: string | null; image: string | null; createdAt: Date } }) {
+  const [activeTab, setActiveTab] = useState("Profile");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+
+  async function saveProfile(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaving(true);
+    setSaved(false);
+    const form = new FormData(e.currentTarget);
+    try {
+      const res = await fetch("/api/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.get("name"),
+          email: form.get("email"),
+        }),
+      });
+      if (res.ok) setSaved(true);
+    } catch {}
+    setSaving(false);
+  }
+
+  async function inviteMember() {
+    if (!inviteEmail.includes("@")) return;
+    setInviting(true);
+    try {
+      await fetch("/api/team/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail }),
+      });
+      setInviteEmail("");
+    } catch {}
+    setInviting(false);
+  }
+
+  return (
+    <div>
+      <header className="flex items-center justify-between px-6 lg:px-10 pt-8 pb-0 gap-5 flex-wrap">
+        <div>
+          <h1 className="font-medium text-[clamp(28px,3.5vw,36px)] font-normal tracking-tight leading-tight">Settings</h1>
+          <p className="text-sm text-muted mt-1.5">Manage your account and preferences</p>
+        </div>
+      </header>
+
+      <div className="px-6 lg:px-10 pt-7 pb-16">
+        <div className="grid grid-cols-[200px_1fr] gap-10 items-start">
+          <div className="flex flex-col gap-0.5 sticky top-8">
+            {TABS.map((item) => (
+              <button key={item} onClick={() => setActiveTab(item)}
+                className={`text-sm text-left px-4 py-2.5 rounded transition-colors ${activeTab === item ? "bg-cream-2 text-ink font-medium" : "text-muted hover:text-ink"}`}>
+                {item}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-8">
+            {activeTab === "Profile" && (
+              <form onSubmit={saveProfile} className="card">
+                <div className="card-header"><h3>Profile</h3></div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="field-group">
+                    <label className="block text-xs text-muted mb-2">Name</label>
+                    <input name="name" className="w-full bg-transparent border-b border-border pb-2.5 text-sm outline-none focus:border-ink transition-colors" defaultValue={user.name || ""} />
+                  </div>
+                  <div className="field-group">
+                    <label className="block text-xs text-muted mb-2">Email</label>
+                    <input name="email" className="w-full bg-transparent border-b border-border pb-2.5 text-sm outline-none focus:border-ink transition-colors" defaultValue={user.email || ""} />
+                  </div>
+                </div>
+                {saved && <p className="text-xs text-green-600 mt-2">Saved!</p>}
+                <div className="mt-6"><button type="submit" disabled={saving} className="btn btn-primary btn-sm">{saving ? "Saving..." : "Save Changes"}</button></div>
+              </form>
+            )}
+
+            {activeTab === "Team" && (
+              <div className="card">
+                <div className="card-header"><h3>Team</h3></div>
+                <div className="flex items-center justify-between p-4 bg-cream-2 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center text-xs font-medium">
+                      {(user.name || user.email || "U")[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{user.name || "User"}</p>
+                      <p className="text-xs text-muted">{user.email}</p>
+                    </div>
+                  </div>
+                  <span className="badge active">Owner</span>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                    placeholder="Email to invite"
+                    className="flex-1 bg-transparent border-b border-border pb-2 text-sm outline-none focus:border-ink transition-colors" />
+                  <button onClick={inviteMember} disabled={inviting || !inviteEmail.includes("@")}
+                    className="btn btn-ghost btn-sm shrink-0">
+                    {inviting ? "Inviting..." : "+ Invite"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "Billing" && (
+              <div className="card">
+                <div className="card-header"><h3>Billing</h3></div>
+                <p className="text-sm text-muted">No billing information yet. To set up billing, sign up at lemonsqueezy.com and I'll help you configure it.</p>
+              </div>
+            )}
+
+            {activeTab === "Integrations" && (
+              <>
+                <div className="card">
+                  <div className="card-header"><h3>Integrations</h3></div>
+                  <IntegrationsSection />
+                </div>
+                <div className="card">
+                  <div className="card-header"><h3>Webhooks</h3></div>
+                  <WebhooksSection />
+                </div>
+              </>
+            )}
+
+            {activeTab === "API Keys" && (
+              <div className="card">
+                <div className="card-header"><h3>API Keys</h3></div>
+                <ApiKeysSection />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

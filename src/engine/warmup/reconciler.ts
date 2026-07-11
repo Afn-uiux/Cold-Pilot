@@ -1,0 +1,166 @@
+import { prisma } from "@/lib/prisma";
+import { calculateNextWarmupTime } from "./scheduler";
+import { pickWarmupPartner } from "./partner";
+import { generateWarmupContent } from "./content";
+import { sendWarmupEmail } from "./sender";
+
+export async function reconcileWarmupSchedules(): Promise<number> {
+  const mailboxes = await prisma.emailAccount.findMany({
+    where: {
+      warmupEnabled: true,
+      isPaused: false,
+      status: "active",
+    },
+    select: {
+      id: true,
+      email: true,
+      warmupStartedAt: true,
+      warmupPoolType: true,
+    },
+  });
+
+  let seeded = 0;
+
+  for (const mailbox of mailboxes) {
+    try {
+      // Check if there's already a pending/upcoming warmup log
+      const pendingCount = await prisma.warmupLog.count({
+        where: {
+          senderMailboxId: mailbox.id,
+          status: { in: ["scheduled", "sending"] },
+        },
+      });
+
+      if (pendingCount > 0) continue;
+
+      // Start warmup if not started
+      if (!mailbox.warmupStartedAt) {
+        await prisma.emailAccount.update({
+          where: { id: mailbox.id },
+          data: { warmupStartedAt: new Date() },
+        });
+      }
+
+      // Calculate next send time
+      const nextTime = await calculateNextWarmupTime(mailbox.id);
+      if (!nextTime) continue;
+
+      // Pick a partner seed
+      const partner = await pickWarmupPartner(
+        mailbox.id,
+        mailbox.warmupPoolType,
+        mailboxes.length,
+      );
+      if (!partner) continue;
+
+      // Generate content
+      const senderName = mailbox.email.split("@")[0];
+      const content = await generateWarmupContent(mailbox.id, senderName, partner.id);
+
+      // Create scheduled warmup log
+      await prisma.warmupLog.create({
+        data: {
+          senderMailboxId: mailbox.id,
+          seedMailboxId: partner.id,
+          subject: content.subject,
+          bodyPreview: content.body.slice(0, 200),
+          status: "scheduled",
+          sentAt: nextTime,
+        },
+      });
+
+      seeded++;
+    } catch (err) {
+      console.error(`Warmup reconcile failed for ${mailbox.email}:`, err);
+    }
+  }
+
+  return seeded;
+}
+
+export async function processDueWarmupSends(): Promise<{ sent: number; failed: number }> {
+  const now = new Date();
+  const dueLogs = await prisma.warmupLog.findMany({
+    where: {
+      status: "scheduled",
+      sentAt: { lte: now },
+    },
+    include: {
+      senderMailbox: true,
+      seedMailbox: true,
+    },
+    take: 50,
+  });
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const log of dueLogs) {
+    try {
+      const senderName = log.senderMailbox.email.split("@")[0];
+      const content = await generateWarmupContent(
+        log.senderMailboxId,
+        senderName,
+        log.seedMailboxId,
+      );
+
+      await prisma.warmupLog.update({
+        where: { id: log.id },
+        data: { status: "sending" },
+      });
+
+      let emailBody = content.body;
+      if (log.senderMailbox.warmupCustomTrackingDomain && log.senderMailbox.customTrackingDomain) {
+        emailBody += `\n\n---\n${log.senderMailbox.customTrackingDomain}`;
+      }
+
+      const result = await sendWarmupEmail(
+        log.senderMailbox.email,
+        log.senderMailbox.smtpHost!,
+        log.senderMailbox.smtpPort!,
+        log.senderMailbox.smtpUser!,
+        log.senderMailbox.smtpPass!,
+        log.senderMailbox.displayName || undefined,
+        log.seedMailbox.email,
+        content.subject,
+        emailBody,
+      );
+
+      if (result.success) {
+        await prisma.warmupLog.update({
+          where: { id: log.id },
+          data: {
+            status: "sent",
+            messageId: result.messageId,
+            subject: content.subject,
+            bodyPreview: emailBody.slice(0, 200),
+            sentAt: new Date(),
+          },
+        });
+
+        // Update seed lastUsed
+        await prisma.seedMailbox.update({
+          where: { id: log.seedMailboxId },
+          data: { lastUsed: new Date() },
+        });
+
+        sent++;
+      } else {
+        await prisma.warmupLog.update({
+          where: { id: log.id },
+          data: { status: "failed" },
+        });
+        failed++;
+      }
+    } catch (err) {
+      console.error("Warmup send failed:", err);
+      await prisma.warmupLog.update({
+        where: { id: log.id },
+        data: { status: "failed" },
+      });
+      failed++;
+    }
+  }
+
+  return { sent, failed };
+}
