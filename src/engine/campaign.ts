@@ -303,11 +303,18 @@ async function executeCampaignInner(campaignId: string) {
       if (claimFup.count === 0) { skipped++; continue; }
 
       try {
-        // Send as reply to thread (for threading)
-        const lastLog = await prisma.emailLog.findFirst({
-          where: { leadId: lead.id, type: "outgoing" },
-          orderBy: { sentAt: "desc" },
+        // Send as reply to thread (for threading). We need the *entire* prior
+        // chain for this lead to build a correct References header — using
+        // only the immediately previous message (as before) is technically
+        // incomplete per the email threading spec and some clients rely on
+        // the full chain, not just the last hop, to group messages.
+        const priorLogs = await prisma.emailLog.findMany({
+          where: { leadId: lead.id, type: "outgoing", messageId: { not: null } },
+          orderBy: { sentAt: "asc" },
+          select: { messageId: true, threadId: true },
         });
+        const lastLog = priorLogs[priorLogs.length - 1] || null;
+        const referencesChain = priorLogs.map(l => l.messageId).filter(Boolean).join(" ") || null;
 
         let fupSubject = step.subject || "Re: Your conversation with Coldpilot";
         let fupBody = step.bodyHtml || "";
@@ -332,6 +339,13 @@ async function executeCampaignInner(campaignId: string) {
           fupSubject = fupSubject.replace(/\{\{calendlyLink\}\}/g, calendlyLink);
           fupBody = fupBody.replace(/\{\{calendlyLink\}\}/g, calendlyLink);
         }
+        // A follow-up that's threaded via headers but whose subject doesn't
+        // carry "Re:" still shows up as a new conversation in some clients
+        // (Yahoo included), which use subject as a secondary threading signal
+        // alongside In-Reply-To/References. Always prefix it when replying.
+        if (lastLog && !/^re:/i.test(fupSubject.trim())) {
+          fupSubject = `Re: ${fupSubject}`;
+        }
 
         await sendEmail({
           to: lead.email,
@@ -346,6 +360,7 @@ async function executeCampaignInner(campaignId: string) {
           clickTracking: campaign.clickTracking,
           threadId: lastLog?.threadId || undefined,
           inReplyTo: lastLog?.messageId || null,
+          references: referencesChain,
         });
 
         sent++;
@@ -485,12 +500,145 @@ export async function checkForReplies(userId: string) {
       replied += await checkGmailAccountReplies(account);
     } else if (account.imapHost && account.imapUser && account.imapPass) {
       replied += await checkImapAccountReplies(account);
+      await checkImapAccountBounces(account);
     } else {
       console.log(`[reply] Skipping ${account.email}: no gmailToken and no IMAP creds`);
     }
   }
 
   return { replied };
+}
+
+// Yahoo (and several other providers) accept a message at SMTP time with a
+// "250 OK" even for an address that doesn't actually exist, then deliver a
+// bounce notification email back to the sender's own inbox later, from an
+// address like mailer-daemon or postmaster. The SMTP-time bounce handling in
+// send.ts can never catch these, since as far as the SMTP transaction is
+// concerned, nothing went wrong. This scans the inbox for those notification
+// emails, extracts which recipient actually failed, and applies the same
+// suppression logic as an SMTP-time hard bounce would.
+async function checkImapAccountBounces(account: any): Promise<number> {
+  let bounced = 0;
+
+  const client = new ImapFlow({
+    host: account.imapHost,
+    port: account.imapPort || 993,
+    secure: (account.imapPort || 993) === 993,
+    auth: { user: account.imapUser, pass: account.imapPass },
+    logger: false,
+  });
+
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock("INBOX");
+    try {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const allUids = (await client.search({ since }) || []);
+      const uids = allUids.slice(-300);
+
+      const bounceSenderPattern = /mailer-daemon|postmaster|mail delivery subsystem|mail-delivery|no-?reply.*delivery|delivery.*status.*notification/i;
+      let bounceCandidates = 0;
+
+      for await (const msg of client.fetch(uids, { uid: true, source: true })) {
+        const rawSource = msg.source?.toString() || "";
+        if (!rawSource) continue;
+
+        const headerEnd = rawSource.indexOf("\r\n\r\n");
+        const headerBlock = headerEnd >= 0 ? rawSource.slice(0, headerEnd) : rawSource;
+        const headerLines = headerBlock.split(/\r?\n/);
+        const headers: Record<string, string> = {};
+        let currentKey = "";
+        for (const line of headerLines) {
+          if (/^\s/.test(line) && currentKey) {
+            headers[currentKey] += " " + line.trim();
+          } else {
+            const colonIdx = line.indexOf(":");
+            if (colonIdx > 0) {
+              currentKey = line.slice(0, colonIdx).toLowerCase().trim();
+              headers[currentKey] = line.slice(colonIdx + 1).trim();
+            }
+          }
+        }
+
+        const from = headers["from"] || "";
+        const subject = headers["subject"] || "";
+        const looksLikeBounce = bounceSenderPattern.test(from) || bounceSenderPattern.test(subject) ||
+          /undeliverable|delivery.?(status|has).?fail|returned.?mail|failure.?notice/i.test(subject);
+        if (!looksLikeBounce) continue;
+
+        bounceCandidates++;
+        const body = headerEnd >= 0 ? rawSource.slice(headerEnd + 4) : "";
+
+        // Try to find the failed recipient. DSN-compliant bounces include a
+        // "Final-Recipient:" header inside the message/delivery-status part;
+        // non-DSN bounces (common with Yahoo/AOL-style notifications) just
+        // mention the address in plain text. Try both.
+        let failedRecipient = "";
+        const finalRecipMatch = body.match(/Final-Recipient:\s*(?:rfc822;)?\s*([\w.+-]+@[\w.-]+\.\w+)/i);
+        if (finalRecipMatch) {
+          failedRecipient = finalRecipMatch[1].toLowerCase();
+        } else {
+          // Fall back to scanning the plain-text body for an email address
+          // near common bounce phrasing.
+          const textNearFailure = body.match(/(?:following address(?:es)? failed|undeliverable to|delivery failed for|error for)[^\n]*?([\w.+-]+@[\w.-]+\.\w+)/i);
+          if (textNearFailure) failedRecipient = textNearFailure[1].toLowerCase();
+        }
+        if (!failedRecipient) {
+          console.log(`[bounce] IMAP: bounce-looking message from ${from} subject="${subject}" but couldn't extract a recipient address`);
+          continue;
+        }
+
+        // Only act on this if it's actually a lead we sent to and haven't
+        // already flagged as bounced/suppressed.
+        const lead = await prisma.lead.findFirst({
+          where: { email: failedRecipient, userId: account.userId },
+        });
+        if (!lead) {
+          console.log(`[bounce] IMAP: ${failedRecipient} not found as a lead`);
+          continue;
+        }
+
+        const alreadySuppressed = await prisma.suppression.findUnique({
+          where: { userId_email: { userId: account.userId, email: failedRecipient } },
+        });
+        if (alreadySuppressed) {
+          console.log(`[bounce] IMAP: ${failedRecipient} already suppressed`);
+          continue;
+        }
+
+        // Reuse the same categorization logic as SMTP-time bounces, just fed
+        // with the bounce notification's text instead of a thrown error.
+        const bounce = categorizeBounce({ message: body.slice(0, 4000) });
+        console.log(`[bounce] IMAP matched bounce for ${failedRecipient}: ${bounce.type} (suppress=${bounce.suppress})`);
+
+        if (bounce.suppress) {
+          await prisma.suppression.upsert({
+            where: { userId_email: { userId: account.userId, email: failedRecipient } },
+            update: {},
+            create: { userId: account.userId, email: failedRecipient, reason: bounce.type, type: "bounce" },
+          });
+        }
+        await prisma.lead.update({ where: { id: lead.id }, data: { status: "bounced" } }).catch(() => {});
+        createNotification({
+          userId: account.userId,
+          type: "bounce",
+          title: "Email bounced",
+          message: `${failedRecipient} — ${bounce.type}`,
+        }).catch(() => {});
+        dispatchWebhookEvent({ event: "bounce", userId: account.userId, data: { email: failedRecipient, reason: bounce.type } }).catch(() => {});
+        bounced++;
+      }
+      console.log(`[bounce] IMAP done for ${account.email}: candidates=${bounceCandidates} bounced=${bounced}`);
+    } finally {
+      lock.release();
+    }
+  } catch (err: any) {
+    console.error(`[bounce] IMAP check failed for ${account.email}:`, err?.message || err);
+  } finally {
+    try { await client.logout(); } catch {}
+  }
+
+  return bounced;
 }
 
 async function checkGmailAccountReplies(account: any): Promise<number> {
@@ -598,11 +746,18 @@ async function checkImapAccountReplies(account: any): Promise<number> {
       repliedAt: null,
       messageId: { not: null },
     },
-    select: { id: true, leadId: true, messageId: true, threadId: true, subject: true },
+    select: { id: true, leadId: true, messageId: true, threadId: true, subject: true, lead: { select: { email: true } } },
     take: 300,
   });
 
   if (sentLogs.length === 0) return 0;
+
+  // Maps a lead's email address -> leadId, used by the subject/sender
+  // fallback matcher below for replies that don't carry In-Reply-To/References.
+  const leadEmailById = new Map<string, string>();
+  for (const l of sentLogs) {
+    if (l.lead?.email) leadEmailById.set(l.lead.email.toLowerCase(), l.leadId);
+  }
 
   console.log(`[reply] IMAP check for ${account.email}: ${sentLogs.length} pending logs`);
 
@@ -658,11 +813,53 @@ async function checkImapAccountReplies(account: any): Promise<number> {
 
         const inReplyTo = headers["in-reply-to"] || "";
         const references = headers["references"] || "";
-
-        if (!inReplyTo && !references) continue;
-
-        matchAttempts++;
         const replySubject = headers["subject"] || "";
+        // Normalize angle brackets for matching
+        const normId = (id: string) => id.replace(/[<>]/g, "").trim();
+        const normSubject = (s: string) => s.replace(/^(re|fwd?|fw)\s*:\s*/i, "").trim().toLowerCase();
+
+        let matchedLog: typeof sentLogs[number] | undefined;
+        let matchMethod = "";
+
+        if (inReplyTo || references) {
+          matchAttempts++;
+          matchedLog = sentLogs.find(l =>
+            l.messageId && (
+              inReplyTo.includes(normId(l.messageId)) || references.includes(normId(l.messageId))
+            )
+          );
+          if (matchedLog) matchMethod = "headers";
+        }
+
+        // Fallback: some mail clients (mobile apps, some webmail, forwarded
+        // threads) don't preserve In-Reply-To/References at all. Previously
+        // any reply lacking those headers was skipped outright with no
+        // further check. As a fallback, match on sender + normalized subject
+        // (stripping Re:/Fwd: prefixes) against our sent logs — this is
+        // weaker evidence than header matching, so it only fires when the
+        // sender's address matches a lead we actually emailed.
+        if (!matchedLog && replySubject) {
+          const fromEmailMatch = from.match(/<?([\w.+-]+@[\w.-]+\.\w+)>?/);
+          const fromEmail = fromEmailMatch ? fromEmailMatch[1].toLowerCase() : "";
+          if (fromEmail) {
+            const normReplySubject = normSubject(replySubject);
+            const candidateLeadId = leadEmailById.get(fromEmail);
+            if (candidateLeadId && normReplySubject) {
+              matchedLog = sentLogs.find(l =>
+                l.leadId === candidateLeadId &&
+                l.subject && normSubject(l.subject) === normReplySubject
+              );
+              if (matchedLog) matchMethod = "subject+sender";
+            }
+          }
+        }
+
+        if (!matchedLog) {
+          if (inReplyTo || references) {
+            console.log(`[reply] IMAP no match for message from ${from} — In-Reply-To/References present but didn't match any of ${sentLogs.length} pending Message-IDs`);
+          }
+          continue;
+        }
 
         // Extract body from raw source
         let replyBody = "";
@@ -676,16 +873,7 @@ async function checkImapAccountReplies(account: any): Promise<number> {
           }
         }
 
-        // Normalize angle brackets for matching
-        const normId = (id: string) => id.replace(/[<>]/g, "").trim();
-        const matchedLog = sentLogs.find(l =>
-          l.messageId && (
-            inReplyTo.includes(normId(l.messageId)) || references.includes(normId(l.messageId))
-          )
-        );
-        if (!matchedLog) continue;
-
-        console.log(`[reply] IMAP matched reply to log ${matchedLog.id} from ${from}`);
+        console.log(`[reply] IMAP matched reply to log ${matchedLog.id} from ${from} (method: ${matchMethod})`);
         const ok = await processReply(
           { id: matchedLog.id, leadId: matchedLog.leadId, threadId: matchedLog.threadId || msg.uid?.toString() || null },
           account,
@@ -701,6 +889,23 @@ async function checkImapAccountReplies(account: any): Promise<number> {
     }
   } catch (err: any) {
     console.error(`[reply] IMAP failed for ${account.email}:`, err?.message || err);
+    // This used to be console-only, so a bad IMAP password or a provider that
+    // needs an app-specific password (Yahoo requires one, and requires IMAP
+    // access to be separately enabled) would silently and permanently break
+    // reply detection with zero visibility in the app.
+    const msg = (err?.message || "").toLowerCase();
+    const authFailed = err?.authenticationFailed || msg.includes("auth") || msg.includes("login") || msg.includes("invalid credentials");
+    if (authFailed) {
+      try {
+        await prisma.emailAccount.update({ where: { id: account.id }, data: { status: "error" } });
+      } catch {}
+      createNotification({
+        userId: account.userId,
+        type: "account_error",
+        title: "Reconnect your email account",
+        message: `${account.email} failed to connect over IMAP — reply detection has stopped working for it. If this is Yahoo, Outlook, or another provider that requires an app-specific password, make sure IMAP access is enabled and you're using an app password, not your regular login password.`,
+      }).catch(() => {});
+    }
   } finally {
     try { await client.logout(); } catch {}
   }

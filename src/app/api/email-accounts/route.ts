@@ -190,7 +190,7 @@ export async function POST(req: Request) {
     await prisma.seedMailbox.upsert({
       where: { email },
       update: {
-        smtpHost: smtpHost || "", smtpPort: smtpPort ? parseInt(String(smtpPort)) : 587,
+        smtpHost: smtpHost || "", smtpPort: smtpPort ? parseInt(String(smtpPort)) : 465,
         smtpUser: smtpUser || "", smtpPass: smtpPass || "",
         imapHost: finalImapHost, imapPort: finalImapPortVal,
         imapUser: finalImapUser, imapPass: finalImapPass,
@@ -198,7 +198,7 @@ export async function POST(req: Request) {
       },
       create: {
         email, userId: session.user.id,
-        smtpHost: smtpHost || "", smtpPort: smtpPort ? parseInt(String(smtpPort)) : 587,
+        smtpHost: smtpHost || "", smtpPort: smtpPort ? parseInt(String(smtpPort)) : 465,
         smtpUser: smtpUser || "", smtpPass: smtpPass || "",
         imapHost: finalImapHost, imapPort: finalImapPortVal,
         imapUser: finalImapUser, imapPass: finalImapPass,

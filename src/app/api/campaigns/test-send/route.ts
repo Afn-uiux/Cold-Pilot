@@ -9,6 +9,7 @@ export async function POST(req: NextRequest) {
 
   const { campaignId, stepIndex, subject, bodyHtml, senderEmail, recipientEmail } = await req.json();
   if (!recipientEmail?.includes("@")) return NextResponse.json({ error: "Valid recipient email required" }, { status: 400 });
+  if (!subject?.trim() && !bodyHtml?.trim()) return NextResponse.json({ error: "Cannot send a blank email — add a subject or body first" }, { status: 400 });
 
   const account = await prisma.emailAccount.findFirst({ where: { userId: session.user.id } });
   if (!account) return NextResponse.json({ error: "No email account connected" }, { status: 400 });

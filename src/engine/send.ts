@@ -10,6 +10,7 @@ interface SendOptions {
   emailAccountId: string;
   threadId?: string | null;
   inReplyTo?: string | null;
+  references?: string | null;
   leadId: string;
   campaignStepId?: string;
   trackingId?: string;
@@ -79,9 +80,9 @@ export async function sendEmail(opts: SendOptions) {
 
   try {
     if (account.provider === "Gmail" && account.gmailToken) {
-      sendResult = await sendViaGmailApi(account, opts.to, opts.subject, body, fromName, opts.threadId, opts.inReplyTo);
+      sendResult = await sendViaGmailApi(account, opts.to, opts.subject, body, fromName, opts.threadId, opts.inReplyTo, opts.references);
     } else {
-      const smtpId = await sendViaSmtp(account, opts.to, opts.subject, body, fromName, opts.inReplyTo);
+      const smtpId = await sendViaSmtp(account, opts.to, opts.subject, body, fromName, opts.inReplyTo, opts.references);
       sendResult = { messageId: smtpId, threadId: opts.threadId || smtpId };
     }
   } catch (err: any) {
@@ -131,7 +132,7 @@ export async function sendEmail(opts: SendOptions) {
 
 async function sendViaGmailApi(
   account: any, to: string, subject: string, htmlBody: string,
-  fromName: string, threadId?: string | null, inReplyTo?: string | null
+  fromName: string, threadId?: string | null, inReplyTo?: string | null, references?: string | null
 ): Promise<{ messageId: string; threadId: string }> {
   const { google } = await import("googleapis");
 
@@ -152,7 +153,7 @@ async function sendViaGmailApi(
   ];
   if (inReplyTo) {
     headers.push(`In-Reply-To: ${inReplyTo}`);
-    headers.push(`References: ${inReplyTo}`);
+    headers.push(`References: ${references || inReplyTo}`);
   }
 
   const raw = Buffer.from([...headers, "", htmlBody].join("\r\n"))
@@ -171,7 +172,7 @@ async function sendViaGmailApi(
 
 async function sendViaSmtp(
   account: any, to: string, subject: string, htmlBody: string,
-  fromName: string, inReplyTo?: string | null
+  fromName: string, inReplyTo?: string | null, references?: string | null
 ): Promise<string> {
   const transporter = nodemailer.createTransport({
     host: account.smtpHost!,
@@ -188,7 +189,7 @@ async function sendViaSmtp(
     to,
     subject,
     html: htmlBody,
-    ...(inReplyTo ? { inReplyTo, references: inReplyTo } : {}),
+    ...(inReplyTo ? { inReplyTo, references: references || inReplyTo } : {}),
   });
 
   return info.messageId;

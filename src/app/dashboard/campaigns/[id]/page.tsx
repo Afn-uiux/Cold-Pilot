@@ -799,28 +799,17 @@ function AnalyticsTab({ campaignId, state, onPublish, onPause, onResume }: { cam
 
     fetchStats();
 
-    // Auto-refresh every 30 seconds while viewing an active campaign
-    const interval = state === "active" ? setInterval(fetchStats, 30_000) : null;
+    // Auto-refresh every 30 seconds regardless of status — a draft campaign
+    // can still have leads/events (e.g. a manual test send, or leads that
+    // were already imported), and the data table should reflect that live
+    // without requiring the campaign to be launched first.
+    const interval = setInterval(fetchStats, 30_000);
 
     return () => { active = false; if (interval) clearInterval(interval); };
   }, [campaignId, state]);
 
   function toggleVariant(key: string) {
     setVariantToggles(prev => ({ ...prev, [key]: !prev[key] }));
-  }
-
-  if (state === "draft") {
-    return (
-      <div className="space-y-6">
-        <div className="metrics">
-          {["Sequence started", "Open rate", "Click rate", "Reply rate", "Conversions"].map(m => (
-            <div key={m} className="metric"><div className="metric-label">{m}</div><div className="metric-value !text-2xl text-muted-2">—</div></div>
-          ))}
-        </div>
-        <div className="card text-center py-16"><p className="text-muted text-sm">No data available</p><p className="text-muted-2 text-xs mt-2">Publish the campaign to start collecting data</p></div>
-        <div className="flex gap-3 justify-center"><button onClick={onPublish} className="btn btn-primary">Publish</button></div>
-      </div>
-    );
   }
 
   if (loading) return <div className="text-center text-muted py-16 text-sm">Loading...</div>;
@@ -1005,7 +994,7 @@ function ScheduleTab({ campaignId }: { campaignId: string }) {
     setSaving(true);
     setMsg("");
     try {
-      await fetch(`/api/campaigns?id=${campaignId}`, {
+      const res = await fetch(`/api/campaigns?id=${campaignId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1023,9 +1012,26 @@ function ScheduleTab({ campaignId }: { campaignId: string }) {
           })),
         }),
       });
+      if (!res.ok) {
+        const err = await res.text().catch(() => "");
+        setMsg(`Failed to save: ${err.slice(0, 150) || res.status}`);
+        setSaving(false);
+        return;
+      }
+      // Re-fetch and re-sync local state from what's actually in the DB now
+      const fresh = await fetch(`/api/campaigns?id=${campaignId}`).then(r => r.json()).catch(() => null);
+      if (fresh?.schedules) {
+        setSchedules(fresh.schedules.map((s: any) => ({
+          id: s.id, name: s.name, startTime: s.startTime, endTime: s.endTime,
+          timezone: s.timezone || "America/New_York",
+          days: typeof s.days === "string" ? JSON.parse(s.days) : s.days,
+        })));
+      }
       setMsg("Schedule saved");
       setTimeout(() => setMsg(""), 3000);
-    } catch { setMsg("Failed to save"); }
+    } catch (e: any) {
+      setMsg(`Failed to save: ${e?.message || "network error"}`);
+    }
     setSaving(false);
   }
 
@@ -1127,6 +1133,7 @@ function ScheduleTab({ campaignId }: { campaignId: string }) {
                 { value: "America/Chicago", label: "Central Time" },
                 { value: "America/Denver", label: "Mountain Time" },
                 { value: "America/Los_Angeles", label: "Pacific Time" },
+                { value: "Africa/Lagos", label: "West Africa Time (WAT)" },
               ]}
               placeholder="Select timezone" />
           </div>
@@ -1184,6 +1191,7 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
   const [firstEmailPlainText, setFirstEmailPlainText] = useState(false);
   const [dailySendLimit, setDailySendLimit] = useState(50);
   const [slowRamp, setSlowRamp] = useState(false);
+  const [rampStart, setRampStart] = useState<string | null>(null);
   const [minTimeBetween, setMinTimeBetween] = useState(15);
   const [randomExtraTime, setRandomExtraTime] = useState(9);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -1216,6 +1224,7 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
         setFirstEmailPlainText(camp.firstEmailPlainText ?? false);
         setDailySendLimit(camp.dailySendLimit ?? 50);
         setSlowRamp(camp.slowRamp ?? false);
+        setRampStart(camp.rampStart ?? null);
         setMinTimeBetween(camp.minTimeBetween ?? 15);
         setRandomExtraTime(camp.randomExtraTime ?? 9);
         setStopOnAutoReply(camp.stopOnAutoReply ?? false);
@@ -1244,7 +1253,7 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
           firstEmailPlainText,
           dailySendLimit,
           slowRamp,
-          rampStart: slowRamp ? new Date().toISOString() : null,
+          rampStart: slowRamp ? (rampStart || new Date().toISOString()) : null,
           minTimeBetween,
           randomExtraTime,
           stopOnAutoReply,
@@ -1258,6 +1267,19 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
         setMsg(`Failed to save: ${err.slice(0, 150) || res.status}`);
         setSaving(false);
         return false;
+      }
+      // Re-sync from the real saved values instead of trusting the local
+      // state — surfaces immediately if anything didn't actually persist.
+      const fresh = await fetch(`/api/campaigns?id=${campaignId}`).then(r => r.json()).catch(() => null);
+      if (fresh) {
+        setDailySendLimit(fresh.dailySendLimit ?? dailySendLimit);
+        setMinTimeBetween(fresh.minTimeBetween ?? minTimeBetween);
+        setRandomExtraTime(fresh.randomExtraTime ?? randomExtraTime);
+        setStopOnReply(fresh.stopOnReply ?? stopOnReply);
+        setOpenTracking(fresh.openTracking ?? openTracking);
+        setClickTracking(fresh.clickTracking ?? clickTracking);
+        setSlowRamp(fresh.slowRamp ?? slowRamp);
+        setRampStart(fresh.rampStart ?? rampStart);
       }
       setMsg("Settings saved");
       setTimeout(() => setMsg(""), 3000);

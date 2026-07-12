@@ -1,5 +1,12 @@
 export function categorizeBounce(err: any): { type: string; suppress: boolean } {
   const msg = (err.message || "").toLowerCase();
+  // Network / connection errors — the server couldn't reach the mail server at all.
+  // These are NOT bounces and must never suppress the email address.
+  if (msg.includes("ehostunreach") || msg.includes("econnrefused") || msg.includes("etimedout") ||
+      msg.includes("enotfound") || msg.includes("epipe") || msg.includes("econnreset") ||
+      msg.includes("connect") || msg.includes("network") || msg.includes("socket")) {
+    return { type: "connection_error", suppress: false };
+  }
   if (msg.includes("invalid_grant") || msg.includes("eauth") || msg.includes("eaccess")) return { type: "auth_error", suppress: false };
   if (msg.includes("550") && (msg.includes("does not exist") || msg.includes("invalid") || msg.includes("user unknown") || msg.includes("no such"))) return { type: "hard_bounce", suppress: true };
   if (msg.includes("552") || msg.includes("mailbox full") || msg.includes("over quota") || msg.includes("try again")) return { type: "soft_bounce", suppress: false };

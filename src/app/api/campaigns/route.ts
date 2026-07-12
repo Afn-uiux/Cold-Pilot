@@ -24,7 +24,50 @@ export async function GET(req: NextRequest) {
     include: { _count: { select: { leads: true, steps: true } } },
     orderBy: { createdAt: "desc" },
   });
-  return NextResponse.json(campaigns);
+
+  // Enrich with email metrics per campaign
+  const enriched = await Promise.all(campaigns.map(async (c) => {
+    const totalLeads = c._count.leads;
+    const sentCount = await prisma.emailLog.count({
+      where: { lead: { campaignId: c.id }, type: "outgoing", status: "sent" },
+    });
+    const clickCount = await prisma.emailLog.count({
+      where: { lead: { campaignId: c.id }, type: "outgoing", clickedAt: { not: null } },
+    });
+    const repliedCount = await prisma.emailLog.count({
+      where: { lead: { campaignId: c.id }, type: "incoming" },
+    });
+    const repliedLeads = await prisma.lead.count({
+      where: { campaignId: c.id, status: "replied" },
+    });
+    const completedLeads = await prisma.lead.count({
+      where: { campaignId: c.id, status: "completed" },
+    });
+    // Count deals whose leadId belongs to this campaign
+    const campaignLeadIds = (await prisma.lead.findMany({
+      where: { campaignId: c.id },
+      select: { id: true },
+    })).map(l => l.id);
+    const opportunities = campaignLeadIds.length > 0
+      ? await prisma.deal.count({ where: { leadId: { in: campaignLeadIds } } })
+      : 0;
+    return {
+      ...c,
+      metrics: {
+        sentCount,
+        clickCount,
+        repliedCount,
+        repliedLeads,
+        opportunities,
+        totalLeads,
+        completedLeads,
+        progress: totalLeads > 0 ? Math.min(Math.round((sentCount / (totalLeads * Math.max(c._count.steps, 1))) * 100), 100) : 0,
+        replyRate: sentCount > 0 ? Math.round((repliedLeads / sentCount) * 100) : 0,
+      },
+    };
+  }));
+
+  return NextResponse.json(enriched);
 }
 
 export async function PATCH(req: NextRequest) {
