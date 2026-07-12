@@ -769,14 +769,25 @@ async function checkImapAccountReplies(account: any): Promise<number> {
     logger: false,
   });
 
-  try {
-    await client.connect();
-    const lock = await client.getMailboxLock("INBOX");
+  // Scans a single mailbox for replies. When `isSpam` is true and a reply is
+  // found, the message is moved into INBOX after being recorded — so a reply
+  // that landed in spam (common with Yahoo, and with any brand-new sending
+  // account) still gets detected AND surfaced where the person will actually
+  // see it in their real inbox.
+  async function scanMailbox(mailboxPath: string, isSpam: boolean): Promise<number> {
+    let foundHere = 0;
+    let lock;
+    try {
+      lock = await client.getMailboxLock(mailboxPath);
+    } catch (err: any) {
+      console.log(`[reply] IMAP could not open mailbox "${mailboxPath}" for ${account.email}: ${err?.message || err}`);
+      return 0;
+    }
     try {
       const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const allUids = (await client.search({ since }) || []);
       const uids = allUids.slice(-300);
-      console.log(`[reply] IMAP INBOX: ${uids.length} messages in last 7 days`);
+      console.log(`[reply] IMAP ${mailboxPath}: ${uids.length} messages in last 7 days`);
 
       let checkedCount = 0;
       let matchAttempts = 0;
@@ -873,19 +884,64 @@ async function checkImapAccountReplies(account: any): Promise<number> {
           }
         }
 
-        console.log(`[reply] IMAP matched reply to log ${matchedLog.id} from ${from} (method: ${matchMethod})`);
+        console.log(`[reply] IMAP matched reply to log ${matchedLog.id} from ${from} in "${mailboxPath}" (method: ${matchMethod})`);
         const ok = await processReply(
           { id: matchedLog.id, leadId: matchedLog.leadId, threadId: matchedLog.threadId || msg.uid?.toString() || null },
           account,
           replySubject,
           replyBody,
         );
-        if (ok) replied++;
+        if (ok) {
+          foundHere++;
+          // Move the reply out of spam and into the real inbox now that
+          // it's been detected, so the person actually sees it there too.
+          if (isSpam && msg.uid) {
+            try {
+              await client.messageMove([msg.uid], "INBOX", { uid: true });
+              console.log(`[reply] Moved message uid ${msg.uid} from "${mailboxPath}" to INBOX for ${account.email}`);
+            } catch (moveErr: any) {
+              console.error(`[reply] Failed to move message out of "${mailboxPath}" for ${account.email}:`, moveErr?.message || moveErr);
+            }
+          }
+        }
       }
 
-      console.log(`[reply] IMAP done: checked=${checkedCount} withReplyHeaders=${matchAttempts} replied=${replied}`);
+      console.log(`[reply] IMAP ${mailboxPath} done: checked=${checkedCount} withReplyHeaders=${matchAttempts} replied=${foundHere}`);
     } finally {
       lock.release();
+    }
+    return foundHere;
+  }
+
+  try {
+    await client.connect();
+
+    replied += await scanMailbox("INBOX", false);
+
+    // Find spam/junk folders. Most providers (including Yahoo) expose the
+    // IMAP SPECIAL-USE extension so the \Junk flag reliably identifies the
+    // right folder regardless of its display name/language. Fall back to
+    // common folder names for servers that don't support SPECIAL-USE.
+    try {
+      const mailboxes = await client.list();
+      const junkPaths = new Set<string>();
+      for (const mb of mailboxes) {
+        if (mb.specialUse === "\\Junk") junkPaths.add(mb.path);
+      }
+      if (junkPaths.size === 0) {
+        const commonJunkNames = ["spam", "junk", "junk e-mail", "bulk mail", "bulk", "[gmail]/spam"];
+        for (const mb of mailboxes) {
+          const name = (mb.name || mb.path || "").toLowerCase();
+          if (commonJunkNames.includes(name) || commonJunkNames.includes(mb.path.toLowerCase())) {
+            junkPaths.add(mb.path);
+          }
+        }
+      }
+      for (const jp of junkPaths) {
+        replied += await scanMailbox(jp, true);
+      }
+    } catch (listErr: any) {
+      console.error(`[reply] IMAP could not list mailboxes for ${account.email}:`, listErr?.message || listErr);
     }
   } catch (err: any) {
     console.error(`[reply] IMAP failed for ${account.email}:`, err?.message || err);
