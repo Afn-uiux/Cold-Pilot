@@ -649,14 +649,22 @@ async function checkGmailAccountReplies(account: any): Promise<number> {
       emailAccountId: account.id,
       type: "outgoing",
       repliedAt: null,
-      threadId: { not: null },
     },
-    select: { threadId: true, id: true, leadId: true },
+    select: { threadId: true, id: true, leadId: true, messageId: true, subject: true, lead: { select: { email: true } } },
     orderBy: { sentAt: "desc" },
     take: 300,
   });
 
-  console.log(`[reply] Gmail check for ${account.email}: ${sentLogs.length} pending threads`);
+  // Maps a lead's email address -> leadId, used by the spam-scan's
+  // sender+subject fallback matcher (mirrors the IMAP path).
+  const leadEmailById = new Map<string, string>();
+  for (const l of sentLogs) {
+    if (l.lead?.email) leadEmailById.set(l.lead.email.toLowerCase(), l.leadId);
+  }
+
+  console.log(`[reply] Gmail check for ${account.email}: ${sentLogs.length} pending logs`);
+
+  let authFailed = false;
 
   for (const log of sentLogs) {
     if (!log.threadId) continue;
@@ -673,9 +681,10 @@ async function checkGmailAccountReplies(account: any): Promise<number> {
       // silently stopped working. Surface it on the account and stop
       // burning through the rest of this account's threads on the same
       // dead token.
-      const authFailed = err?.code === 401 || err?.code === "EAUTH" ||
+      const isAuthFailure = err?.code === 401 || err?.code === "EAUTH" ||
         (typeof err?.message === "string" && (err.message.includes("invalid_grant") || err.message.includes("invalid_token")));
-      if (authFailed) {
+      if (isAuthFailure) {
+        authFailed = true;
         console.error(`Gmail auth failed for ${account.email}, marking account as needing reconnection:`, err?.message || err);
         try {
           await prisma.emailAccount.update({ where: { id: account.id }, data: { status: "error" } });
@@ -689,6 +698,120 @@ async function checkGmailAccountReplies(account: any): Promise<number> {
         break;
       }
       console.error(`Gmail reply check failed for thread ${log.threadId}:`, err);
+    }
+  }
+
+  // Also scan the SPAM label — Gmail usually keeps a reply in the same
+  // thread as the original send even if it's classified as spam, but that
+  // isn't guaranteed (e.g. a reply from an address Gmail doesn't trust yet
+  // can start a separate, spam-labeled thread). This mirrors the IMAP
+  // spam-folder scanning above: same header + subject/sender fallback
+  // matching, and any match gets moved out of SPAM into the inbox.
+  if (!authFailed) {
+    try {
+      replied += await checkGmailSpamReplies(account, sentLogs, leadEmailById);
+    } catch (err: any) {
+      console.error(`[reply] Gmail spam scan failed for ${account.email}:`, err?.message || err);
+    }
+  }
+
+  return replied;
+}
+
+async function checkGmailSpamReplies(
+  account: any,
+  sentLogs: { id: string; leadId: string; threadId: string | null; messageId: string | null; subject: string | null }[],
+  leadEmailById: Map<string, string>
+): Promise<number> {
+  if (sentLogs.length === 0) return 0;
+
+  const { google } = await import("googleapis");
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  );
+  oauth2Client.setCredentials({ refresh_token: account.gmailToken });
+  const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+  const listRes = await gmail.users.messages.list({
+    userId: "me",
+    labelIds: ["SPAM"],
+    maxResults: 50,
+    q: "newer_than:7d",
+  });
+  const messages = listRes.data.messages || [];
+  if (messages.length === 0) return 0;
+
+  console.log(`[reply] Gmail SPAM: ${messages.length} messages in last 7 days for ${account.email}`);
+
+  const normId = (id: string) => id.replace(/[<>]/g, "").trim();
+  const normSubject = (s: string) => s.replace(/^(re|fwd?|fw)\s*:\s*/i, "").trim().toLowerCase();
+
+  let replied = 0;
+
+  for (const m of messages) {
+    if (!m.id) continue;
+    const full = await gmail.users.messages.get({ userId: "me", id: m.id, format: "full" });
+    const headers = full.data.payload?.headers || [];
+    const getHeader = (name: string) => headers.find(h => h.name?.toLowerCase() === name)?.value || "";
+
+    const from = getHeader("from");
+    if (from.toLowerCase().includes(account.email.toLowerCase())) continue;
+
+    const inReplyTo = getHeader("in-reply-to");
+    const references = getHeader("references");
+    const replySubject = getHeader("subject");
+
+    let matchedLog: typeof sentLogs[number] | undefined;
+    if (inReplyTo || references) {
+      matchedLog = sentLogs.find(l =>
+        l.messageId && (inReplyTo.includes(normId(l.messageId)) || references.includes(normId(l.messageId)))
+      );
+    }
+    // Fallback: match on sender + normalized subject when threading headers
+    // are missing or don't line up with our records.
+    if (!matchedLog && replySubject) {
+      const fromEmailMatch = from.match(/<?([\w.+-]+@[\w.-]+\.\w+)>?/);
+      const fromEmail = fromEmailMatch ? fromEmailMatch[1].toLowerCase() : "";
+      if (fromEmail) {
+        const candidateLeadId = leadEmailById.get(fromEmail);
+        const normReplySubject = normSubject(replySubject);
+        if (candidateLeadId && normReplySubject) {
+          matchedLog = sentLogs.find(l =>
+            l.leadId === candidateLeadId && l.subject && normSubject(l.subject) === normReplySubject
+          );
+        }
+      }
+    }
+    if (!matchedLog) continue;
+
+    let body = "";
+    const payload = full.data.payload;
+    if (payload?.parts) {
+      const textPart = payload.parts.find(p => p.mimeType === "text/plain")
+        || payload.parts.find(p => p.mimeType === "text/html");
+      if (textPart?.body?.data) body = Buffer.from(textPart.body.data, "base64url").toString("utf-8");
+    } else if (payload?.body?.data) {
+      body = Buffer.from(payload.body.data, "base64url").toString("utf-8");
+    }
+    if (!body) body = full.data.snippet || "";
+
+    console.log(`[reply] Gmail SPAM matched reply to log ${matchedLog.id} from ${from}`);
+    const ok = await processReply(
+      { id: matchedLog.id, leadId: matchedLog.leadId, threadId: matchedLog.threadId || full.data.threadId || null },
+      account,
+      replySubject,
+      body.slice(0, 2000),
+    );
+    if (ok) {
+      replied++;
+      // Move it out of spam and into the inbox now that it's been detected.
+      try {
+        await gmail.users.messages.modify({ userId: "me", id: m.id, requestBody: { removeLabelIds: ["SPAM"], addLabelIds: ["INBOX"] } });
+        console.log(`[reply] Moved Gmail message ${m.id} out of SPAM to INBOX for ${account.email}`);
+      } catch (modErr: any) {
+        console.error(`[reply] Failed to un-spam Gmail message ${m.id} for ${account.email}:`, modErr?.message || modErr);
+      }
     }
   }
 
