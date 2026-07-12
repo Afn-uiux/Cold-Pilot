@@ -192,5 +192,6 @@ async function sendViaSmtp(
     ...(inReplyTo ? { inReplyTo, references: references || inReplyTo } : {}),
   });
 
+  console.log(`[send] SMTP sent to ${to} inReplyTo=${inReplyTo || "none"} references=${(references || "").slice(0, 100) || "none"} messageId=${info.messageId}`);
   return info.messageId;
 }

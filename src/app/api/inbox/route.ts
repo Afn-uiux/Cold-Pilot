@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       where: { userId: session.user.id },
       select: {
         id: true, firstName: true, lastName: true, email: true, status: true,
-        campaignId: true,
+        campaignId: true, lastReadAt: true,
         campaign: { select: { name: true } },
       },
       orderBy: { updatedAt: "desc" },
@@ -91,6 +91,10 @@ export async function GET(req: NextRequest) {
     .map(l => {
     const lastLog = latestByLead.get(l.id)!;
     const deal = dealByLead.get(l.id);
+    const isReplied = l.status === "replied";
+    const lastLogTime = new Date(lastLog.sentAt).getTime();
+    const readAt = l.lastReadAt ? new Date(l.lastReadAt).getTime() : 0;
+    const unread = isReplied && readAt < lastLogTime;
     return {
       id: l.id,
       name: [l.firstName, l.lastName].filter(Boolean).join(" ") || l.email,
@@ -102,8 +106,8 @@ export async function GET(req: NextRequest) {
       subject: lastLog.subject || "No subject",
       preview: lastLog.bodyHtml ? lastLog.bodyHtml.replace(/<[^>]*>/g, "").slice(0, 120) : "",
       time: timeAgo(lastLog.sentAt),
-      unread: l.status === "replied",
-      repliedAt: l.status === "replied" ? lastLog.repliedAt : null,
+      unread,
+      repliedAt: isReplied ? lastLog.repliedAt : null,
       dealStage: deal?.stage || null,
       dealStatus: deal?.status || null,
       dealValue: deal?.value || 0,
@@ -111,6 +115,37 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json({ threads, campaigns, emailAccounts });
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { leadId } = await req.json();
+  if (!leadId) return NextResponse.json({ error: "leadId required" }, { status: 400 });
+
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, userId: session.user.id } });
+  if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  await prisma.lead.update({ where: { id: leadId }, data: { lastReadAt: new Date() } });
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const url = new URL(req.url);
+  const leadId = url.searchParams.get("leadId");
+  if (!leadId) return NextResponse.json({ error: "leadId required" }, { status: 400 });
+
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, userId: session.user.id } });
+  if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  await prisma.emailLog.deleteMany({ where: { leadId } });
+  await prisma.deal.deleteMany({ where: { leadId } });
+  await prisma.lead.delete({ where: { id: leadId } });
+  return NextResponse.json({ ok: true });
 }
 
 function timeAgo(date: Date): string {

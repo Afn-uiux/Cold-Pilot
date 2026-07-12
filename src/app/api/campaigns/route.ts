@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
   // Enrich with email metrics per campaign
   const enriched = await Promise.all(campaigns.map(async (c) => {
     const totalLeads = c._count.leads;
+    const totalSteps = Math.max(c._count.steps, 1);
     const sentCount = await prisma.emailLog.count({
       where: { lead: { campaignId: c.id }, type: "outgoing", status: "sent" },
     });
@@ -51,6 +52,24 @@ export async function GET(req: NextRequest) {
     const opportunities = campaignLeadIds.length > 0
       ? await prisma.deal.count({ where: { leadId: { in: campaignLeadIds } } })
       : 0;
+
+    // Weighted progress: each lead contributes based on currentStep
+    // Terminal states (completed, replied, bounced, suppressed) = 100%
+    const leads = await prisma.lead.findMany({
+      where: { campaignId: c.id },
+      select: { status: true, currentStep: true },
+    });
+    const TERMINAL = new Set(["completed", "replied", "bounced", "suppressed"]);
+    let progressSum = 0;
+    for (const l of leads) {
+      if (TERMINAL.has(l.status)) {
+        progressSum += 100;
+      } else {
+        progressSum += Math.min(Math.round(((l.currentStep || 0) / totalSteps) * 100), 100);
+      }
+    }
+    const progress = totalLeads > 0 ? Math.round(progressSum / totalLeads) : 0;
+
     return {
       ...c,
       metrics: {
@@ -61,7 +80,7 @@ export async function GET(req: NextRequest) {
         opportunities,
         totalLeads,
         completedLeads,
-        progress: totalLeads > 0 ? Math.min(Math.round((sentCount / (totalLeads * Math.max(c._count.steps, 1))) * 100), 100) : 0,
+        progress,
         replyRate: sentCount > 0 ? Math.round((repliedLeads / sentCount) * 100) : 0,
       },
     };

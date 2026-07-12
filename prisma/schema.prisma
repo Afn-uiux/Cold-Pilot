@@ -284,6 +284,7 @@ model Lead {
   currentStep     Int      @default(0)
   sendingAccountId String?
   lastSentAt      DateTime?
+  lastReadAt      DateTime?
   notes           String?
 
   createdAt DateTime @default(now())
@@ -293,6 +294,7 @@ model Lead {
   campaign  Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   emailLogs EmailLog[]
   groups    LeadGroup[]
+  deals     Deal[]
 }
 
 model EmailLog {
@@ -355,6 +357,7 @@ model Deal {
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  lead     Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
   tasks    Task[]
 }
 

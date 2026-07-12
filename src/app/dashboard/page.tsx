@@ -21,7 +21,7 @@ export default async function DashboardPage() {
     select: { status: true, openedAt: true, repliedAt: true },
   });
 
-  const sent = emailLogs.length;
+  const sent = emailLogs.filter(e => e.status === "sent" || e.status === "delivered").length;
   const replied = emailLogs.filter(e => e.repliedAt).length;
   const replyRate = sent > 0 ? Math.round((replied / sent) * 1000) / 10 : 0;
 

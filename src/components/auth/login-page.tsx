@@ -2,12 +2,17 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { login, demoLogin } from "@/app/actions/auth";
+import { login, demoLogin, resetPassword } from "@/app/actions/auth";
 import Link from "next/link";
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetPass, setResetPass] = useState("");
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -18,6 +23,20 @@ export default function LoginPage() {
       setError(result.error);
     } else {
       window.location.href = "/dashboard";
+    }
+  }
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault();
+    setResetMsg(null);
+    setResetLoading(true);
+    const result = await resetPassword(resetEmail, resetPass);
+    setResetLoading(false);
+    if (result?.error) {
+      setResetMsg(result.error);
+    } else {
+      setResetMsg("Password reset! You can now log in.");
+      setResetOpen(false);
     }
   }
 
@@ -91,6 +110,15 @@ export default function LoginPage() {
             <button type="submit" className="btn btn-primary" style={{ width: "100%" }}>Log in</button>
           </form>
 
+          <div style={{ marginTop: 12, textAlign: "right" }}>
+            <button onClick={() => { setResetOpen(true); setResetMsg(null); setResetEmail(""); setResetPass(""); }}
+              style={{ fontSize: 13, color: "#5A6B87", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+              onMouseEnter={e => (e.target as HTMLElement).style.color = "#0F1929"}
+              onMouseLeave={e => (e.target as HTMLElement).style.color = "#5A6B87"}>
+              Forgot password?
+            </button>
+          </div>
+
           <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "#8A9BB5", margin: "4px 0" }}>
             <div style={{ flex: 1, height: 1, background: "rgba(15,25,41,0.08)" }} />
             <span>or</span>
@@ -116,6 +144,31 @@ export default function LoginPage() {
           </p>
         </div>
       </main>
+
+      {resetOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
+          onClick={() => setResetOpen(false)}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 32, width: "100%", maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, fontWeight: 500, color: "#0F1929", marginBottom: 4 }}>Reset password</h3>
+            <p style={{ fontSize: 13, color: "#5A6B87", marginBottom: 20 }}>Enter your email and a new password.</p>
+            {resetMsg && (
+              <div style={{ fontSize: 13, color: resetMsg.includes("!") ? "#2E7D32" : "#C62828", background: resetMsg.includes("!") ? "rgba(46,125,50,0.06)" : "rgba(198,40,40,0.06)", padding: "10px 14px", borderRadius: 6, marginBottom: 16 }}>{resetMsg}</div>
+            )}
+            <form onSubmit={handleReset} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <input value={resetEmail} onChange={e => setResetEmail(e.target.value)} type="email" required placeholder="Email"
+                style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 0", outline: "none" }} />
+              <input value={resetPass} onChange={e => setResetPass(e.target.value)} type="password" required placeholder="New password (min 6 chars)"
+                style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 0", outline: "none" }} />
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+                <button type="button" onClick={() => setResetOpen(false)}
+                  style={{ padding: "8px 16px", fontSize: 13, color: "#5A6B87", background: "none", border: "1px solid rgba(15,25,41,0.08)", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
+                <button type="submit" disabled={resetLoading}
+                  style={{ padding: "8px 16px", fontSize: 13, color: "#fff", background: "#0F1929", border: "none", borderRadius: 6, cursor: "pointer" }}>{resetLoading ? "Resetting..." : "Reset"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

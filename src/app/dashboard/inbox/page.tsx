@@ -79,6 +79,27 @@ export default function InboxPage() {
       if (data.lead) setLead(data.lead);
       if (Array.isArray(data.emailLogs)) setEmailLogs(data.emailLogs);
     }).catch(() => {}).finally(() => setThreadLoading(false));
+    fetch("/api/inbox", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadId: id }),
+    }).then(() => {
+      setThreads(prev => prev.map(t => t.id === id ? { ...t, unread: false } : t));
+    }).catch(() => {});
+  }
+
+  async function deleteThread() {
+    if (!selectedId) return;
+    if (!confirm("Delete this conversation?")) return;
+    try {
+      const res = await fetch(`/api/inbox?leadId=${selectedId}`, { method: "DELETE" });
+      if (res.ok) {
+        setThreads(prev => prev.filter(t => t.id !== selectedId));
+        setSelectedId(null);
+        setLead(null);
+        setEmailLogs([]);
+      }
+    } catch {}
   }
 
   async function sendReply() {
@@ -300,6 +321,13 @@ export default function InboxPage() {
                     {STAGE_LABELS[selectedThread.dealStage] || selectedThread.dealStage}
                   </span>
                 )}
+                <button onClick={deleteThread}
+                  className="ml-auto text-muted hover:text-red-500 transition-colors p-1.5 rounded-md hover:bg-red-50"
+                  title="Delete conversation">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
               </div>
               <p className="text-xs text-muted mt-1">{selectedThread.name} &lt;{selectedThread.email}&gt;</p>
               {selectedThread.emailAccountEmail && <p className="text-xs text-muted-2 mt-0.5">via {selectedThread.emailAccountEmail}</p>}

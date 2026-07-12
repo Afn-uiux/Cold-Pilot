@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { VARIABLE_LIST, processSpintax, getPersonalizedPreview } from "@/engine/personalize";
@@ -820,7 +821,6 @@ function AnalyticsTab({ campaignId, state, onPublish, onPause, onResume }: { cam
   const openTrackingEnabled = campaignData.openTracking === true;
   const clickTrackingEnabled = campaignData.clickTracking === true;
   const steps: any[] = stats?.stepAnalytics?.[0]?.steps || [];
-  const activity: { date: string; count: number }[] = stats?.activity || [];
   const tabs = ["Step Analytics", "Activity", "Bounces", "Suppressed"];
 
   return (
@@ -904,31 +904,8 @@ function AnalyticsTab({ campaignId, state, onPublish, onPause, onResume }: { cam
         )}
 
         {/* Activity */}
-        {analyticsTab === "Activity" && (
-          <div className="px-8 pb-6">
-            {activity.length > 0 ? (
-              <div>
-                <div className="flex items-center justify-between pt-6 pb-4">
-                  <span className="text-xs text-muted">{activity.reduce((sum, a) => sum + a.count, 0)} emails sent</span>
-                </div>
-                <div className="h-44 flex items-end justify-between gap-1 px-2">
-                  {activity.map((a) => {
-                    const maxCount = Math.max(...activity.map(x => x.count), 1);
-                    return (
-                      <div key={a.date} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
-                        <div className="w-full bg-blue-accent/30 hover:bg-blue-accent/60 rounded-sm transition-colors" style={{ height: `${(a.count / maxCount) * 100}%`, minHeight: 2 }} />
-                        <span className="text-[9px] text-muted-2 truncate w-full text-center">{formatDay(a.date)}</span>
-                        <div className="absolute bottom-8 hidden group-hover:block bg-ink text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-10">{a.count} sent</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center py-16 text-sm text-muted-2">No data yet</div>
-            )}
-          </div>
-        )}
+        {analyticsTab === "Activity" && <ActivityFeedTab campaignId={campaignId} />}
+
 
         {/* Bounces */}
         {analyticsTab === "Bounces" && <BouncesTab stats={stats} />}
@@ -936,6 +913,208 @@ function AnalyticsTab({ campaignId, state, onPublish, onPause, onResume }: { cam
         {/* Suppressed */}
         {analyticsTab === "Suppressed" && <SuppressedTab campaignId={campaignId} />}
       </div>
+    </div>
+  );
+}
+
+function timeAgo(dateStr: string): string {
+  const then = new Date(dateStr).getTime();
+  const now = Date.now();
+  const diffSec = Math.max(0, Math.floor((now - then) / 1000));
+  if (diffSec < 60) return "just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 30) return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
+  const diffMon = Math.floor(diffDay / 30);
+  return `${diffMon} month${diffMon === 1 ? "" : "s"} ago`;
+}
+
+const ACTIVITY_TYPE_META: Record<string, { label: string; color: string; bg: string; icon: ReactNode }> = {
+  sent: {
+    label: "Sent", color: "#2563EB", bg: "rgba(37,99,235,0.1)",
+    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" /></svg>,
+  },
+  opened: {
+    label: "Opened", color: "#7C3AED", bg: "rgba(124,58,237,0.1)",
+    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 8.5 13.4 14a2 2 0 0 1-2.8 0L2 8.5" /><rect x="2" y="4" width="20" height="16" rx="2" /></svg>,
+  },
+  clicked: {
+    label: "Clicked", color: "#D97706", bg: "rgba(217,119,6,0.1)",
+    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 9l11 4-4.5 2L13 20z" /><path d="M9 9V3M4.2 6.2l1.4 1.4M3 12h2" /></svg>,
+  },
+  replied: {
+    label: "Replied", color: "#16A34A", bg: "rgba(22,163,74,0.1)",
+    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 17 4 12l5-5" /><path d="M4 12h11a5 5 0 0 1 5 5v2" /></svg>,
+  },
+  bounced: {
+    label: "Bounce", color: "#DC2626", bg: "rgba(220,38,38,0.1)",
+    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>,
+  },
+};
+
+function ActivityFeedTab({ campaignId }: { campaignId: string }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const PAGE_SIZE = 50;
+
+  // Debounce the search box so we're not firing a request per keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    fetch(`/api/campaigns/activity?campaignId=${campaignId}&search=${encodeURIComponent(search)}&type=${typeFilter}&offset=0&limit=${PAGE_SIZE}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!active) return;
+        setItems(Array.isArray(data.items) ? data.items : []);
+        setTotal(data.total || 0);
+        setHasMore(Boolean(data.hasMore));
+      })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [campaignId, search, typeFilter]);
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/campaigns/activity?campaignId=${campaignId}&search=${encodeURIComponent(search)}&type=${typeFilter}&offset=${items.length}&limit=${PAGE_SIZE}`);
+      const data = await res.json();
+      setItems(prev => [...prev, ...(Array.isArray(data.items) ? data.items : [])]);
+      setHasMore(Boolean(data.hasMore));
+    } catch {}
+    setLoadingMore(false);
+  }
+
+  async function downloadCsv() {
+    const res = await fetch(`/api/campaigns/activity?campaignId=${campaignId}&search=${encodeURIComponent(search)}&type=${typeFilter}&offset=0&limit=5000`);
+    const data = await res.json();
+    const rows: any[] = Array.isArray(data.items) ? data.items : [];
+    const header = ["Type", "Lead Email", "Sending Account", "Step", "Date"];
+    const csvLines = [
+      header.join(","),
+      ...rows.map(r => [
+        ACTIVITY_TYPE_META[r.type]?.label || r.type,
+        r.leadEmail,
+        r.senderEmail,
+        r.step ? `Step ${r.step}` : "",
+        new Date(r.date).toISOString(),
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    ];
+    const blob = new Blob([csvLines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "activity.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const typeOptions = [
+    { value: "all", label: "All activity" },
+    { value: "sent", label: "Sent" },
+    { value: "opened", label: "Opened" },
+    { value: "clicked", label: "Clicked" },
+    { value: "replied", label: "Replied" },
+    { value: "bounced", label: "Bounced" },
+  ];
+
+  return (
+    <div className="px-8 pb-6">
+      {/* Search + filter + export */}
+      <div className="flex items-center gap-2 pt-6 pb-4">
+        <div className="relative flex-1 max-w-xs">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+          </span>
+          <input
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            placeholder="Search by email"
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-border bg-transparent text-ink placeholder:text-muted-2 focus:outline-none focus:border-blue-accent"
+          />
+        </div>
+        <div className="relative">
+          <button onClick={() => setFilterOpen(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-md border ${typeFilter !== "all" ? "border-blue-accent text-blue-accent" : "border-border text-muted"}`}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
+            Filter{typeFilter !== "all" ? `: ${ACTIVITY_TYPE_META[typeFilter]?.label || typeFilter}` : ""}
+          </button>
+          {filterOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-border rounded-md shadow-lg z-20 py-1">
+                {typeOptions.map(opt => (
+                  <button key={opt.value} onClick={() => { setTypeFilter(opt.value); setFilterOpen(false); }}
+                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-cream-2 ${typeFilter === opt.value ? "text-blue-accent font-medium" : "text-ink"}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <button onClick={downloadCsv} title="Export CSV" className="p-2 rounded-md border border-border text-muted hover:text-blue-accent hover:border-blue-accent">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+        </button>
+        <div className="flex-1" />
+        <span className="text-xs text-muted-2">{total} event{total === 1 ? "" : "s"}</span>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-sm text-muted-2">Loading...</div>
+      ) : items.length === 0 ? (
+        <div className="flex items-center justify-center py-16 text-sm text-muted-2">No activity yet</div>
+      ) : (
+        <div>
+          {items.map((item, i) => {
+            const meta = ACTIVITY_TYPE_META[item.type] || ACTIVITY_TYPE_META.sent;
+            return (
+              <div key={item.id} className={`flex items-center gap-4 py-3.5 ${i > 0 ? "border-t border-dashed border-border" : ""}`}>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: meta.bg, color: meta.color }}>
+                  {meta.icon}
+                </div>
+                <div className="w-20 shrink-0">
+                  <div className="text-sm font-semibold text-ink">{meta.label}</div>
+                  <div className="text-[11px] text-muted-2 truncate max-w-[140px]">{item.senderEmail}</div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <span className="text-muted-2 shrink-0">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16v16H4z" /><path d="m4 6 8 7 8-7" /></svg>
+                  </span>
+                  <span className="text-sm text-ink truncate">{item.leadEmail}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-muted-2 shrink-0 w-36">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                  {timeAgo(item.date)}
+                </div>
+                <div className="text-xs text-muted-2 shrink-0 w-14 text-right">{item.step ? `Step ${item.step}` : ""}</div>
+              </div>
+            );
+          })}
+          {hasMore && (
+            <div className="flex justify-center pt-6">
+              <button onClick={loadMore} disabled={loadingMore} className="btn btn-ghost btn-sm">
+                {loadingMore ? "Loading..." : `Load ${PAGE_SIZE} more`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

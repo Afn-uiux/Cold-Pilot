@@ -57,6 +57,21 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function cleanReplyBody(raw: string): string {
+  let body = raw;
+  // Strip MIME headers that leak into the body (Content-Type, Content-Transfer-Encoding, etc.)
+  body = body.replace(/^[A-Z][\w-]*:\s*[^\n]+\n/gim, "");
+  // Strip the "On <date>, <name> wrote:" introduction line and everything after it
+  body = body.replace(/On\s+.+wrote:\s*[\s\S]*$/im, "");
+  // Strip quoted lines (starting with >)
+  body = body.split("\n").filter(line => !line.trimStart().startsWith(">")).join("\n");
+  // Strip HTML tags if any
+  body = body.replace(/<[^>]*>/g, "");
+  // Collapse multiple blank lines
+  body = body.replace(/\n{3,}/g, "\n\n").trim();
+  return body.slice(0, 2000);
+}
+
 const runningCampaigns = new Set<string>();
 
 export async function executeCampaign(campaignId: string) {
@@ -801,7 +816,7 @@ async function checkGmailSpamReplies(
       { id: matchedLog.id, leadId: matchedLog.leadId, threadId: matchedLog.threadId || full.data.threadId || null },
       account,
       replySubject,
-      body.slice(0, 2000),
+      cleanReplyBody(body.slice(0, 2000)),
     );
     if (ok) {
       replied++;
@@ -854,7 +869,7 @@ async function checkGmailThread(refreshToken: string, threadId: string, ownEmail
     }
     if (!body) body = msg.snippet || "";
 
-    return { subject, body: body.slice(0, 2000) };
+    return { subject, body: cleanReplyBody(body.slice(0, 2000)) };
   }
   return null;
 }
@@ -1005,6 +1020,10 @@ async function checkImapAccountReplies(account: any): Promise<number> {
           } else {
             replyBody = afterHeaders.replace(/<[^>]*>/g, "").trim().slice(0, 2000);
           }
+          // Clean up the reply body: strip MIME headers, quoted text, and
+          // the "On ... wrote:" introduction line so only the actual reply
+          // content is shown.
+          replyBody = cleanReplyBody(replyBody);
         }
 
         console.log(`[reply] IMAP matched reply to log ${matchedLog.id} from ${from} in "${mailboxPath}" (method: ${matchMethod})`);

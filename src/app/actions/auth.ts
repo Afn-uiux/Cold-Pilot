@@ -57,6 +57,22 @@ export async function login(formData: FormData) {
   }
 }
 
+export async function resetPassword(email: string, newPassword: string) {
+  if (!email || !newPassword) {
+    return { error: "Email and new password are required" };
+  }
+  if (newPassword.length < 6) {
+    return { error: "Password must be at least 6 characters" };
+  }
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    return { error: "No account found with this email" };
+  }
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+  await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
+  return { success: true };
+}
+
 export async function demoLogin() {
   const email = "demo@coldpilot.io";
   const password = "demo123456";
