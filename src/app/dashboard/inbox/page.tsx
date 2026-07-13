@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 
 type Campaign = { id: string; name: string };
 type EmailAccount = { id: string; email: string };
@@ -32,7 +33,16 @@ function stageBadgeClass(s: string) {
   return POSITIVE_STAGES.includes(s) ? "bg-purple-100 text-purple-700" : "bg-red-100 text-red-700";
 }
 
-export default function InboxPage() {
+export default function InboxPageWrapper() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen text-sm text-muted">Loading...</div>}>
+      <InboxPage />
+    </Suspense>
+  );
+}
+
+function InboxPage() {
+  const searchParams = useSearchParams();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
@@ -61,14 +71,27 @@ export default function InboxPage() {
   const [inboxSearch, setInboxSearch] = useState("");
   const [moreSearch, setMoreSearch] = useState("");
 
-  useEffect(() => {
+  function fetchInbox() {
     fetch("/api/inbox").then(r => r.json()).then(data => {
       if (data.threads) setThreads(data.threads);
       if (data.campaigns) setCampaigns(data.campaigns);
       if (data.emailAccounts) setEmailAccounts(data.emailAccounts);
     }).catch(() => {})
     .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    fetchInbox();
+    const interval = setInterval(fetchInbox, 30000);
+    return () => clearInterval(interval);
   }, []);
+
+  const leadIdParam = searchParams.get("leadId");
+  useEffect(() => {
+    if (leadIdParam && threads.length > 0 && !selectedId) {
+      selectThread(leadIdParam);
+    }
+  }, [leadIdParam, threads]);
 
   function selectThread(id: string) {
     setSelectedId(id);
@@ -129,8 +152,8 @@ export default function InboxPage() {
 
   const selectedThread = threads.find(t => t.id === selectedId);
 
-  // Filter threads
-  let filtered = threads.filter(t => t.unread || t.dealStage);
+  // Filter threads — show all threads that have email activity
+  let filtered = threads;
   if (statusFilter) filtered = filtered.filter(t => t.dealStage === statusFilter);
   if (campaignFilter) filtered = filtered.filter(t => t.campaignId === campaignFilter);
   if (inboxFilter) filtered = filtered.filter(t => t.emailAccountId === inboxFilter);
