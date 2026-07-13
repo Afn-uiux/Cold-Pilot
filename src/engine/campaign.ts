@@ -97,6 +97,15 @@ async function executeCampaignInner(campaignId: string) {
 
   if (!campaign || campaign.status !== "active") return { sent: 0, errors: 0, skipped: 0 };
 
+  // Auto-complete: if no leads are pending or awaiting follow-up, mark campaign done
+  const activeLeads = await prisma.lead.count({
+    where: { campaignId, status: { in: ["pending", "sent"] } },
+  });
+  if (activeLeads === 0) {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "completed" } });
+    return { sent: 0, errors: 0, skipped: 0, reason: "completed" };
+  }
+
   if (!isWithinSchedule(campaign)) return { sent: 0, errors: 0, skipped: 0, reason: "outside_schedule" };
 
   // Use selected account IDs if set, otherwise use all active accounts
@@ -256,6 +265,8 @@ async function executeCampaignInner(campaignId: string) {
           trackingId: lead.id,
           openTracking: campaign.openTracking,
           clickTracking: campaign.clickTracking,
+          unsubscribeHeader: campaign.unsubscribeHeader,
+          plainTextOnly: campaign.plainTextOnly || campaign.firstEmailPlainText,
         });
 
         sent++;
@@ -376,6 +387,8 @@ async function executeCampaignInner(campaignId: string) {
           threadId: lastLog?.threadId || undefined,
           inReplyTo: lastLog?.messageId || null,
           references: referencesChain,
+          unsubscribeHeader: campaign.unsubscribeHeader,
+          plainTextOnly: campaign.plainTextOnly,
         });
 
         sent++;

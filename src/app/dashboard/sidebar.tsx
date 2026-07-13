@@ -84,8 +84,8 @@ export default function Sidebar({ user }: { user: any }) {
         </nav>
 
         <div className="pt-3 border-t border-border px-6">
-          <button
-            onClick={() => signOut({ redirectTo: "/auth/login" })}
+          <a
+            href="/api/auth/signout"
             className="flex items-center gap-3 py-2.5 text-sm text-muted hover:text-blue-accent transition-colors w-full text-left"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -94,7 +94,7 @@ export default function Sidebar({ user }: { user: any }) {
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
             Sign out
-          </button>
+          </a>
         </div>
       </aside>
     </>

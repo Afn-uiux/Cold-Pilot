@@ -16,6 +16,24 @@ interface SendOptions {
   trackingId?: string;
   openTracking?: boolean;
   clickTracking?: boolean;
+  unsubscribeHeader?: boolean;
+  plainTextOnly?: boolean;
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function rewriteLinks(html: string, baseUrl: string, leadId: string, campaignStepId?: string): string {
@@ -46,6 +64,7 @@ export async function sendEmail(opts: SendOptions) {
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
+  const unsubscribeUrl = opts.unsubscribeHeader ? `${baseUrl}/api/unsubscribe?lead=${opts.leadId}` : null;
 
   // Open/click tracking work by having the recipient's mail client load a URL
   // from the public internet. A localhost URL is only reachable from this
@@ -60,29 +79,35 @@ export async function sendEmail(opts: SendOptions) {
   }
 
   let html = opts.htmlBody;
-  // Convert plain-text newlines to HTML breaks for proper rendering in email clients
-  if (html && !html.match(/<br|<p|<div|<li|<h[1-6]/i)) {
-    html = html.replace(/\n\n+/g, "</p><p>").replace(/\n/g, "<br>");
-    html = `<p>${html}</p>`;
-  }
-  if (opts.clickTracking === true) {
-    html = rewriteLinks(html, baseUrl, opts.leadId, opts.campaignStepId);
+  const isPlainText = opts.plainTextOnly;
+
+  if (isPlainText) {
+    html = stripHtml(html);
+  } else {
+    // Convert plain-text newlines to HTML breaks for proper rendering in email clients
+    if (html && !html.match(/<br|<p|<div|<li|<h[1-6]/i)) {
+      html = html.replace(/\n\n+/g, "</p><p>").replace(/\n/g, "<br>");
+      html = `<p>${html}</p>`;
+    }
+    if (opts.clickTracking === true) {
+      html = rewriteLinks(html, baseUrl, opts.leadId, opts.campaignStepId);
+    }
   }
 
-  const trackingPixel = (opts.trackingId && opts.openTracking === true)
+  const trackingPixel = (!isPlainText && opts.trackingId && opts.openTracking === true)
     ? `<img src="${baseUrl}/api/track?id=${opts.trackingId}${opts.campaignStepId ? `&stepId=${opts.campaignStepId}` : ""}" width="1" height="1" alt="" style="display:none;" />`
     : "";
 
-  const body = html + trackingPixel;
+  const body = isPlainText ? html : html + trackingPixel;
   const fromName = opts.fromName || account.displayName || account.email;
 
   let sendResult: { messageId: string; threadId: string };
 
   try {
     if (account.provider === "Gmail" && account.gmailToken) {
-      sendResult = await sendViaGmailApi(account, opts.to, opts.subject, body, fromName, opts.threadId, opts.inReplyTo, opts.references);
+      sendResult = await sendViaGmailApi(account, opts.to, opts.subject, body, fromName, opts.threadId, opts.inReplyTo, opts.references, unsubscribeUrl, isPlainText);
     } else {
-      const smtpId = await sendViaSmtp(account, opts.to, opts.subject, body, fromName, opts.inReplyTo, opts.references);
+      const smtpId = await sendViaSmtp(account, opts.to, opts.subject, body, fromName, opts.inReplyTo, opts.references, unsubscribeUrl, isPlainText);
       sendResult = { messageId: smtpId, threadId: opts.threadId || smtpId };
     }
   } catch (err: any) {
@@ -132,7 +157,8 @@ export async function sendEmail(opts: SendOptions) {
 
 async function sendViaGmailApi(
   account: any, to: string, subject: string, htmlBody: string,
-  fromName: string, threadId?: string | null, inReplyTo?: string | null, references?: string | null
+  fromName: string, threadId?: string | null, inReplyTo?: string | null, references?: string | null,
+  listUnsubscribe?: string | null, isPlainText?: boolean
 ): Promise<{ messageId: string; threadId: string }> {
   const { google } = await import("googleapis");
 
@@ -148,12 +174,16 @@ async function sendViaGmailApi(
     `From: ${fromName} <${account.email}>`,
     `To: ${to}`,
     "MIME-Version: 1.0",
-    "Content-Type: text/html; charset=utf-8",
+    `Content-Type: ${isPlainText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8"}`,
     `Subject: ${subject}`,
   ];
   if (inReplyTo) {
     headers.push(`In-Reply-To: ${inReplyTo}`);
     headers.push(`References: ${references || inReplyTo}`);
+  }
+  if (listUnsubscribe) {
+    headers.push(`List-Unsubscribe: <${listUnsubscribe}>`);
+    headers.push(`List-Unsubscribe-Post: List-Unsubscribe=One-Click`);
   }
 
   const raw = Buffer.from([...headers, "", htmlBody].join("\r\n"))
@@ -172,7 +202,8 @@ async function sendViaGmailApi(
 
 async function sendViaSmtp(
   account: any, to: string, subject: string, htmlBody: string,
-  fromName: string, inReplyTo?: string | null, references?: string | null
+  fromName: string, inReplyTo?: string | null, references?: string | null,
+  listUnsubscribe?: string | null, isPlainText?: boolean
 ): Promise<string> {
   const transporter = nodemailer.createTransport({
     host: account.smtpHost!,
@@ -188,8 +219,9 @@ async function sendViaSmtp(
     from: `"${fromName}" <${account.email}>`,
     to,
     subject,
-    html: htmlBody,
+    ...(isPlainText ? { text: htmlBody } : { html: htmlBody }),
     ...(inReplyTo ? { inReplyTo, references: references || inReplyTo } : {}),
+    ...(listUnsubscribe ? { headers: { "List-Unsubscribe": `<${listUnsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
   });
 
   console.log(`[send] SMTP sent to ${to} inReplyTo=${inReplyTo || "none"} references=${(references || "").slice(0, 100) || "none"} messageId=${info.messageId}`);

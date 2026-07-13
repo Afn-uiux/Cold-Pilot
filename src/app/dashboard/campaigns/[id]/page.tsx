@@ -9,7 +9,7 @@ import { VARIABLE_LIST, processSpintax, getPersonalizedPreview } from "@/engine/
 import Select from "@/components/select";
 import ConfirmModal from "@/components/confirm-modal";
 
-type CampaignState = "draft" | "active" | "paused";
+type CampaignState = "draft" | "active" | "paused" | "completed";
 type Step = { id?: string; type: string; subject: string; bodyHtml: string; delayDays: number; delayUnit: string; order: number };
 
 export default function CampaignDetailPage() {
@@ -865,8 +865,10 @@ function AnalyticsTab({ campaignId, state, onPublish, onPause, onResume }: { cam
           <div className="flex items-center gap-2 pb-4">
             {state === "active" ? (
               <button onClick={onPause} className="btn btn-ghost btn-xs">Pause</button>
-            ) : (
+            ) : state !== "completed" ? (
               <button onClick={onResume} className="btn btn-primary btn-xs">Resume</button>
+            ) : (
+              <span className="text-xs text-muted-2 font-medium">Completed</span>
             )}
           </div>
         </div>
@@ -1507,11 +1509,27 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
         ) : (
           <div className="relative">
             <button type="button" onClick={() => setAccountsOpen(!accountsOpen)}
-              className="w-full flex items-center justify-between border border-[#ddd] rounded-lg px-3 py-2.5 text-sm text-left bg-white hover:border-blue-accent transition-colors">
-              <span className={selected.length === 0 ? "text-[#999]" : "text-ink"}>
-                {selected.length === 0 ? "Select accounts" : `${selected.length} account${selected.length > 1 ? "s" : ""} selected`}
-              </span>
-              <svg className={`w-4 h-4 text-[#666] transition-transform ${accountsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              className="w-full flex items-center justify-between border border-[#ddd] rounded-lg px-3 py-2.5 text-sm text-left bg-white hover:border-blue-accent transition-colors min-h-[42px]">
+              <div className="flex flex-wrap gap-1.5 flex-1">
+                {selected.length === 0 ? (
+                  <span className="text-[#999]">Select accounts</span>
+                ) : (
+                  selected.map(id => {
+                    const acct = accounts.find(a => a.id === id);
+                    if (!acct) return null;
+                    return (
+                      <span key={id} className="inline-flex items-center gap-1 bg-cream-2 border border-border rounded-md px-2 py-0.5 text-xs text-ink">
+                        {acct.email}
+                        <button type="button" onClick={e => { e.stopPropagation(); setSelected(prev => prev.filter(x => x !== id)); }}
+                          className="text-muted-2 hover:text-ink ml-0.5">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      </span>
+                    );
+                  })
+                )}
+              </div>
+              <svg className={`w-4 h-4 text-[#666] transition-transform flex-shrink-0 ml-2 ${accountsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>

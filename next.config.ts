@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["192.168.1.111", "localhost", "0.0.0.0"],
+  allowedDevOrigins: ["wanting-capital-disk.ngrok-free.dev"],
 };
 
 export default nextConfig;

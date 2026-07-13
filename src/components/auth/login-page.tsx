@@ -1,24 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { signIn } from "next-auth/react";
 import { login, demoLogin, resetPassword } from "@/app/actions/auth";
 import Link from "next/link";
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("error");
+    if (err) {
+      window.history.replaceState({}, "", window.location.pathname);
+      if (err === "invalid") setError("Invalid email or password");
+      else if (err === "missing") setError("Email and password are required");
+      else setError("Login failed");
+    }
+  }, []);
   const [loading, setLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetPass, setResetPass] = useState("");
   const [resetMsg, setResetMsg] = useState<string | null>(null);
   const [resetLoading, setResetLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setLoading(true);
     const form = new FormData(e.currentTarget);
     const result = await login(form);
+    setLoading(false);
     if (result?.error) {
       setError(result.error);
     } else {
@@ -48,7 +62,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#F8FAFC", fontFamily: "'Geist', system-ui, sans-serif" }}>
-      {/* Top bar */}
       <header style={{ padding: "24px clamp(20px,4vw,40px)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Link href="/" style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 20, letterSpacing: "-0.01em", color: "#0F1929", textDecoration: "none" }}>
           Coldpilot
@@ -60,9 +73,7 @@ export default function LoginPage() {
         </Link>
       </header>
 
-      {/* Main */}
       <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px clamp(20px,4vw,40px) 80px", position: "relative", overflow: "hidden" }}>
-        {/* Background watermark */}
         <div style={{
           position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
           fontFamily: "'Geist', system-ui, sans-serif", fontSize: "clamp(140px,22vw,260px)",
@@ -78,7 +89,7 @@ export default function LoginPage() {
           </h1>
           <p style={{ marginTop: 12, fontSize: 15, color: "#5A6B87", lineHeight: 1.6 }}>Pick up where you left off.</p>
 
-          <form onSubmit={handleSubmit} style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 24 }}>
+          <form onSubmit={handleSubmit} action="/api/auth/login" method="POST" style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 24 }}>
             {error && (
               <div style={{ fontSize: 13, color: "#C62828", background: "rgba(198,40,40,0.06)", padding: "10px 14px", borderRadius: 6 }}>{error}</div>
             )}
@@ -107,7 +118,9 @@ export default function LoginPage() {
                 onBlur={e => e.target.style.borderBottomColor = "rgba(15,25,41,0.08)"} />
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: "100%" }}>Log in</button>
+            <button type="submit" className="btn btn-primary" style={{ width: "100%" }}>
+              {loading || isPending ? "Logging in..." : "Log in"}
+            </button>
           </form>
 
           <div style={{ marginTop: 12, textAlign: "right" }}>
