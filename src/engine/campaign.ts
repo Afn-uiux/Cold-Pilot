@@ -812,7 +812,7 @@ async function checkGmailSpamReplies(
     userId: "me",
     labelIds: ["SPAM"],
     maxResults: 50,
-    q: "newer_than:7d",
+    q: "-label:inbox",
   });
   const messages = listRes.data.messages || [];
   if (messages.length === 0) return 0;
@@ -986,10 +986,9 @@ async function checkImapAccountReplies(account: any): Promise<number> {
       return 0;
     }
     try {
-      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const allUids = (await client.search({ since }) || []);
+      const allUids = (await client.search({})) || [];
       const uids = allUids.slice(-300);
-      console.log(`[reply] IMAP ${mailboxPath}: ${uids.length} messages in last 7 days`);
+      console.log(`[reply] IMAP ${mailboxPath}: ${uids.length} messages`);
 
       let checkedCount = 0;
       let matchAttempts = 0;
