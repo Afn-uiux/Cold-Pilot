@@ -130,7 +130,9 @@ export async function sendEmail(opts: SendOptions) {
       sendResult = await sendViaGmailApi(account, opts.to, opts.subject, body, fromName, opts.threadId, opts.inReplyTo, opts.references, unsubscribeUrl, isPlainText);
     } else {
       const smtpId = await sendViaSmtp(account, opts.to, opts.subject, body, fromName, opts.inReplyTo, opts.references, unsubscribeUrl, isPlainText);
-      sendResult = { messageId: smtpId, threadId: opts.threadId || smtpId };
+      // For SMTP, store the nodemailer messageId as threadId only for the first email.
+      // Follow-ups already have a valid threadId from the first email's log.
+      sendResult = { messageId: normalizeMessageId(smtpId), threadId: opts.threadId || smtpId };
     }
   } catch (err: any) {
     const bounce = categorizeBounce(err);
@@ -177,6 +179,12 @@ export async function sendEmail(opts: SendOptions) {
   return sendResult;
 }
 
+export function normalizeMessageId(id: string): string {
+  const trimmed = id.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.startsWith("<") && trimmed.endsWith(">") ? trimmed : `<${trimmed.replace(/^<|>$/g, "")}>`;
+}
+
 async function sendViaGmailApi(
   account: any, to: string, subject: string, htmlBody: string,
   fromName: string, threadId?: string | null, inReplyTo?: string | null, references?: string | null,
@@ -192,10 +200,22 @@ async function sendViaGmailApi(
 
   const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
+  // res.data.id (used further down) is Gmail's internal API message ID —
+  // a completely different identifier from the RFC822 Message-ID header,
+  // in a different format entirely. Storing that as our "messageId" meant
+  // nothing we stored ever matched the real Message-ID header actually
+  // sent, so In-Reply-To/References on every follow-up pointed at an ID
+  // that never existed in any real email — breaking threading every time.
+  // Generate and set our own Message-ID explicitly so the two are
+  // guaranteed to match.
+  const domain = account.email.split("@").pop() || "coldpilot.local";
+  const generatedMessageId = normalizeMessageId(`${Date.now()}.${Math.random().toString(36).slice(2)}@${domain}`);
+
   const headers = [
     `From: ${fromName} <${account.email}>`,
     `To: ${to}`,
     "MIME-Version: 1.0",
+    `Message-ID: ${generatedMessageId}`,
   ];
 
   let contentType: string;
@@ -226,8 +246,9 @@ async function sendViaGmailApi(
   headers.push(`Content-Type: ${contentType}`);
   headers.push(`Subject: ${subject}`);
   if (inReplyTo) {
-    headers.push(`In-Reply-To: ${inReplyTo}`);
-    headers.push(`References: ${references || inReplyTo}`);
+    headers.push(`In-Reply-To: ${normalizeMessageId(inReplyTo)}`);
+    const refChain = (references || inReplyTo).split(/\s+/).filter(Boolean).map(normalizeMessageId).join(" ");
+    headers.push(`References: ${refChain}`);
   }
   if (listUnsubscribe) {
     headers.push(`List-Unsubscribe: <${listUnsubscribe}>`);
@@ -240,12 +261,14 @@ async function sendViaGmailApi(
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
+  console.log(`[send] Gmail API: to=${to} subject="${subject.slice(0, 60)}" threadId=${threadId || "new"} inReplyTo=${inReplyTo || "none"}`);
+
   const res = await gmail.users.messages.send({
     userId: "me",
     requestBody: { raw, ...(threadId ? { threadId } : {}) },
   });
 
-  return { messageId: res.data.id!, threadId: res.data.threadId! };
+  return { messageId: generatedMessageId, threadId: res.data.threadId! };
 }
 
 async function sendViaSmtp(
@@ -268,7 +291,10 @@ async function sendViaSmtp(
     to,
     subject,
     ...(isPlainText ? { text: htmlBody } : { html: htmlBody, text: stripHtml(htmlBody) }),
-    ...(inReplyTo ? { inReplyTo, references: references || inReplyTo } : {}),
+    ...(inReplyTo ? {
+      inReplyTo: normalizeMessageId(inReplyTo),
+      references: (references || inReplyTo).split(/\s+/).filter(Boolean).map(normalizeMessageId).join(" "),
+    } : {}),
     ...(listUnsubscribe ? { headers: { "List-Unsubscribe": `<${listUnsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
   });
 

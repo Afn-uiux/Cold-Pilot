@@ -155,7 +155,7 @@ export async function POST(req: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { email, provider, smtpHost, smtpPort, smtpUser, smtpPass, imapHost, imapPort, imapUser, imapPass, gmailToken, dailySendLimit } = body;
+  const { email, provider, smtpHost, smtpPort, smtpUser, smtpPass, imapHost, imapPort, imapUser, imapPass, gmailToken, dailySendLimit, displayName } = body;
 
   if (!email || !provider) return NextResponse.json({ error: "Email and provider are required" }, { status: 400 });
 
@@ -174,6 +174,7 @@ export async function POST(req: Request) {
   const account = await prisma.emailAccount.create({
     data: {
       email, provider,
+      displayName: displayName || null,
       smtpHost: smtpHost || null, smtpPort: smtpPort ? parseInt(smtpPort) : null,
       smtpUser: smtpUser || null, smtpPass: smtpPass || null,
       imapHost: finalImapHost || null, imapPort: finalImapPortVal ? parseInt(String(finalImapPortVal)) : null,

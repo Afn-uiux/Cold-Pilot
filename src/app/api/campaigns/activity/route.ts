@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   const stepMap = new Map<string, number>(steps.map((s: { id: string; order: number }): [string, number] => [s.id, s.order + 1]));
 
   const logs = await prisma.emailLog.findMany({
-    where: { lead: { campaignId } },
+    where: { lead: { campaignId, deletedAt: null } },
     select: {
       id: true, status: true, sentAt: true, openedAt: true, repliedAt: true, clickedAt: true,
       campaignStepId: true,

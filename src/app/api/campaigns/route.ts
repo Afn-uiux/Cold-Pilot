@@ -27,7 +27,6 @@ export async function GET(req: NextRequest) {
 
   // Enrich with email metrics per campaign
   const enriched = await Promise.all(campaigns.map(async (c) => {
-    const totalLeads = c._count.leads;
     const totalSteps = Math.max(c.steps?.filter((s: any) => s.type === "email").length || c._count.steps || 1, 1);
     const sentCount = await prisma.emailLog.count({
       where: { lead: { campaignId: c.id }, type: "outgoing", status: "sent" },
@@ -59,6 +58,7 @@ export async function GET(req: NextRequest) {
       where: { campaignId: c.id, deletedAt: null },
       select: { status: true, currentStep: true },
     });
+    const totalLeads = leads.length;
     const TERMINAL = new Set(["completed", "replied", "bounced", "suppressed"]);
     let progressSum = 0;
     for (const l of leads) {
@@ -169,6 +169,21 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
   const c = await prisma.campaign.findFirst({ where: { id, userId: session.user.id, deletedAt: null } });
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const leads = await prisma.lead.findMany({
+    where: { campaignId: id, deletedAt: null },
+    select: { id: true, _count: { select: { deals: true, groups: true } } },
+  });
+  const leadIdsToSoftDelete = leads.filter((l: { _count: { deals: number; groups: number } }) => l._count.deals === 0 && l._count.groups === 0).map((l: { id: string }) => l.id);
+  const leadIdsToDetach = leads.filter((l: { _count: { deals: number; groups: number } }) => l._count.deals > 0 || l._count.groups > 0).map((l: { id: string }) => l.id);
+
+  if (leadIdsToSoftDelete.length > 0) {
+    await prisma.lead.updateMany({ where: { id: { in: leadIdsToSoftDelete } }, data: { deletedAt: new Date() } });
+  }
+  if (leadIdsToDetach.length > 0) {
+    await prisma.lead.updateMany({ where: { id: { in: leadIdsToDetach } }, data: { campaignId: null } });
+  }
+
   await prisma.campaign.update({ where: { id }, data: { deletedAt: new Date(), status: "archived" } });
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, softDeletedLeads: leadIdsToSoftDelete.length, detachedLeads: leadIdsToDetach.length });
 }

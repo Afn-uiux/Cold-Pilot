@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "./send";
+import { sendEmail, normalizeMessageId } from "./send";
 import { personalizeText } from "./personalize";
 import { createNotification } from "@/lib/notify";
 import { dispatchWebhookEvent } from "@/lib/webhook";
@@ -349,7 +349,7 @@ async function executeCampaignInner(campaignId: string) {
           select: { messageId: true, threadId: true },
         });
         const lastLog = priorLogs[priorLogs.length - 1] || null;
-        const referencesChain = priorLogs.map(l => l.messageId).filter(Boolean).join(" ") || null;
+        const referencesChain = priorLogs.map(l => l.messageId).filter(Boolean).map((id: string) => normalizeMessageId(id)).join(" ") || null;
 
         let fupSubject = step.subject || "Re: Your conversation with Coldpilot";
         let fupBody = step.bodyHtml || "";

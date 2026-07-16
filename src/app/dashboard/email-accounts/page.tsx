@@ -21,6 +21,7 @@ export default function EmailAccountsPage() {
   const [showModal, setShowModal] = useState(false);
   const [screen, setScreen] = useState<ModalScreen>("select");
 
+  const [msName, setMsName] = useState("");
   const [msEmail, setMsEmail] = useState("");
   const [msPassword, setMsPassword] = useState("");
   const [gmailName, setGmailName] = useState("");
@@ -61,7 +62,7 @@ export default function EmailAccountsPage() {
   }
 
   function resetAnyForms() {
-    setMsEmail(""); setMsPassword("");
+    setMsName(""); setMsEmail(""); setMsPassword("");
     setGmailName(""); setGmailEmail(""); setGmailPassword("");
     setSingleName(""); setSingleEmail("");
     setImapForm({ username: "", password: "", host: "", port: "993" });
@@ -142,7 +143,7 @@ export default function EmailAccountsPage() {
     await new Promise(r => setTimeout(r, 600));
     setTestingStatus(prev => [...prev, "Connecting your account..."]);
     await new Promise(r => setTimeout(r, 600));
-    const ok = await connectAccount({ email: gmailEmail, provider: "Gmail", smtpHost: "smtp.gmail.com", smtpPort: 587, smtpUser: gmailEmail, smtpPass: cleanPass, dailySendLimit: 50 });
+    const ok = await connectAccount({ email: gmailEmail, provider: "Gmail", smtpHost: "smtp.gmail.com", smtpPort: 587, smtpUser: gmailEmail, smtpPass: cleanPass, dailySendLimit: 50, displayName: gmailName || undefined });
     if (!ok) { setTestingError("Failed to save account"); return; }
     setTestingStatus(prev => [...prev, "Account connected successfully!"]); setTestingDone(true);
   }
@@ -190,7 +191,7 @@ export default function EmailAccountsPage() {
     const testData = await testRes.json();
     if (!testData.success) { setSmtpStatus("error"); setSmtpStatusMsg(testData.error || "SMTP connection failed"); setTimeout(() => setSmtpStatus("idle"), 4000); return; }
     setSmtpStatus("success"); setSmtpStatusMsg("Account linked successfully!");
-    const ok = await connectAccount({ email: singleEmail, provider: "IMAP", smtpHost: smtpForm.host, smtpPort: parseInt(smtpForm.port) || 587, smtpUser: smtpUsername, smtpPass: smtpPassword, imapHost: imapForm.host, imapPort: parseInt(imapForm.port) || 993, imapUser: imapForm.username, imapPass: imapForm.password, dailySendLimit: 30 });
+    const ok = await connectAccount({ email: singleEmail, provider: "IMAP", smtpHost: smtpForm.host, smtpPort: parseInt(smtpForm.port) || 587, smtpUser: smtpUsername, smtpPass: smtpPassword, imapHost: imapForm.host, imapPort: parseInt(imapForm.port) || 993, imapUser: imapForm.username, imapPass: imapForm.password, dailySendLimit: 30, displayName: singleName || undefined });
     if (ok) { setTimeout(() => { setShowModal(false); resetAnyForms(); }, 1000); }
   }
 
@@ -218,7 +219,7 @@ export default function EmailAccountsPage() {
     setBulkImporting(true);
     for (const acc of valid) {
       try {
-        const res = await fetch("/api/email-accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: acc.email, provider: "IMAP", smtpHost: acc.smtpHost || undefined, smtpPort: acc.smtpPort ? parseInt(acc.smtpPort) : undefined, smtpUser: acc.smtpUsername || acc.email, smtpPass: acc.smtpPassword || undefined, imapHost: acc.imapHost || undefined, imapPort: acc.imapPort ? parseInt(acc.imapPort) : undefined, imapUser: acc.imapUsername || acc.email, imapPass: acc.imapPassword || undefined, dailySendLimit: 30 }) });
+        const res = await fetch("/api/email-accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: acc.email, provider: "IMAP", smtpHost: acc.smtpHost || undefined, smtpPort: acc.smtpPort ? parseInt(acc.smtpPort) : undefined, smtpUser: acc.smtpUsername || acc.email, smtpPass: acc.smtpPassword || undefined, imapHost: acc.imapHost || undefined, imapPort: acc.imapPort ? parseInt(acc.imapPort) : undefined, imapUser: acc.imapUsername || acc.email, imapPass: acc.imapPassword || undefined, dailySendLimit: 30, displayName: [acc.firstName, acc.lastName].filter(Boolean).join(" ") || undefined }) });
         if (res.ok) success++; else { const err = await res.json(); errors.push({ email: acc.email, reason: err.error || "Unknown error" }); }
       } catch { errors.push({ email: acc.email, reason: "Network error" }); }
     }
