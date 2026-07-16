@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server";
 import { enqueueJob } from "@/lib/queue";
 import { processDueWarmupSends, reconcileWarmupSchedules, processSeedInboxes } from "@/engine/warmup";

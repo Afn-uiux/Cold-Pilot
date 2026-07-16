@@ -8,45 +8,45 @@ const adapter = new PrismaBetterSqlite3({ url: absolutePath });
 const p = new PrismaClient({ adapter });
 
 (async () => {
-  // Check replied leads
-  const replied = await p.lead.findMany({ where: { status: 'replied' } });
-  console.log('=== Replied leads (' + replied.length + ') ===');
-  replied.forEach(l => console.log(`  ${l.email} | status=${l.status} | campaignId=${l.campaignId}`));
+  // All campaigns
+  const campaigns = await p.campaign.findMany({ select: { id: true, name: true, status: true } });
+  console.log('=== Campaigns ===');
+  campaigns.forEach(c => console.log(`  ${c.name} | status=${c.status} | id=${c.id}`));
 
-  // Check incoming email logs
-  const incoming = await p.emailLog.findMany({ where: { type: 'incoming' }, orderBy: { sentAt: 'desc' }, take: 10 });
-  console.log('\n=== Incoming email logs (' + incoming.length + ') ===');
+  // All leads grouped by status
+  const allLeads = await p.lead.findMany({ select: { id: true, email: true, status: true, campaignId: true } });
+  console.log('\n=== All leads (' + allLeads.length + ') ===');
+  const byStatus = {};
+  allLeads.forEach(l => { byStatus[l.status] = (byStatus[l.status] || 0) + 1; });
+  console.log('  By status:', JSON.stringify(byStatus));
+  allLeads.forEach(l => console.log(`  ${l.email} | status=${l.status} | campaign=${l.campaignId}`));
+
+  // All incoming logs
+  const incoming = await p.emailLog.findMany({ where: { type: 'incoming' }, orderBy: { sentAt: 'desc' } });
+  console.log('\n=== Incoming logs (' + incoming.length + ') ===');
   incoming.forEach(l => console.log(`  leadId=${l.leadId} | subject=${l.subject} | sentAt=${l.sentAt}`));
 
-  // Check deals
-  const deals = await p.deal.findMany();
-  console.log('\n=== Deals (' + deals.length + ') ===');
-  deals.forEach(d => console.log(`  leadId=${d.leadId} | stage=${d.stage}`));
-
-  // Check reply notifications
-  const notifs = await p.notification.findMany({ where: { type: 'reply' }, orderBy: { createdAt: 'desc' }, take: 10 });
+  // All reply notifications
+  const notifs = await p.notification.findMany({ where: { type: 'reply' }, orderBy: { createdAt: 'desc' } });
   console.log('\n=== Reply notifications (' + notifs.length + ') ===');
-  notifs.forEach(n => console.log(`  ${n.title}: ${n.message} | link=${n.link}`));
+  notifs.forEach(n => console.log(`  ${n.message} | link=${n.link} | created=${n.createdAt}`));
 
-  // Simulate what the inbox API does
-  const allLeads = await p.lead.findMany({ where: { userId: replied[0]?.userId || '' } });
+  // Check: for each lead, does it have email logs?
   const leadIds = allLeads.map(l => l.id);
-  console.log('\n=== Total leads for user: ' + leadIds.length + ' ===');
+  const logs = await p.emailLog.findMany({ where: { leadId: { in: leadIds } }, orderBy: { sentAt: 'desc' } });
+  const latestByLead = new Map();
+  for (const log of logs) {
+    if (!latestByLead.has(log.leadId)) latestByLead.set(log.leadId, log);
+  }
+  console.log('\n=== Leads with email logs: ' + latestByLead.size + ' / ' + leadIds.length + ' ===');
 
-  if (leadIds.length > 0) {
-    const logs = await p.emailLog.findMany({ where: { leadId: { in: leadIds } }, orderBy: { sentAt: 'desc' } });
-    const latestByLead = new Map();
-    for (const log of logs) {
-      if (!latestByLead.has(log.leadId)) latestByLead.set(log.leadId, log);
-    }
-    console.log('Leads with email logs: ' + latestByLead.size);
-
-    const repliedLeadIds = replied.map(l => l.id);
-    for (const lid of repliedLeadIds) {
-      const hasLog = latestByLead.has(lid);
-      const log = latestByLead.get(lid);
-      console.log(`  Replied lead ${lid}: hasLog=${hasLog} | logType=${log?.type} | repliedAt=${log?.repliedAt}`);
-    }
+  // For replied leads, show the thread detail
+  const replied = allLeads.filter(l => l.status === 'replied');
+  console.log('\n=== Replied leads detail ===');
+  for (const l of replied) {
+    const latest = latestByLead.get(l.id);
+    const leadLogs = logs.filter(ll => ll.leadId === l.id);
+    console.log(`  ${l.email}: ${leadLogs.length} logs, latest type=${latest?.type}, latest sentAt=${latest?.sentAt}`);
   }
 
   await p.$disconnect();

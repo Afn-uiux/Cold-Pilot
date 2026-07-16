@@ -183,8 +183,8 @@ export default function LeadsPage() {
         const fresh = await fetch(freshUrl).then(r => r.json());
         setLeads(Array.isArray(fresh) ? fresh : []);
       }
-    } catch {
-      setImportResult({ error: "Failed to import from URL." });
+    } catch (e: any) {
+      setImportResult({ error: e?.message || "Failed to import from URL." });
     } finally {
       setImporting(false);
     }
@@ -315,7 +315,7 @@ export default function LeadsPage() {
 
             <div className="px-8 pb-8 overflow-y-auto pt-6">
               {importResult && (
-                <div className={`text-sm p-3 rounded-lg mb-4 ${importResult.error || importResult.firstError ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+                <div className={`text-sm p-3 rounded-lg mb-4 whitespace-pre-line ${importResult.error || importResult.firstError ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
                   {importResult.error || (importResult.firstError ? `${importResult.imported} imported, ${importResult.errors} errors (e.g. ${importResult.firstError})` : `${importResult.imported} imported, ${importResult.errors || 0} errors out of ${importResult.total}`)}
                 </div>
               )}

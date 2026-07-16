@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -94,14 +96,169 @@ export async function POST(req: Request) {
     // Fetch from URL
     if (body.url) {
       try {
-        let url = body.url;
-        const match = url.match(/\/d\/([^/]+)/);
-        if (match && url.includes("spreadsheets")) url = `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv`;
-        const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-        if (!res.ok) return NextResponse.json({ error: `Server returned ${res.status}. Make sure the sheet is published to the web.` }, { status: 400 });
-        const text = await res.text();
-        const lines = text.split(/\r?\n/).filter(l => l.trim());
-        if (lines.length < 2) return NextResponse.json({ error: "No data rows found" }, { status: 400 });
+        let url = body.url.trim();
+
+        // Google Sheets: try multiple export formats for public sheets
+        const gsMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+        if (gsMatch) {
+          const sheetId = gsMatch[1];
+          const exportUrls = [
+            `https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv`,
+            `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`,
+            `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`,
+          ];
+          let csvText = "";
+          for (const exportUrl of exportUrls) {
+            try {
+              const r = await fetch(exportUrl, {
+                redirect: "follow",
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                  "Accept": "text/csv, text/plain, */*",
+                },
+                signal: AbortSignal.timeout(15000),
+              });
+              if (!r.ok) continue;
+              const text = await r.text();
+              // Skip HTML login/consent pages — real CSV starts with a header row
+              if (text.trimStart().startsWith("<!")) continue;
+              csvText = text;
+              break;
+            } catch { /* try next */ }
+          }
+          if (!csvText) {
+            return NextResponse.json({
+              error: "Could not read the Google Sheet. Make sure the sheet is set to 'Anyone with the link' can view, then try again.",
+            }, { status: 400 });
+          }
+          const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+          if (lines.length < 2) return NextResponse.json({ error: "Sheet has no data rows" }, { status: 400 });
+          const headers = parseCsvLine(lines[0]).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
+          const emailIdx = findColumn(headers,
+            "email", "e-mail", "email address", "mail",
+            "emails", "email addresses", "e mail", "e_mail"
+          );
+          if (emailIdx === -1) return NextResponse.json({ error: "No 'email' column found in the sheet" }, { status: 400 });
+          leads = lines.slice(1).map(line => {
+            const cols = parseCsvLine(line);
+            return {
+              email: cols[emailIdx] || "",
+              firstName: findHeader(headers, cols,
+                "first name", "firstname", "first_name", "fname", "first",
+                "given name", "full name", "fullname", "forename", "given-name"
+              ) || findExact(headers, cols, "name"),
+              lastName: findHeader(headers, cols,
+                "last name", "lastname", "last_name", "lname", "surname",
+                "last", "family name", "family_name", "familyname", "second name",
+                "last-name"
+              ),
+              company: findHeader(headers, cols,
+                "company", "organization", "org", "business", "firm",
+                "company name", "company_name", "company-name", "business name",
+                "business_name", "employer", "co", "organisation", "account"
+              ),
+              title: findHeader(headers, cols,
+                "title", "job title", "position", "role", "designation",
+                "job position", "job_position", "job-title", "job role",
+                "job_role", "position title", "position_title"
+              ),
+              phone: findHeader(headers, cols,
+                "phone", "telephone", "tel", "mobile", "cell",
+                "phone number", "phone_number", "contact number", "contact_number",
+                "phone #", "phone#", "phone no", "phone_no", "phone no.",
+                "mobile phone", "mobile_number", "work phone", "work_phone",
+                "cell phone", "cellphone"
+              ),
+              website: findHeader(headers, cols,
+                "website", "web", "url", "site", "company website",
+                "company_website", "web site", "website url", "website_url",
+                "linkedin url", "linkedin_url", "linkedin", "company site",
+                "company_site", "webpage", "web page", "web page url"
+              ),
+              personalization: findHeader(headers, cols,
+                "personalization", "custom", "personalized", "custom field",
+                "custom_field", "custom1", "custom2", "custom field 1",
+                "personalize", "personalisation", "note personalization",
+                "personalized note", "custom note", "personal note",
+                "personal_note", "custom text", "notes_personalization"
+              ),
+              location: findLocation(headers, cols),
+              notes: findHeader(headers, cols,
+                "notes", "note", "comments", "description",
+                "additional notes", "additional_info", "extra notes",
+                "remarks", "extra info", "extra_information"
+              ),
+            };
+          }).filter(l => l.email && l.email.includes("@"));
+        } else {
+          // Non-Google URL: fetch directly
+          const res = await fetch(url, {
+            redirect: "follow",
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!res.ok) return NextResponse.json({ error: `Server returned ${res.status}. Make sure the link is a public CSV file.` }, { status: 400 });
+          const text = await res.text();
+          const lines = text.split(/\r?\n/).filter(l => l.trim());
+          if (lines.length < 2) return NextResponse.json({ error: "No data rows found in the file" }, { status: 400 });
+          const headers = parseCsvLine(lines[0]).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
+          const emailIdx = findColumn(headers,
+            "email", "e-mail", "email address", "mail",
+            "emails", "email addresses", "e mail", "e_mail"
+          );
+          if (emailIdx === -1) return NextResponse.json({ error: "No 'email' column found" }, { status: 400 });
+          leads = lines.slice(1).map(line => {
+            const cols = parseCsvLine(line);
+            return {
+              email: cols[emailIdx] || "",
+              firstName: findHeader(headers, cols,
+                "first name", "firstname", "first_name", "fname", "first",
+                "given name", "full name", "fullname", "forename", "given-name"
+              ) || findExact(headers, cols, "name"),
+              lastName: findHeader(headers, cols,
+                "last name", "lastname", "last_name", "lname", "surname",
+                "last", "family name", "family_name", "familyname", "second name",
+                "last-name"
+              ),
+              company: findHeader(headers, cols,
+                "company", "organization", "org", "business", "firm",
+                "company name", "company_name", "company-name", "business name",
+                "business_name", "employer", "co", "organisation", "account"
+              ),
+              title: findHeader(headers, cols,
+                "title", "job title", "position", "role", "designation",
+                "job position", "job_position", "job-title", "job role",
+                "job_role", "position title", "position_title"
+              ),
+              phone: findHeader(headers, cols,
+                "phone", "telephone", "tel", "mobile", "cell",
+                "phone number", "phone_number", "contact number", "contact_number",
+                "phone #", "phone#", "phone no", "phone_no", "phone no.",
+                "mobile phone", "mobile_number", "work phone", "work_phone",
+                "cell phone", "cellphone"
+              ),
+              website: findHeader(headers, cols,
+                "website", "web", "url", "site", "company website",
+                "company_website", "web site", "website url", "website_url",
+                "linkedin url", "linkedin_url", "linkedin", "company site",
+                "company_site", "webpage", "web page", "web page url"
+              ),
+              personalization: findHeader(headers, cols,
+                "personalization", "custom", "personalized", "custom field",
+                "custom_field", "custom1", "custom2", "custom field 1",
+                "personalize", "personalisation", "note personalization",
+                "personalized note", "custom note", "personal note",
+                "personal_note", "custom text", "notes_personalization"
+              ),
+              location: findLocation(headers, cols),
+              notes: findHeader(headers, cols,
+                "notes", "note", "comments", "description",
+                "additional notes", "additional_info", "extra notes",
+                "remarks", "extra info", "extra_information"
+              ),
+            };
+          }).filter(l => l.email && l.email.includes("@"));
+        }
         const headers = parseCsvLine(lines[0]).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
         const emailIdx = findColumn(headers,
           "email", "e-mail", "email address", "mail",
