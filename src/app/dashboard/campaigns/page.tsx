@@ -163,6 +163,19 @@ export default function CampaignsPage() {
         </button>
       );
     }
+    if (campaign.status === "draft") {
+      return (
+        <button
+          onClick={(e) => { e.stopPropagation(); handleAction(campaign.id, "launch"); }}
+          className="p-1 text-muted-2 hover:text-green-600 transition-colors"
+          title="Launch campaign"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="6,4 20,12 6,20" />
+          </svg>
+        </button>
+      );
+    }
     return null;
   }
 

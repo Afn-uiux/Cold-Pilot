@@ -36,6 +36,21 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+function wrapInEmailDocument(html: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#333333;">
+  <div style="max-width:600px;margin:0 auto;padding:20px;">
+    ${html}
+  </div>
+</body>
+</html>`;
+}
+
 function rewriteLinks(html: string, baseUrl: string, leadId: string, campaignStepId?: string): string {
   return html.replace(
     /<a\s([^>]*?)href\s*=\s*"(https?:\/\/[^"]+)"/gi,
@@ -84,8 +99,15 @@ export async function sendEmail(opts: SendOptions) {
   if (isPlainText) {
     html = stripHtml(html);
   } else {
-    // Convert plain-text newlines to HTML breaks for proper rendering in email clients
-    if (html && !html.match(/<br|<p|<div|<li|<h[1-6]/i)) {
+    // Always convert bare newlines to HTML breaks. Email clients treat
+    // literal \n as whitespace, so without this, line breaks disappear.
+    // If the body has no HTML tags at all, wrap in <p> for basic structure.
+    const hasBlockTags = html.match(/<p[\s>]|<div[\s>]|<li[\s>]|<h[1-6][\s>]/i);
+    if (hasBlockTags) {
+      // Content already has block-level structure — just convert any
+      // remaining bare newlines (between tags or inside inline tags) to <br>.
+      html = html.replace(/([^>])\n/g, "$1<br>");
+    } else {
       html = html.replace(/\n\n+/g, "</p><p>").replace(/\n/g, "<br>");
       html = `<p>${html}</p>`;
     }
@@ -98,7 +120,7 @@ export async function sendEmail(opts: SendOptions) {
     ? `<img src="${baseUrl}/api/track?id=${opts.trackingId}${opts.campaignStepId ? `&stepId=${opts.campaignStepId}` : ""}" width="1" height="1" alt="" style="display:none;" />`
     : "";
 
-  const body = isPlainText ? html : html + trackingPixel;
+  const body = isPlainText ? html : wrapInEmailDocument(html + trackingPixel);
   const fromName = opts.fromName || account.displayName || account.email;
 
   let sendResult: { messageId: string; threadId: string };
@@ -174,9 +196,35 @@ async function sendViaGmailApi(
     `From: ${fromName} <${account.email}>`,
     `To: ${to}`,
     "MIME-Version: 1.0",
-    `Content-Type: ${isPlainText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8"}`,
-    `Subject: ${subject}`,
   ];
+
+  let contentType: string;
+  let rawBody: string;
+
+  if (isPlainText) {
+    contentType = "text/plain; charset=utf-8";
+    rawBody = htmlBody;
+  } else {
+    // Send multipart/alternative with both HTML and plain-text parts
+    // so every email client renders the message properly.
+    const textPart = stripHtml(htmlBody);
+    const boundary = `Boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    contentType = `multipart/alternative; boundary="${boundary}"`;
+    rawBody = [
+      `--${boundary}`,
+      `Content-Type: text/plain; charset=utf-8`,
+      "",
+      textPart,
+      `--${boundary}`,
+      `Content-Type: text/html; charset=utf-8`,
+      "",
+      htmlBody,
+      `--${boundary}--`,
+    ].join("\r\n");
+  }
+
+  headers.push(`Content-Type: ${contentType}`);
+  headers.push(`Subject: ${subject}`);
   if (inReplyTo) {
     headers.push(`In-Reply-To: ${inReplyTo}`);
     headers.push(`References: ${references || inReplyTo}`);
@@ -186,7 +234,7 @@ async function sendViaGmailApi(
     headers.push(`List-Unsubscribe-Post: List-Unsubscribe=One-Click`);
   }
 
-  const raw = Buffer.from([...headers, "", htmlBody].join("\r\n"))
+  const raw = Buffer.from([...headers, "", rawBody].join("\r\n"))
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
@@ -219,7 +267,7 @@ async function sendViaSmtp(
     from: `"${fromName}" <${account.email}>`,
     to,
     subject,
-    ...(isPlainText ? { text: htmlBody } : { html: htmlBody }),
+    ...(isPlainText ? { text: htmlBody } : { html: htmlBody, text: stripHtml(htmlBody) }),
     ...(inReplyTo ? { inReplyTo, references: references || inReplyTo } : {}),
     ...(listUnsubscribe ? { headers: { "List-Unsubscribe": `<${listUnsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
   });

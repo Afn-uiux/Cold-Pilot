@@ -9,15 +9,15 @@ export default async function DashboardPage() {
   if (!userId) return null;
 
   const campaigns = await prisma.campaign.findMany({
-    where: { userId },
+    where: { userId, deletedAt: null },
     orderBy: { updatedAt: "desc" },
     take: 5,
     include: { _count: { select: { leads: true, steps: true } } },
   });
 
-  const totalLeads = await prisma.lead.count({ where: { userId } });
+  const totalLeads = await prisma.lead.count({ where: { userId, campaignId: { not: null }, deletedAt: null } });
   const emailLogs = await prisma.emailLog.findMany({
-    where: { lead: { userId } },
+    where: { lead: { userId, campaignId: { not: null }, deletedAt: null } },
     select: { status: true, openedAt: true, repliedAt: true },
   });
 

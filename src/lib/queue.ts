@@ -23,6 +23,7 @@ function getRedisUrl(): string | null {
 interface JobPayloads {
   campaign: { campaignId: string; userId: string };
   warmup: { type: "sends" | "reconcile" | "imap" };
+  replyCheck: { userId: string };
 }
 
 type JobType = keyof JobPayloads;
@@ -80,6 +81,9 @@ async function executeJobDirectly(type: string, payload: any) {
         await warmup.processSeedInboxes();
         break;
     }
+  } else if (type === "replyCheck") {
+    const { checkForReplies } = await import("@/engine/campaign");
+    await checkForReplies(payload.userId);
   }
 }
 

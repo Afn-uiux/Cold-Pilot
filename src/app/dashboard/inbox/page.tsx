@@ -9,10 +9,10 @@ type Thread = {
   id: string; name: string; email: string;
   campaignId: string | null; campaignName: string | null;
   emailAccountId: string | null; emailAccountEmail: string | null;
-  subject: string; preview: string; time: string;
-  unread: boolean; repliedAt: string | null;
+  subject: string; replyPreview: string; time: string;
+  lastReplyAt: string | null;
+  unread: boolean;
   dealStage: string | null; dealStatus: string | null; dealValue: number;
-  source: "campaign" | "inbox";
 };
 type EmailLogEntry = {
   id: string; subject: string | null; bodyHtml: string | null;
@@ -294,7 +294,7 @@ function InboxPage() {
         </div>
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">
           <p className="text-[11px] text-muted">
-            Campaign replies & lead activity
+            Campaign replies
             {statusFilter && <span> / {STAGE_LABELS[statusFilter] || statusFilter}</span>}
             {moreFilter !== "inbox" && <span> / {moreFilter}</span>}
             <span className="ml-1">— {filtered.length}</span>
@@ -305,7 +305,7 @@ function InboxPage() {
           <div className="px-5 py-8 text-sm text-muted text-center">Loading...</div>
         ) : filtered.length === 0 ? (
           <div className="px-5 py-8 text-sm text-muted text-center">
-            "No conversations"
+            No replies yet — leads will appear here when they respond
           </div>
         ) : filtered.map(t => (
           <div key={t.id}
@@ -324,7 +324,12 @@ function InboxPage() {
             </div>
             <div className="text-xs text-ink overflow-hidden text-ellipsis whitespace-nowrap">{t.subject}</div>
             <span className="text-[11px] text-muted-2 whitespace-nowrap">{t.time}</span>
-            {t.preview && <div className="text-[11px] text-muted overflow-hidden text-ellipsis whitespace-nowrap col-span-2">{t.preview}</div>}
+            {t.replyPreview && (
+              <div className={`text-[11px] overflow-hidden text-ellipsis whitespace-nowrap col-span-2 flex items-start gap-1.5 ${t.unread ? "text-ink" : "text-muted"}`}>
+                <svg className="w-3 h-3 shrink-0 mt-0.5 text-blue-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                <span>{t.replyPreview}</span>
+              </div>
+            )}
             {t.campaignName && <div className="text-[10px] text-muted-2 col-span-2">via {t.campaignName}</div>}
           </div>
         ))}
@@ -357,29 +362,27 @@ function InboxPage() {
               {lead?.campaign && <p className="text-xs text-muted-2 mt-0.5">Campaign: {lead.campaign.name}</p>}
             </div>
             <div className="flex-1 px-8 py-6 overflow-y-auto">
-              {emailLogs.length > 0 ? emailLogs.map((log, i) => {
-                const bodyText = log.bodyHtml ? log.bodyHtml.replace(/<[^>]*>/g, "").trim() : "(no content)";
+              {emailLogs.length > 0 ? emailLogs.map((log) => {
+                const isIncoming = log.type === "incoming";
+                const bodyText = log.bodyHtml ? htmlToText(log.bodyHtml) : "(no content)";
                 return (
-                  <div key={log.id} className="max-w-[600px] mb-6">
+                  <div key={log.id} className={`max-w-[600px] mb-6 ${isIncoming ? "bg-blue-accent/5 border border-blue-accent/20 rounded-lg p-4" : "px-0"}`}>
                     <div className="flex items-center gap-2.5 mb-2">
-                      <div className="w-7 h-7 rounded-full bg-cream-2 border border-border flex items-center justify-center text-[11px] font-medium text-muted shrink-0">
-                        {log.type === "outgoing" ? "Y" : selectedThread.name.charAt(0)}
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-medium shrink-0 ${isIncoming ? "bg-blue-accent text-white" : "bg-cream-2 border border-border text-muted"}`}>
+                        {isIncoming ? selectedThread.name.charAt(0).toUpperCase() : "Y"}
                       </div>
-                      <span className="text-sm font-medium">{log.type === "outgoing" ? "You" : selectedThread.name}</span>
+                      <span className={`text-sm font-medium ${isIncoming ? "text-ink" : "text-muted"}`}>
+                        {isIncoming ? selectedThread.name : "You"}
+                      </span>
+                      {isIncoming && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-accent/15 text-blue-accent font-medium">Reply</span>
+                      )}
                       <span className="text-xs text-muted-2 ml-auto">{formatDate(log.sentAt)}</span>
                     </div>
-                    <div className="text-sm text-muted leading-relaxed pl-10">
+                    <div className={`text-sm leading-relaxed pl-10 ${isIncoming ? "text-ink" : "text-muted"}`}>
                       {log.subject && <p className="text-xs text-muted-2 mb-1">{log.subject}</p>}
-                      <p>{bodyText.slice(0, 500)}</p>
+                      <p className="whitespace-pre-wrap">{bodyText.slice(0, 2000)}</p>
                     </div>
-                    {log.repliedAt && (
-                      <div className="mt-2 border-l-2 border-blue-accent pl-4">
-                        <div className="flex items-center gap-2.5 mb-1">
-                          <span className="text-sm font-medium text-blue-accent">Reply from {selectedThread.name}</span>
-                          <span className="text-xs text-muted-2">{formatDate(log.repliedAt)}</span>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               }) : (
@@ -412,6 +415,25 @@ function InboxPage() {
       </div>
     </div>
   );
+}
+
+// Converts stored bodyHtml (real HTML for outgoing sends, or plain text
+// with only newlines for incoming replies) into plain text that keeps
+// paragraph/line breaks, so it can be rendered with white-space: pre-wrap
+// instead of collapsing into a single run-on line.
+function htmlToText(html: string): string {
+  if (!html) return "";
+  let text = html
+    .replace(/<(br|BR)\s*\/?>/g, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'");
+  return text.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function formatDate(dateStr: string | Date): string {

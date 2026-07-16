@@ -7,7 +7,7 @@ export async function register() {
   async function tick() {
     try {
       const campaigns = await prisma.campaign.findMany({
-        where: { status: "active" },
+        where: { status: "active", deletedAt: null },
         select: { id: true, userId: true },
         take: 10,
       });

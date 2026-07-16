@@ -39,6 +39,7 @@ export default function CampaignDetailPage() {
   const [testMsg, setTestMsg] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
 
   async function loadTemplates() {
     try {
@@ -205,8 +206,11 @@ export default function CampaignDetailPage() {
   }
 
   function insertVariable(i: number, field: "subject" | "bodyHtml", varKey: string) {
-    const step = steps[i];
-    updateStep(i, field, (step[field] || "") + `{{${varKey}}}`);
+    const tag = `{{${varKey}}}`;
+    navigator.clipboard.writeText(tag).then(() => {
+      setToast("Copied " + tag);
+      setTimeout(() => setToast(null), 2000);
+    });
   }
 
   function wrapFormat(stepIdx: number, prefix: string, suffix: string) {
@@ -305,6 +309,11 @@ export default function CampaignDetailPage() {
 
   return (
     <div>
+      {toast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-ink text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg transition-all">
+          {toast}
+        </div>
+      )}
       <header className="px-6 lg:px-10 pt-6 pb-0">
         <Link href="/dashboard/campaigns" className="text-sm text-muted hover:text-blue-accent flex items-center gap-1.5 mb-4">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
@@ -741,7 +750,7 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
     setShowConfirmAll(false);
   }
   if (loading) return <div className="text-sm text-muted py-8">Loading...</div>;
-  if (leads.length === 0) return <div className="empty-state"><h3>Add some leads to get started</h3><p>Import a CSV or paste a list to add leads to this campaign.</p><Link href="/dashboard/leads" className="btn btn-primary">Import Leads</Link></div>;
+  if (leads.length === 0) return <div className="empty-state"><h3>Add some leads to get started</h3><p>Import a CSV or paste a list to add leads to this campaign.</p><Link href={`/dashboard/leads?campaignId=${campaignId}`} className="btn btn-primary">Import Leads</Link></div>;
   return (
     <>
       <div className="flex justify-between items-center mb-4">
@@ -865,7 +874,9 @@ function AnalyticsTab({ campaignId, state, onPublish, onPause, onResume }: { cam
           <div className="flex items-center gap-2 pb-4">
             {state === "active" ? (
               <button onClick={onPause} className="btn btn-ghost btn-xs">Pause</button>
-            ) : state !== "completed" ? (
+            ) : state === "draft" ? (
+              <button onClick={onResume} className="btn btn-primary btn-xs">Launch</button>
+            ) : state === "paused" ? (
               <button onClick={onResume} className="btn btn-primary btn-xs">Resume</button>
             ) : (
               <span className="text-xs text-muted-2 font-medium">Completed</span>
@@ -1520,10 +1531,10 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
                     return (
                       <span key={id} className="inline-flex items-center gap-1 bg-cream-2 border border-border rounded-md px-2 py-0.5 text-xs text-ink">
                         {acct.email}
-                        <button type="button" onClick={e => { e.stopPropagation(); setSelected(prev => prev.filter(x => x !== id)); }}
-                          className="text-muted-2 hover:text-ink ml-0.5">
+                        <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); setSelected(prev => prev.filter(x => x !== id)); }}
+                          className="text-muted-2 hover:text-ink ml-0.5 cursor-pointer">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>
+                        </span>
                       </span>
                     );
                   })
@@ -1699,17 +1710,20 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
   );
 }
 
-function SuppressedTab(_props: { campaignId: string }) {
+function SuppressedTab({ campaignId }: { campaignId: string }) {
   const [suppressions, setSuppressions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/suppressions`)
-      .then(r => r.json())
-      .then(data => setSuppressions(Array.isArray(data) ? data : []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    Promise.all([
+      fetch(`/api/leads?campaignId=${campaignId}`).then(r => r.json()),
+      fetch(`/api/suppressions`).then(r => r.json()),
+    ]).then(([leadsData, suppData]) => {
+      const leadEmails = new Set((Array.isArray(leadsData) ? leadsData : []).map((l: any) => l.email.toLowerCase()));
+      const allSupps = Array.isArray(suppData) ? suppData : [];
+      setSuppressions(allSupps.filter((s: any) => leadEmails.has(s.email.toLowerCase())));
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [campaignId]);
 
   if (loading) return <div className="flex items-center justify-center py-16 text-sm text-muted-2">Loading...</div>;
 

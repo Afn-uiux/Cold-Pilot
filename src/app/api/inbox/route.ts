@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   if (leadId) {
     const lead = await prisma.lead.findFirst({
-      where: { id: leadId, userId: session.user.id },
+      where: { id: leadId, userId: session.user.id, deletedAt: null },
       include: { campaign: { select: { name: true } } },
     });
     if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const [leads, campaigns, emailAccounts] = await Promise.all([
     prisma.lead.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, status: "replied", deletedAt: null },
       select: {
         id: true, firstName: true, lastName: true, email: true, status: true,
         campaignId: true, lastReadAt: true,
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       orderBy: { updatedAt: "desc" },
     }),
     prisma.campaign.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, deletedAt: null },
       select: { id: true, name: true },
       orderBy: { createdAt: "desc" },
     }),
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
       arr.slice(i * size, i * size + size)
     );
-  const [latestLogsChunks, dealsChunks] = await Promise.all([
+  const [allLogsChunks, dealsChunks] = await Promise.all([
     leadIds.length > 0
       ? Promise.all(chunked(leadIds).map(chunk =>
           prisma.emailLog.findMany({
@@ -71,13 +71,20 @@ export async function GET(req: NextRequest) {
         ))
       : [],
   ]);
-  const latestLogs = latestLogsChunks.flat();
+  const allLogs = allLogsChunks.flat();
   const deals = dealsChunks.flat();
 
-  const latestByLead = new Map<string, typeof latestLogs[0]>();
-  for (const log of latestLogs) {
-    if (!latestByLead.has(log.leadId)) {
-      latestByLead.set(log.leadId, log);
+  const incomingByLead = new Map<string, typeof allLogs[0]>();
+  for (const log of allLogs) {
+    if (log.type === "incoming" && !incomingByLead.has(log.leadId)) {
+      incomingByLead.set(log.leadId, log);
+    }
+  }
+
+  const outgoingByLead = new Map<string, typeof allLogs[0]>();
+  for (const log of allLogs) {
+    if (log.type === "outgoing" && !outgoingByLead.has(log.leadId)) {
+      outgoingByLead.set(log.leadId, log);
     }
   }
 
@@ -87,27 +94,31 @@ export async function GET(req: NextRequest) {
   }
 
   const threads = leads
-    .filter(l => latestByLead.has(l.id))
+    .filter(l => incomingByLead.has(l.id))
     .map(l => {
-    const lastLog = latestByLead.get(l.id)!;
+    const lastIncoming = incomingByLead.get(l.id)!;
+    const lastOutgoing = outgoingByLead.get(l.id);
     const deal = dealByLead.get(l.id);
-    const isReplied = l.status === "replied";
-    const lastLogTime = new Date(lastLog.sentAt).getTime();
+    const replyTime = new Date(lastIncoming.sentAt).getTime();
     const readAt = l.lastReadAt ? new Date(l.lastReadAt).getTime() : 0;
-    const unread = isReplied && readAt < lastLogTime;
+    const unread = readAt < replyTime;
+    const replyText = lastIncoming.bodyHtml
+      ? lastIncoming.bodyHtml.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 140)
+      : "(no content)";
+    const accountEmail = lastIncoming.emailAccount?.email || lastOutgoing?.emailAccount?.email || null;
     return {
       id: l.id,
       name: [l.firstName, l.lastName].filter(Boolean).join(" ") || l.email,
       email: l.email,
       campaignId: l.campaignId,
       campaignName: l.campaign?.name || null,
-      emailAccountId: lastLog.emailAccountId,
-      emailAccountEmail: lastLog.emailAccount?.email || null,
-      subject: lastLog.subject || "No subject",
-      preview: lastLog.bodyHtml ? lastLog.bodyHtml.replace(/<[^>]*>/g, "").slice(0, 120) : "",
-      time: timeAgo(lastLog.sentAt),
+      emailAccountId: lastIncoming.emailAccountId || lastOutgoing?.emailAccountId || null,
+      emailAccountEmail: accountEmail,
+      subject: lastIncoming.subject || lastOutgoing?.subject || "No subject",
+      replyPreview: replyText,
+      time: timeAgo(lastIncoming.sentAt),
+      lastReplyAt: lastIncoming.sentAt.toISOString(),
       unread,
-      repliedAt: isReplied ? lastLog.repliedAt : null,
       dealStage: deal?.stage || null,
       dealStatus: deal?.status || null,
       dealValue: deal?.value || 0,
@@ -142,9 +153,7 @@ export async function DELETE(req: NextRequest) {
   const lead = await prisma.lead.findFirst({ where: { id: leadId, userId: session.user.id } });
   if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await prisma.emailLog.deleteMany({ where: { leadId } });
-  await prisma.deal.deleteMany({ where: { leadId } });
-  await prisma.lead.delete({ where: { id: leadId } });
+  await prisma.lead.update({ where: { id: leadId }, data: { deletedAt: new Date() } });
   return NextResponse.json({ ok: true });
 }
 

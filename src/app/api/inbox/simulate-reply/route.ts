@@ -6,7 +6,7 @@ export async function POST() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const campaign = await prisma.campaign.findFirst({ where: { userId: session.user.id } });
+  const campaign = await prisma.campaign.findFirst({ where: { userId: session.user.id, deletedAt: null } });
   const account = await prisma.emailAccount.findFirst({ where: { userId: session.user.id } });
   if (!account) {
     return NextResponse.json({ error: "Connect an email account first" }, { status: 400 });

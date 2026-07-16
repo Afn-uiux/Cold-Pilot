@@ -21,6 +21,7 @@ export default function NewCampaignPage() {
   const [openTracking, setOpenTracking] = useState(true);
   const [linkTracking, setLinkTracking] = useState(true);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/email-accounts")
@@ -90,6 +91,11 @@ export default function NewCampaignPage() {
 
   return (
     <div className="px-6 lg:px-10 pt-8 pb-16 max-w-3xl">
+      {toast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-ink text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg transition-all">
+          {toast}
+        </div>
+      )}
       <div className="mb-8">
         <h1 className="font-medium text-[clamp(28px,3.5vw,36px)] font-normal tracking-tight leading-tight">New Campaign</h1>
         <p className="text-sm text-muted mt-1.5">Build your email sequence</p>
@@ -163,7 +169,7 @@ export default function NewCampaignPage() {
                         <label className="text-xs text-muted">Email Body</label>
                         <div className="flex gap-1">
                           {["firstName", "company", "title"].map(v => (
-                            <button key={v} type="button" onClick={() => updateStep(i, "body", (step.body || "") + `{{${v}}}`)}
+                            <button key={v} type="button" onClick={() => { navigator.clipboard.writeText(`{{${v}}}`).then(() => { setToast("Copied " + `{{${v}}}`); setTimeout(() => setToast(null), 2000); }); }}
                               className="text-xs text-muted-2 hover:text-blue-accent border border-border rounded px-1.5 py-0.5">{`{{${v}}}`}</button>
                           ))}
                         </div>

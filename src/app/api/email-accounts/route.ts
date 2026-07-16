@@ -122,7 +122,7 @@ export async function GET(req: NextRequest) {
     const savedFromSpam = warmupLogs.filter(l => l.rescuedFromSpam).length;
 
     const campaigns = await prisma.campaign.findMany({
-      where: { userId: session.user.id, accountIds: { contains: id } },
+      where: { userId: session.user.id, accountIds: { contains: id }, deletedAt: null },
       select: { id: true, name: true, status: true, createdAt: true, updatedAt: true },
       orderBy: { updatedAt: "desc" },
     });

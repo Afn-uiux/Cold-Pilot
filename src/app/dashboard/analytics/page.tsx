@@ -7,13 +7,25 @@ export default function AnalyticsPage() {
   const ranges = ["7d", "30d", "90d", "All"];
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  function fetchStats() {
+    setLoading(true);
+    setError(null);
+    fetch(`/api/stats?range=${range}`)
+      .then(async r => {
+        const data = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(data?.error || `Failed to load analytics (${r.status})`);
+        return data;
+      })
+      .then(data => setStats(data))
+      .catch(err => { setStats(null); setError(err.message || "Failed to load analytics"); })
+      .finally(() => setLoading(false));
+  }
 
   useEffect(() => {
-    fetch(`/api/stats?range=${range}`)
-      .then(r => r.json())
-      .then(data => setStats(data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
   const d = stats?.detailed || {};
@@ -53,6 +65,14 @@ export default function AnalyticsPage() {
       <div className="px-6 lg:px-10 pt-7 pb-16 space-y-8">
         {loading ? (
           <div className="text-center text-muted py-16 text-sm">Loading...</div>
+        ) : error ? (
+          <div className="empty-state">
+            <h3>Couldn't load analytics</h3>
+            <p>{error}</p>
+            <button onClick={fetchStats} className="btn btn-primary btn-sm mt-2">
+              Retry
+            </button>
+          </div>
         ) : sent === 0 ? (
           <div className="empty-state">
             <h3>No data yet</h3>

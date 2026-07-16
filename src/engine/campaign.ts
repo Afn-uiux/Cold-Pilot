@@ -8,6 +8,7 @@ import { classifyReply } from "@/lib/classify";
 import { categorizeBounce } from "@/lib/bounce";
 import { getCalendlyLink } from "@/integrations/calendly";
 import { ImapFlow } from "imapflow";
+import { simpleParser } from "mailparser";
 
 function isWithinSchedule(campaign: { startDate: Date | null; endDate: Date | null; noEndDate: boolean; schedules: { startTime: string; endTime: string; timezone: string; days: string }[] }): boolean {
   const now = new Date();
@@ -88,7 +89,7 @@ export async function executeCampaign(campaignId: string) {
 
 async function executeCampaignInner(campaignId: string) {
   const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
+    where: { id: campaignId, deletedAt: null },
     include: {
       steps: { orderBy: { order: "asc" } },
       schedules: true,
@@ -99,7 +100,7 @@ async function executeCampaignInner(campaignId: string) {
 
   // Auto-complete: if no leads are pending or awaiting follow-up, mark campaign done
   const activeLeads = await prisma.lead.count({
-    where: { campaignId, status: { in: ["pending", "sent"] } },
+    where: { campaignId, status: { in: ["pending", "sent"] }, deletedAt: null },
   });
   if (activeLeads === 0) {
     await prisma.campaign.update({ where: { id: campaignId }, data: { status: "completed" } });
@@ -129,6 +130,7 @@ async function executeCampaignInner(campaignId: string) {
     where: {
       campaignId,
       status: { in: ["pending", "sent"] },
+      deletedAt: null,
     },
   });
 
@@ -182,28 +184,30 @@ async function executeCampaignInner(campaignId: string) {
 
   // Reload leads with updated sendingAccountId
   const updatedLeads = await prisma.lead.findMany({
-    where: { campaignId, status: { in: ["pending", "sent"] } },
+    where: { campaignId, status: { in: ["pending", "sent"] }, deletedAt: null },
   });
 
   for (const lead of updatedLeads) {
+    // Re-check campaign status before each lead — if the user paused mid-tick,
+    // stop sending immediately instead of burning through claimed leads.
+    const freshCampaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+    if (!freshCampaign || freshCampaign.status !== "active") {
+      console.log(`[campaign] Campaign ${campaignId} is no longer active (status=${freshCampaign?.status}), stopping mid-tick`);
+      break;
+    }
+
     const account = accounts.find(a => a.id === lead.sendingAccountId) || accounts[emailCount % accounts.length];
     const currentStepIdx = lead.currentStep || 0;
     const step = emailSteps[currentStepIdx];
-    // Hoisted so both Phase 1 (initial send) and Phase 2 (follow-ups) can use
-    // it — it was previously declared only inside Phase 1's try block, so
-    // every follow-up send threw "accountSignature is not defined" and was
-    // silently swallowed by the catch block below as a failed/rolled-back send.
     const accountSignature = (account as any)?.signature || "";
 
     if (!step) {
-      // All steps completed — mark lead as done
       if (lead.status === "sent") {
         await prisma.lead.update({ where: { id: lead.id }, data: { status: "completed" } });
       }
       continue;
     }
 
-    // Refuse to send a genuinely blank email (no subject and no body)
     const stepHasContent = Boolean(step.subject?.trim()) || Boolean(step.bodyHtml?.trim());
     if (!stepHasContent) {
       console.error(`[campaign] step ${step.id} (order ${step.order}) has no subject or body — skipping send for lead ${lead.id}`);
@@ -211,16 +215,16 @@ async function executeCampaignInner(campaignId: string) {
       continue;
     }
 
-    // Daily cap check (includes emails sent in previous ticks today)
     if (todaySent + emailCount >= campaignCap) { skipped++; continue; }
 
-    // Time gap pacing — actually wait out any remaining gap
     const waitMs = nextAllowed - Date.now();
-    if (waitMs > 0) await sleep(waitMs);
+    if (waitMs > 0) {
+      console.log(`[campaign] Pacing: waiting ${Math.round(waitMs / 1000)}s before next send (nextAllowed=${new Date(nextAllowed).toISOString()})`);
+      await sleep(waitMs);
+    }
 
     // Phase 1: Send initial email to pending leads
     if (lead.status === "pending" && currentStepIdx === 0) {
-      // Atomically claim this lead — prevents duplicate sends from concurrent ticks
       const claimResult = await prisma.lead.updateMany({
         where: { id: lead.id, status: "pending", currentStep: 0 },
         data: { status: "sent", currentStep: 1, lastSentAt: new Date() },
@@ -247,7 +251,12 @@ async function executeCampaignInner(campaignId: string) {
         let subject: string;
         let htmlBody: string;
         subject = personalizeText(step.subject || "Hello", vars);
-        htmlBody = personalizeText(step.bodyHtml || "", vars);
+
+        const { signature: _sig, accountSignature: _asig, ...varsNoSignature } = vars;
+        htmlBody = personalizeText(step.bodyHtml || "", varsNoSignature);
+        htmlBody = htmlBody
+          .replace(/\{\{signature\}\}/gi, accountSignature)
+          .replace(/\{\{accountSignature\}\}/gi, accountSignature);
 
         if (calendlyLink) {
           subject = subject.replace(/\{\{calendlyLink\}\}/g, calendlyLink);
@@ -276,11 +285,16 @@ async function executeCampaignInner(campaignId: string) {
       } catch (err: any) {
         console.error(`Failed to send initial to ${lead.email}:`, err);
         const bounce = categorizeBounce(err);
-        if (bounce.suppress) {
+        if (bounce.type === "hard_bounce" && bounce.suppress) {
+          // Terminal failure — mark lead as bounced so it is never retried.
           await prisma.suppression.upsert({
             where: { userId_email: { userId: campaign.userId, email: lead.email.toLowerCase().trim() } },
             create: { userId: campaign.userId, email: lead.email.toLowerCase().trim(), reason: bounce.type, type: "bounce" },
             update: {},
+          });
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { status: "bounced" },
           });
           createNotification({
             userId: campaign.userId,
@@ -289,12 +303,13 @@ async function executeCampaignInner(campaignId: string) {
             message: `${lead.email} — ${bounce.type}`,
           }).catch(() => {});
           dispatchWebhookEvent({ event: "bounce", userId: campaign.userId, data: { leadId: lead.id, email: lead.email, reason: bounce.type } }).catch(() => {});
+        } else {
+          // Transient error (connection, timeout, auth) — roll back so it can be retried later.
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { status: "pending", currentStep: 0, lastSentAt: null },
+          });
         }
-        // Roll back optimistic claim so the lead can be retried
-        await prisma.lead.update({
-          where: { id: lead.id },
-          data: { status: "pending", currentStep: 0, lastSentAt: null },
-        });
         errors++;
       }
       continue;
@@ -316,7 +331,6 @@ async function executeCampaignInner(campaignId: string) {
 
       if (!isDue) { skipped++; continue; }
 
-      // Atomically claim this follow-up — prevents duplicate sends
       const nextStep = currentStepIdx + 1;
       const claimFup = await prisma.lead.updateMany({
         where: { id: lead.id, currentStep: currentStepIdx, status: "sent" },
@@ -329,11 +343,6 @@ async function executeCampaignInner(campaignId: string) {
       if (claimFup.count === 0) { skipped++; continue; }
 
       try {
-        // Send as reply to thread (for threading). We need the *entire* prior
-        // chain for this lead to build a correct References header — using
-        // only the immediately previous message (as before) is technically
-        // incomplete per the email threading spec and some clients rely on
-        // the full chain, not just the last hop, to group messages.
         const priorLogs = await prisma.emailLog.findMany({
           where: { leadId: lead.id, type: "outgoing", messageId: { not: null } },
           orderBy: { sentAt: "asc" },
@@ -360,15 +369,17 @@ async function executeCampaignInner(campaignId: string) {
           calendlyLink: "",
         };
         fupSubject = personalizeText(fupSubject, fupVars);
-        fupBody = personalizeText(fupBody, fupVars);
+
+        const { signature: _fsig, accountSignature: _fasig, ...fupVarsNoSignature } = fupVars;
+        fupBody = personalizeText(fupBody, fupVarsNoSignature);
+        fupBody = fupBody
+          .replace(/\{\{signature\}\}/gi, accountSignature)
+          .replace(/\{\{accountSignature\}\}/gi, accountSignature);
+
         if (calendlyLink) {
           fupSubject = fupSubject.replace(/\{\{calendlyLink\}\}/g, calendlyLink);
           fupBody = fupBody.replace(/\{\{calendlyLink\}\}/g, calendlyLink);
         }
-        // A follow-up that's threaded via headers but whose subject doesn't
-        // carry "Re:" still shows up as a new conversation in some clients
-        // (Yahoo included), which use subject as a secondary threading signal
-        // alongside In-Reply-To/References. Always prefix it when replying.
         if (lastLog && !/^re:/i.test(fupSubject.trim())) {
           fupSubject = `Re: ${fupSubject}`;
         }
@@ -398,11 +409,16 @@ async function executeCampaignInner(campaignId: string) {
       } catch (err: any) {
         console.error(`Failed to send follow-up to ${lead.email}:`, err);
         const bounce = categorizeBounce(err);
-        if (bounce.suppress) {
+        if (bounce.type === "hard_bounce" && bounce.suppress) {
+          // Terminal failure — mark lead as bounced so it is never retried.
           await prisma.suppression.upsert({
             where: { userId_email: { userId: campaign.userId, email: lead.email.toLowerCase().trim() } },
             create: { userId: campaign.userId, email: lead.email.toLowerCase().trim(), reason: bounce.type, type: "bounce" },
             update: {},
+          });
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { status: "bounced" },
           });
           createNotification({
             userId: campaign.userId,
@@ -411,19 +427,25 @@ async function executeCampaignInner(campaignId: string) {
             message: `${lead.email} — ${bounce.type}`,
           }).catch(() => {});
           dispatchWebhookEvent({ event: "bounce", userId: campaign.userId, data: { leadId: lead.id, email: lead.email, reason: bounce.type } }).catch(() => {});
+        } else {
+          // Transient error — roll back step so it can be retried.
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { currentStep: currentStepIdx, status: "sent" },
+          });
         }
-        // Roll back the optimistic claim so the lead can be retried. Note:
-        // lastSentAt is deliberately left untouched here — a follow-up send
-        // requires lastSentAt to be set at all (see the "Phase 2" condition
-        // above), so nulling it on error would permanently stop this lead
-        // from ever being retried instead of just delaying it.
-        await prisma.lead.update({
-          where: { id: lead.id },
-          data: { currentStep: currentStepIdx, status: "sent" },
-        });
         errors++;
       }
     }
+  }
+
+  // Final completion check — mark campaign done if all leads are processed
+  const remainingActive = await prisma.lead.count({
+    where: { campaignId, status: { in: ["pending", "sent"] } },
+  });
+  if (remainingActive === 0) {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "completed" } });
+    return { sent, errors, skipped, reason: "completed" };
   }
 
   return { sent, errors, skipped };
@@ -434,7 +456,31 @@ async function processReply(
   account: { id: string; email: string },
   replySubject: string,
   replyBody: string,
+  replyMessageId?: string | null,
 ): Promise<boolean> {
+  // Dedup guard: every outgoing send (initial email, follow-up, or a manual
+  // reply sent from the inbox) opens a new pending ("repliedAt: null") log
+  // on the same thread. If the lead's most recent message in that thread
+  // hasn't changed since the last time we checked, the thread-scanning
+  // reply checkers would otherwise re-match that same old lead message
+  // against the newer outgoing log and process it all over again — that's
+  // what caused the same lead reply to show up twice (once as a fresh
+  // "reply" right after a manual reply was sent). If we've already recorded
+  // this exact incoming message for this lead, just close out this pending
+  // log without creating a duplicate notification/deal update.
+  if (replyMessageId) {
+    const alreadyProcessed = await prisma.emailLog.findFirst({
+      where: { leadId: log.leadId, type: "incoming", messageId: replyMessageId },
+    });
+    if (alreadyProcessed) {
+      await prisma.emailLog.update({
+        where: { id: log.id },
+        data: { repliedAt: new Date() },
+      });
+      return false;
+    }
+  }
+
   await prisma.emailLog.update({
     where: { id: log.id },
     data: { repliedAt: new Date() },
@@ -448,6 +494,7 @@ async function processReply(
       subject: replySubject,
       bodyHtml: replyBody,
       threadId: log.threadId,
+      messageId: replyMessageId || null,
       sentAt: new Date(),
     },
   });
@@ -699,7 +746,7 @@ async function checkGmailAccountReplies(account: any): Promise<number> {
     try {
       const threadResult = await checkGmailThread(account.gmailToken, log.threadId, account.email);
       if (threadResult) {
-        const ok = await processReply(log, account, threadResult.subject, threadResult.body);
+        const ok = await processReply(log, account, threadResult.subject, threadResult.body, threadResult.messageId);
         if (ok) replied++;
       }
     } catch (err: any) {
@@ -825,11 +872,13 @@ async function checkGmailSpamReplies(
     if (!body) body = full.data.snippet || "";
 
     console.log(`[reply] Gmail SPAM matched reply to log ${matchedLog.id} from ${from}`);
+    const spamMessageId = getHeader("message-id");
     const ok = await processReply(
       { id: matchedLog.id, leadId: matchedLog.leadId, threadId: matchedLog.threadId || full.data.threadId || null },
       account,
       replySubject,
       cleanReplyBody(body.slice(0, 2000)),
+      spamMessageId ? spamMessageId.replace(/[<>]/g, "").trim() : null,
     );
     if (ok) {
       replied++;
@@ -846,7 +895,7 @@ async function checkGmailSpamReplies(
   return replied;
 }
 
-async function checkGmailThread(refreshToken: string, threadId: string, ownEmail: string): Promise<{ subject: string; body: string } | null> {
+async function checkGmailThread(refreshToken: string, threadId: string, ownEmail: string): Promise<{ subject: string; body: string; messageId: string | null } | null> {
   const { google } = await import("googleapis");
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -868,6 +917,8 @@ async function checkGmailThread(refreshToken: string, threadId: string, ownEmail
     const from = headers.find(h => h.name?.toLowerCase() === "from")?.value || "";
     if (from.toLowerCase().includes(ownEmail.toLowerCase())) continue;
     const subject = headers.find(h => h.name?.toLowerCase() === "subject")?.value || "";
+    const rawMessageId = headers.find(h => h.name?.toLowerCase() === "message-id")?.value || "";
+    const messageId = rawMessageId ? rawMessageId.replace(/[<>]/g, "").trim() : null;
 
     // Extract full body from MIME parts instead of relying on snippet
     let body = "";
@@ -882,7 +933,7 @@ async function checkGmailThread(refreshToken: string, threadId: string, ownEmail
     }
     if (!body) body = msg.snippet || "";
 
-    return { subject, body: cleanReplyBody(body.slice(0, 2000)) };
+    return { subject, body: cleanReplyBody(body.slice(0, 2000)), messageId };
   }
   return null;
 }
@@ -943,39 +994,33 @@ async function checkImapAccountReplies(account: any): Promise<number> {
       let checkedCount = 0;
       let matchAttempts = 0;
 
-      // We only need the raw source to parse headers — msg.headers in ImapFlow
-      // is a Buffer, not a Map, so we parse headers from msg.source instead.
+      // We fetch the raw source and hand it to mailparser's simpleParser,
+      // which properly decodes multipart/MIME messages (base64,
+      // quoted-printable, nested boundaries, etc). The previous approach
+      // parsed headers with regex and grabbed the body with a fragile
+      // regex match — it worked for simple plain-text emails but leaked
+      // raw MIME boundary markers and base64 payloads into the reply body
+      // for anything multipart (which is most real-world mail clients).
       for await (const msg of client.fetch(uids, { uid: true, source: true })) {
         checkedCount++;
-        const rawSource = msg.source?.toString() || "";
-        if (!rawSource) continue;
+        if (!msg.source) continue;
 
-        // Parse headers from raw source (everything before the first blank line)
-        const headerEnd = rawSource.indexOf("\r\n\r\n");
-        const headerBlock = headerEnd >= 0 ? rawSource.slice(0, headerEnd) : rawSource;
-        const headerLines = headerBlock.split(/\r?\n/);
-
-        // Fold headers: continuation lines (starting with whitespace) belong to the previous header
-        const headers: Record<string, string> = {};
-        let currentKey = "";
-        for (const line of headerLines) {
-          if (/^\s/.test(line) && currentKey) {
-            headers[currentKey] += " " + line.trim();
-          } else {
-            const colonIdx = line.indexOf(":");
-            if (colonIdx > 0) {
-              currentKey = line.slice(0, colonIdx).toLowerCase().trim();
-              headers[currentKey] = line.slice(colonIdx + 1).trim();
-            }
-          }
+        let parsed;
+        try {
+          parsed = await simpleParser(msg.source);
+        } catch (parseErr: any) {
+          console.error(`[reply] Failed to parse MIME message uid ${msg.uid} for ${account.email}:`, parseErr?.message || parseErr);
+          continue;
         }
 
-        const from = headers["from"] || "";
+        const from = parsed.from?.text || "";
         if (from.toLowerCase().includes(account.email.toLowerCase())) continue;
 
-        const inReplyTo = headers["in-reply-to"] || "";
-        const references = headers["references"] || "";
-        const replySubject = headers["subject"] || "";
+        const inReplyTo = parsed.inReplyTo || "";
+        const references = Array.isArray(parsed.references)
+          ? parsed.references.join(" ")
+          : (parsed.references || "");
+        const replySubject = parsed.subject || "";
         // Normalize angle brackets for matching
         const normId = (id: string) => id.replace(/[<>]/g, "").trim();
         const normSubject = (s: string) => s.replace(/^(re|fwd?|fw)\s*:\s*/i, "").trim().toLowerCase();
@@ -1023,28 +1068,23 @@ async function checkImapAccountReplies(account: any): Promise<number> {
           continue;
         }
 
-        // Extract body from raw source
-        let replyBody = "";
-        if (headerEnd >= 0) {
-          const afterHeaders = rawSource.slice(headerEnd + 4);
-          const textMatch = afterHeaders.match(/Content-Type:\s*text\/plain[^]*?\n\n([^]*?)(?:\n--|\n\.\n|$)/i);
-          if (textMatch && textMatch[1]) {
-            replyBody = textMatch[1].trim().slice(0, 2000);
-          } else {
-            replyBody = afterHeaders.replace(/<[^>]*>/g, "").trim().slice(0, 2000);
-          }
-          // Clean up the reply body: strip MIME headers, quoted text, and
-          // the "On ... wrote:" introduction line so only the actual reply
-          // content is shown.
-          replyBody = cleanReplyBody(replyBody);
-        }
+        // Extract body — prefer mailparser's decoded plain-text part; fall
+        // back to the decoded HTML part (tags stripped) if no text/plain
+        // part exists. Both are already fully MIME-decoded at this point.
+        const decodedBody = parsed.text || (parsed.html ? parsed.html.replace(/<[^>]*>/g, " ") : "") || "";
+        // Clean up the reply body: strip MIME headers, quoted text, and
+        // the "On ... wrote:" introduction line so only the actual reply
+        // content is shown.
+        const replyBody = decodedBody ? cleanReplyBody(decodedBody.slice(0, 2000)) : "";
 
         console.log(`[reply] IMAP matched reply to log ${matchedLog.id} from ${from} in "${mailboxPath}" (method: ${matchMethod})`);
+        const imapMessageId = parsed.messageId || "";
         const ok = await processReply(
           { id: matchedLog.id, leadId: matchedLog.leadId, threadId: matchedLog.threadId || msg.uid?.toString() || null },
           account,
           replySubject,
           replyBody,
+          imapMessageId ? imapMessageId.replace(/[<>]/g, "").trim() : null,
         );
         if (ok) {
           foundHere++;

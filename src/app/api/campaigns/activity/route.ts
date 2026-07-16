@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
   const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 1), 200);
 
-  const campaign = await prisma.campaign.findFirst({ where: { id: campaignId, userId: session.user.id }, select: { id: true } });
+  const campaign = await prisma.campaign.findFirst({ where: { id: campaignId, userId: session.user.id, deletedAt: null }, select: { id: true } });
   if (!campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const steps = await prisma.campaignStep.findMany({ where: { campaignId }, select: { id: true, order: true } });

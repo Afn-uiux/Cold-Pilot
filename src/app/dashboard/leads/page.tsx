@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ConfirmModal from "@/components/confirm-modal";
 import Select from "@/components/select";
 
@@ -32,6 +32,8 @@ function getEmailProvider(email: string) {
 
 export default function LeadsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlCampaignId = searchParams.get("campaignId") || "";
   const [leads, setLeads] = useState<Lead[]>([]);
   const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
   const [search, setSearch] = useState("");
@@ -45,18 +47,20 @@ export default function LeadsPage() {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
-  const [importCampaignId, setImportCampaignId] = useState("");
+  const [importCampaignId, setImportCampaignId] = useState(urlCampaignId);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const leadsUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
     Promise.all([
-      fetch("/api/leads").then(r => r.json()),
+      fetch(leadsUrl).then(r => r.json()),
       fetch("/api/campaigns").then(r => r.json()),
     ]).then(([leadsData, campaignsData]) => {
       setLeads(Array.isArray(leadsData) ? leadsData : []);
       setCampaigns(Array.isArray(campaignsData) ? campaignsData.map((c: any) => ({ id: c.id, name: c.name })) : []);
+      if (urlCampaignId) setShowImport(true);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  }, [urlCampaignId]);
 
   const columns = useMemo(() => {
     const has = (field: (l: Lead) => string | null) => leads.some(l => field(l)?.trim());
@@ -107,7 +111,8 @@ export default function LeadsPage() {
   }
 
   async function handleRemoveAll() {
-    await fetch("/api/leads?all=true", { method: "DELETE" });
+    const deleteUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads?all=true";
+    await fetch(deleteUrl, { method: "DELETE" });
     setLeads([]);
     setSelectedIds(new Set());
     setShowConfirmAll(false);
@@ -127,7 +132,8 @@ export default function LeadsPage() {
       const result = await res.json();
       setImportResult(result);
       if (result.imported > 0) {
-        const fresh = await fetch("/api/leads").then(r => r.json());
+        const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
+        const fresh = await fetch(freshUrl).then(r => r.json());
         setLeads(Array.isArray(fresh) ? fresh : []);
       }
     } catch {
@@ -149,7 +155,8 @@ export default function LeadsPage() {
       const result = await res.json();
       setImportResult(result);
       if (result.imported > 0) {
-        const fresh = await fetch("/api/leads").then(r => r.json());
+        const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
+        const fresh = await fetch(freshUrl).then(r => r.json());
         setLeads(Array.isArray(fresh) ? fresh : []);
       }
     } catch {
@@ -172,7 +179,8 @@ export default function LeadsPage() {
       const result = await res.json();
       setImportResult(result);
       if (result.imported > 0) {
-        const fresh = await fetch("/api/leads").then(r => r.json());
+        const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
+        const fresh = await fetch(freshUrl).then(r => r.json());
         setLeads(Array.isArray(fresh) ? fresh : []);
       }
     } catch {
@@ -182,12 +190,14 @@ export default function LeadsPage() {
     }
   }
 
+  const activeCampaign = urlCampaignId ? campaigns.find(c => c.id === urlCampaignId) : null;
+
   return (
     <>
       <header className="flex items-center justify-between px-6 lg:px-10 pt-8 pb-0 gap-5 flex-wrap">
         <div>
           <h1 className="font-medium text-[clamp(28px,3.5vw,36px)] font-normal tracking-tight leading-tight">Leads</h1>
-          <p className="text-sm text-muted mt-1.5">{leads.length} total</p>
+          <p className="text-sm text-muted mt-1.5">{leads.length} total{activeCampaign ? ` in ${activeCampaign.name}` : ""}</p>
         </div>
         <div className="flex gap-2">
           {leads.length > 0 && (
@@ -378,7 +388,7 @@ export default function LeadsPage() {
       <ConfirmModal
         open={showConfirmAll}
         title="Remove all leads?"
-        message="This will permanently delete all leads from your account."
+        message={urlCampaignId ? "This will permanently delete all leads from this campaign." : "This will permanently delete all leads from your account."}
         confirmLabel="Remove all"
         onConfirm={handleRemoveAll}
         onCancel={() => setShowConfirmAll(false)}

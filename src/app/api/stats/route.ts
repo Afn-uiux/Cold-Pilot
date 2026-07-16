@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const dateFilter = dateFrom ? { sentAt: { gte: dateFrom } } : {};
 
-  const campaignWhere: any = { userId: session.user.id };
+  const campaignWhere: any = { userId: session.user.id, deletedAt: null };
   if (campaignIdFilter) campaignWhere.id = campaignIdFilter;
 
   const campaigns = await prisma.campaign.findMany({
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
 
   // Status breakdown
   const leads = await prisma.lead.findMany({
-    where: { userId: session.user.id, campaignId: { in: campaignIds } },
+    where: { userId: session.user.id, campaignId: { in: campaignIds }, deletedAt: null },
     select: { status: true, currentStep: true },
   });
   const totalLeads = leads.length;
@@ -73,9 +73,11 @@ export async function GET(req: NextRequest) {
   const uniqueOpenLeadIds = new Set(openedLogs.map(e => e.leadId));
   const uniqueClickLeadIds = new Set(clickedLogs.map(e => e.leadId));
 
+  const uniqueReplyLeadIds = new Set(repliedLogs.map(e => e.leadId));
+
   const totalOpens = openedLogs.length;
   const uniqueOpens = uniqueOpenLeadIds.size;
-  const totalReplies = repliedLogs.length;
+  const totalReplies = uniqueReplyLeadIds.size;
   const totalClicks = clickedLogs.length;
   const uniqueClicks = uniqueClickLeadIds.size;
 
@@ -103,7 +105,7 @@ export async function GET(req: NextRequest) {
     const stepLogs = emailLogs.filter(e => e.campaignStepId === step.id);
     const stepSentCount = stepLogs.filter(e => e.status === "sent" || e.status === "delivered").length;
     const stepOpenedCount = stepLogs.filter(e => e.openedAt).length;
-    const stepRepliedCount = stepLogs.filter(e => e.repliedAt).length;
+    const stepRepliedCount = new Set(stepLogs.filter(e => e.repliedAt).map(e => e.leadId)).size;
     const stepClickedCount = stepLogs.filter(e => e.clickedAt).length;
 
     stepAnalytics[step.campaignId].steps.push({

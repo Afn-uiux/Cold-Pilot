@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const campaignId = searchParams.get("campaignId");
   const groupId = searchParams.get("groupId");
 
-  const where: any = { userId: session.user.id };
+  const where: any = { userId: session.user.id, deletedAt: null };
   if (campaignId) where.campaignId = campaignId;
   if (groupId) where.groups = { some: { groupId } };
 
@@ -37,14 +37,12 @@ export async function DELETE(req: Request) {
   const campaignId = searchParams.get("campaignId");
 
   if (campaignId) {
-    await prisma.leadGroup.deleteMany({ where: { lead: { campaignId } } });
-    await prisma.emailLog.deleteMany({ where: { lead: { campaignId } } });
-    await prisma.lead.deleteMany({ where: { campaignId, userId: session.user.id } });
+    await prisma.lead.updateMany({ where: { campaignId, userId: session.user.id, deletedAt: null }, data: { deletedAt: new Date() } });
     return NextResponse.json({ success: true, deleted: "campaign" });
   }
 
   if (all === "true") {
-    await prisma.lead.deleteMany({ where: { userId: session.user.id } });
+    await prisma.lead.updateMany({ where: { userId: session.user.id, deletedAt: null }, data: { deletedAt: new Date() } });
     return NextResponse.json({ success: true, deleted: "all" });
   }
 
@@ -52,13 +50,9 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Lead ID required" }, { status: 400 });
   }
 
-  const lead = await prisma.lead.findFirst({ where: { id, userId: session.user.id } });
+  const lead = await prisma.lead.findFirst({ where: { id, userId: session.user.id, deletedAt: null } });
   if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Delete related records first to avoid FK constraint issues
-  await prisma.emailLog.deleteMany({ where: { leadId: id } });
-  await prisma.leadGroup.deleteMany({ where: { leadId: id } });
-
-  await prisma.lead.delete({ where: { id } });
+  await prisma.lead.update({ where: { id }, data: { deletedAt: new Date() } });
   return NextResponse.json({ success: true });
 }

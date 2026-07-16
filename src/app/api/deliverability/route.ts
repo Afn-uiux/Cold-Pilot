@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   }
 
   const campaign = await prisma.campaign.findFirst({
-    where: { id: campaignId, userId: session.user.id },
+    where: { id: campaignId, userId: session.user.id, deletedAt: null },
     include: {
       steps: { orderBy: { order: "asc" } },
     },

@@ -229,6 +229,7 @@ model Campaign {
   ccAddresses       String   @default("")
   bccAddresses      String   @default("")
   nextAllowedSendAt DateTime?
+  deletedAt       DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -286,6 +287,7 @@ model Lead {
   lastSentAt      DateTime?
   lastReadAt      DateTime?
   notes           String?
+  deletedAt       DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

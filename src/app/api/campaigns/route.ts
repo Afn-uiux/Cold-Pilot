@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const id = url.searchParams.get("id");
   if (id) {
     const c = await prisma.campaign.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, userId: session.user.id, deletedAt: null },
       include: {
         steps: { orderBy: { order: "asc" } },
         schedules: { orderBy: { order: "asc" } },
@@ -20,15 +20,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(c);
   }
   const campaigns = await prisma.campaign.findMany({
-    where: { userId: session.user.id },
-    include: { _count: { select: { leads: true, steps: true } } },
+    where: { userId: session.user.id, deletedAt: null },
+    include: { _count: { select: { leads: true, steps: true } }, steps: { select: { type: true } } },
     orderBy: { createdAt: "desc" },
   });
 
   // Enrich with email metrics per campaign
   const enriched = await Promise.all(campaigns.map(async (c) => {
     const totalLeads = c._count.leads;
-    const totalSteps = Math.max(c._count.steps, 1);
+    const totalSteps = Math.max(c.steps?.filter((s: any) => s.type === "email").length || c._count.steps || 1, 1);
     const sentCount = await prisma.emailLog.count({
       where: { lead: { campaignId: c.id }, type: "outgoing", status: "sent" },
     });
@@ -39,14 +39,14 @@ export async function GET(req: NextRequest) {
       where: { lead: { campaignId: c.id }, type: "incoming" },
     });
     const repliedLeads = await prisma.lead.count({
-      where: { campaignId: c.id, status: "replied" },
+      where: { campaignId: c.id, status: "replied", deletedAt: null },
     });
     const completedLeads = await prisma.lead.count({
-      where: { campaignId: c.id, status: "completed" },
+      where: { campaignId: c.id, status: "completed", deletedAt: null },
     });
     // Count deals whose leadId belongs to this campaign
     const campaignLeadIds = (await prisma.lead.findMany({
-      where: { campaignId: c.id },
+      where: { campaignId: c.id, deletedAt: null },
       select: { id: true },
     })).map(l => l.id);
     const opportunities = campaignLeadIds.length > 0
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     // Weighted progress: each lead contributes based on currentStep
     // Terminal states (completed, replied, bounced, suppressed) = 100%
     const leads = await prisma.lead.findMany({
-      where: { campaignId: c.id },
+      where: { campaignId: c.id, deletedAt: null },
       select: { status: true, currentStep: true },
     });
     const TERMINAL = new Set(["completed", "replied", "bounced", "suppressed"]);
@@ -96,7 +96,7 @@ export async function PATCH(req: NextRequest) {
   const id = url.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
   const body = await req.json();
-  const c = await prisma.campaign.findFirst({ where: { id, userId: session.user.id } });
+  const c = await prisma.campaign.findFirst({ where: { id, userId: session.user.id, deletedAt: null } });
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (body.steps) {
     await prisma.campaignStep.deleteMany({ where: { campaignId: id } });
@@ -167,8 +167,8 @@ export async function DELETE(req: NextRequest) {
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
-  const c = await prisma.campaign.findFirst({ where: { id, userId: session.user.id } });
+  const c = await prisma.campaign.findFirst({ where: { id, userId: session.user.id, deletedAt: null } });
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  await prisma.campaign.delete({ where: { id } });
+  await prisma.campaign.update({ where: { id }, data: { deletedAt: new Date(), status: "archived" } });
   return NextResponse.json({ success: true });
 }

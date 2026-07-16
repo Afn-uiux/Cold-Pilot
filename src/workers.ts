@@ -5,8 +5,9 @@ async function main() {
 
   const warmupWorker = await startWorker("warmup");
   const campaignWorker = await startWorker("campaign");
+  const replyCheckWorker = await startWorker("replyCheck");
 
-  if (!warmupWorker && !campaignWorker) {
+  if (!warmupWorker && !campaignWorker && !replyCheckWorker) {
     console.log("[workers] Redis not available — workers not started");
     process.exit(0);
   }

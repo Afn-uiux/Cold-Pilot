@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const { leadId, body } = await req.json();
   if (!leadId || !body?.trim()) return NextResponse.json({ error: "Missing leadId or body" }, { status: 400 });
 
-  const lead = await prisma.lead.findFirst({ where: { id: leadId, userId: session.user.id } });
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, userId: session.user.id, deletedAt: null } });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
   // Find an account to reply from — prefer the one used for the last email, then any connected account
