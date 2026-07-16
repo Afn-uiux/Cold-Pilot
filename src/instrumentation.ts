@@ -12,30 +12,36 @@ export async function register() {
         take: 10,
       });
 
-      if (campaigns.length === 0) return;
+      if (campaigns.length > 0) {
+        console.log(`[scheduler] tick: ${campaigns.length} active campaign(s)`);
 
-      console.log(`[scheduler] tick: ${campaigns.length} active campaign(s)`);
-
-      await Promise.allSettled(campaigns.map(async (c: { id: string; userId: string }) => {
-        try {
-          const result = await executeCampaign(c.id);
-          if (result && (result.sent > 0 || result.errors > 0)) {
-            console.log(`[scheduler] campaign ${c.id}: sent=${result.sent} errors=${result.errors} skipped=${result.skipped}`);
+        await Promise.allSettled(campaigns.map(async (c: { id: string; userId: string }) => {
+          try {
+            const result = await executeCampaign(c.id);
+            if (result && (result.sent > 0 || result.errors > 0)) {
+              console.log(`[scheduler] campaign ${c.id}: sent=${result.sent} errors=${result.errors} skipped=${result.skipped}`);
+            }
+          } catch (e) {
+            console.error(`[scheduler] campaign ${c.id}:`, e);
           }
-        } catch (e) {
-          console.error(`[scheduler] campaign ${c.id}:`, e);
-        }
-      }));
+        }));
+      }
 
-      const userIds = [...new Set(campaigns.map((c: { id: string; userId: string }) => c.userId))];
-      for (const uid of userIds as string[]) {
+      // Reply detection runs regardless of campaign status — leads can
+      // reply after their campaign has finished.
+      const accounts = await prisma.emailAccount.findMany({
+        where: { status: "active" },
+        select: { userId: true },
+        distinct: ["userId"],
+      });
+      for (const { userId } of accounts) {
         try {
-          const result = await checkForReplies(uid);
+          const result = await checkForReplies(userId);
           if (result && result.replied > 0) {
-            console.log(`[scheduler] replies ${uid}: ${result.replied} new`);
+            console.log(`[scheduler] replies ${userId}: ${result.replied} new`);
           }
         } catch (e) {
-          console.error(`[scheduler] replies ${uid}:`, e);
+          console.error(`[scheduler] replies ${userId}:`, e);
         }
       }
     } catch (e) {

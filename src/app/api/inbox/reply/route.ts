@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { normalizeMessageId } from "@/engine/send";
 import nodemailer from "nodemailer";
 
 export async function POST(req: NextRequest) {
@@ -44,14 +45,15 @@ export async function POST(req: NextRequest) {
       oauth2Client.setCredentials({ refresh_token: account.gmailToken });
       const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
+      const fromName = account.displayName || account.email;
       const headers = [
-        `From: ${account.email} <${account.email}>`,
+        `From: ${fromName} <${account.email}>`,
         `To: ${lead.email}`,
         "MIME-Version: 1.0",
         "Content-Type: text/html; charset=utf-8",
         `Subject: ${subjectLine}`,
-        `In-Reply-To: ${lastLog?.messageId || ""}`,
-        `References: ${lastLog?.messageId || ""}`,
+        `In-Reply-To: ${normalizeMessageId(lastLog?.messageId || "")}`,
+        `References: ${normalizeMessageId(lastLog?.messageId || "")}`,
       ];
 
       const raw = Buffer.from([...headers, "", htmlBody].join("\r\n"))
@@ -73,13 +75,14 @@ export async function POST(req: NextRequest) {
         secure: (account.smtpPort || 587) === 465,
         auth: { user: account.smtpUser, pass: account.smtpPass },
       });
+      const fromName = account.displayName || account.email;
       const info = await transporter.sendMail({
-        from: `"${account.email}" <${account.email}>`,
+        from: `"${fromName}" <${account.email}>`,
         to: lead.email,
         subject: subjectLine,
         html: htmlBody,
-        inReplyTo: lastLog?.messageId || undefined,
-        references: lastLog?.messageId || undefined,
+        inReplyTo: normalizeMessageId(lastLog?.messageId || ""),
+        references: normalizeMessageId(lastLog?.messageId || ""),
         ...(lastLog?.threadId ? { threadId: lastLog.threadId } : {}),
       });
       messageId = info.messageId;

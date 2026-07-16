@@ -4,18 +4,27 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-function parseCsvLine(line: string): string[] {
+function parseCsvLine(line: string, delimiter: string = ","): string[] {
   const cells: string[] = [];
   let current = "", quoted = false;
   for (let i = 0; i < line.length; i++) {
     const char = line[i], next = line[i + 1];
     if (char === '"' && quoted && next === '"') { current += '"'; i++; }
     else if (char === '"') { quoted = !quoted; }
-    else if (char === "," && !quoted) { cells.push(current.trim()); current = ""; }
+    else if (char === delimiter && !quoted) { cells.push(current.trim()); current = ""; }
     else { current += char; }
   }
   cells.push(current.trim());
   return cells;
+}
+
+function detectDelimiter(headerLine: string): string {
+  const commaCount = (headerLine.match(/,/g) || []).length;
+  const semiCount = (headerLine.match(/;/g) || []).length;
+  const tabCount = (headerLine.match(/\t/g) || []).length;
+  if (tabCount > commaCount && tabCount > semiCount) return "\t";
+  if (semiCount > commaCount) return ";";
+  return ",";
 }
 
 function findColumn(headers: string[], ...keywords: string[]): number {
@@ -133,14 +142,15 @@ export async function POST(req: Request) {
           }
           const lines = csvText.split(/\r?\n/).filter(l => l.trim());
           if (lines.length < 2) return NextResponse.json({ error: "Sheet has no data rows" }, { status: 400 });
-          const headers = parseCsvLine(lines[0]).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
+          const delim = detectDelimiter(lines[0]);
+          const headers = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
           const emailIdx = findColumn(headers,
             "email", "e-mail", "email address", "mail",
             "emails", "email addresses", "e mail", "e_mail"
           );
           if (emailIdx === -1) return NextResponse.json({ error: "No 'email' column found in the sheet" }, { status: 400 });
           leads = lines.slice(1).map(line => {
-            const cols = parseCsvLine(line);
+            const cols = parseCsvLine(line, delim);
             return {
               email: cols[emailIdx] || "",
               firstName: findHeader(headers, cols,
@@ -201,14 +211,15 @@ export async function POST(req: Request) {
           const text = await res.text();
           const lines = text.split(/\r?\n/).filter(l => l.trim());
           if (lines.length < 2) return NextResponse.json({ error: "No data rows found in the file" }, { status: 400 });
-          const headers = parseCsvLine(lines[0]).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
+          const delim = detectDelimiter(lines[0]);
+          const headers = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
           const emailIdx = findColumn(headers,
             "email", "e-mail", "email address", "mail",
             "emails", "email addresses", "e mail", "e_mail"
           );
           if (emailIdx === -1) return NextResponse.json({ error: "No 'email' column found" }, { status: 400 });
           leads = lines.slice(1).map(line => {
-            const cols = parseCsvLine(line);
+            const cols = parseCsvLine(line, delim);
             return {
               email: cols[emailIdx] || "",
               firstName: findHeader(headers, cols,
@@ -259,14 +270,14 @@ export async function POST(req: Request) {
             };
           }).filter(l => l.email && l.email.includes("@"));
         }
-        const headers = parseCsvLine(lines[0]).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
+        const headers = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
         const emailIdx = findColumn(headers,
           "email", "e-mail", "email address", "mail",
           "emails", "email addresses", "e mail", "e_mail"
         );
         if (emailIdx === -1) return NextResponse.json({ error: "No 'email' column found" }, { status: 400 });
-        leads = lines.slice(1).map(line => {
-          const cols = parseCsvLine(line);
+          leads = lines.slice(1).map(line => {
+            const cols = parseCsvLine(line, delim);
           return {
             email: cols[emailIdx] || "",
             firstName: findHeader(headers, cols,
@@ -359,7 +370,8 @@ export async function POST(req: Request) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return NextResponse.json({ error: "CSV must have a header row" }, { status: 400 });
 
-  const headers = parseCsvLine(lines[0]).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
+  const delim = detectDelimiter(lines[0]);
+  const headers = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
   const emailIdx = findColumn(headers,
     "email", "e-mail", "email address", "mail",
     "emails", "email addresses", "e mail", "e_mail"
@@ -368,7 +380,7 @@ export async function POST(req: Request) {
 
   let imported = 0, errors = 0, firstError = "";
   for (let i = 1; i < lines.length; i++) {
-    const cols = parseCsvLine(lines[i]);
+    const cols = parseCsvLine(lines[i], delim);
     const email = cols[emailIdx];
     if (!email || !email.includes("@")) { errors++; continue; }
     try {
