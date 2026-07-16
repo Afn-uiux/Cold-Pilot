@@ -270,63 +270,6 @@ export async function POST(req: Request) {
             };
           }).filter(l => l.email && l.email.includes("@"));
         }
-        const headers = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
-        const emailIdx = findColumn(headers,
-          "email", "e-mail", "email address", "mail",
-          "emails", "email addresses", "e mail", "e_mail"
-        );
-        if (emailIdx === -1) return NextResponse.json({ error: "No 'email' column found" }, { status: 400 });
-          leads = lines.slice(1).map(line => {
-            const cols = parseCsvLine(line, delim);
-          return {
-            email: cols[emailIdx] || "",
-            firstName: findHeader(headers, cols,
-              "first name", "firstname", "first_name", "fname", "first",
-              "given name", "full name", "fullname", "forename", "given-name"
-            ) || findExact(headers, cols, "name"),
-            lastName: findHeader(headers, cols,
-              "last name", "lastname", "last_name", "lname", "surname",
-              "last", "family name", "family_name", "familyname", "second name",
-              "last-name"
-            ),
-            company: findHeader(headers, cols,
-              "company", "organization", "org", "business", "firm",
-              "company name", "company_name", "company-name", "business name",
-              "business_name", "employer", "co", "organisation", "account"
-            ),
-            title: findHeader(headers, cols,
-              "title", "job title", "position", "role", "designation",
-              "job position", "job_position", "job-title", "job role",
-              "job_role", "position title", "position_title"
-            ),
-            phone: findHeader(headers, cols,
-              "phone", "telephone", "tel", "mobile", "cell",
-              "phone number", "phone_number", "contact number", "contact_number",
-              "phone #", "phone#", "phone no", "phone_no", "phone no.",
-              "mobile phone", "mobile_number", "work phone", "work_phone",
-              "cell phone", "cellphone"
-            ),
-            website: findHeader(headers, cols,
-              "website", "web", "url", "site", "company website",
-              "company_website", "web site", "website url", "website_url",
-              "linkedin url", "linkedin_url", "linkedin", "company site",
-              "company_site", "webpage", "web page", "web page url"
-            ),
-            personalization: findHeader(headers, cols,
-              "personalization", "custom", "personalized", "custom field",
-              "custom_field", "custom1", "custom2", "custom field 1",
-              "personalize", "personalisation", "note personalization",
-              "personalized note", "custom note", "personal note",
-              "personal_note", "custom text", "notes_personalization"
-            ),
-            location: findLocation(headers, cols),
-            notes: findHeader(headers, cols,
-              "notes", "note", "comments", "description",
-              "additional notes", "additional_info", "extra notes",
-              "remarks", "extra info", "extra_information"
-            ),
-          };
-        }).filter(l => l.email && l.email.includes("@"));
       } catch (err: any) {
         return NextResponse.json({ error: `Failed to fetch: ${err.message}` }, { status: 400 });
       }
