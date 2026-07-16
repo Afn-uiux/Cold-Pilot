@@ -609,7 +609,7 @@ async function checkImapAccountBounces(account: any): Promise<number> {
     try {
       const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const allUids = (await client.search({ since }) || []);
-      const uids = allUids.slice(-300);
+      const uids = allUids.slice(-1000);
 
       const bounceSenderPattern = /mailer-daemon|postmaster|mail delivery subsystem|mail-delivery|no-?reply.*delivery|delivery.*status.*notification/i;
       let bounceCandidates = 0;
@@ -727,7 +727,7 @@ async function checkGmailAccountReplies(account: any): Promise<number> {
     },
     select: { threadId: true, id: true, leadId: true, messageId: true, subject: true, lead: { select: { email: true } } },
     orderBy: { sentAt: "desc" },
-    take: 300,
+    take: 1000,
   });
 
   // Maps a lead's email address -> leadId, used by the spam-scan's
@@ -949,7 +949,7 @@ async function checkImapAccountReplies(account: any): Promise<number> {
       messageId: { not: null },
     },
     select: { id: true, leadId: true, messageId: true, threadId: true, subject: true, lead: { select: { email: true } } },
-    take: 300,
+    take: 1000,
   });
 
   if (sentLogs.length === 0) return 0;
@@ -987,7 +987,7 @@ async function checkImapAccountReplies(account: any): Promise<number> {
     }
     try {
       const allUids = (await client.search({})) || [];
-      const uids = allUids.slice(-300);
+      const uids = allUids.slice(-1000);
       console.log(`[reply] IMAP ${mailboxPath}: ${uids.length} messages`);
 
       let checkedCount = 0;
