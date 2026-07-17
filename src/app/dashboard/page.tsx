@@ -18,11 +18,17 @@ export default async function DashboardPage() {
   const totalLeads = await prisma.lead.count({ where: { userId, campaignId: { not: null }, deletedAt: null } });
   const emailLogs = await prisma.emailLog.findMany({
     where: { lead: { userId, campaignId: { not: null }, deletedAt: null } },
-    select: { status: true, openedAt: true, repliedAt: true },
+    select: { status: true, openedAt: true },
+  });
+  // Counts unique leads who replied, not raw reply events — a lead who
+  // replies more than once (e.g. once to a campaign step, again later in
+  // the inbox) was previously counted once per reply, which is why
+  // "Replies" could show a number higher than the total lead count.
+  const replied = await prisma.lead.count({
+    where: { userId, campaignId: { not: null }, deletedAt: null, status: "replied" },
   });
 
   const sent = emailLogs.filter(e => e.status === "sent" || e.status === "delivered").length;
-  const replied = emailLogs.filter(e => e.repliedAt).length;
   const replyRate = sent > 0 ? Math.round((replied / sent) * 1000) / 10 : 0;
 
   return (

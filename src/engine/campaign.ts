@@ -349,7 +349,7 @@ async function executeCampaignInner(campaignId: string) {
           select: { messageId: true, threadId: true },
         });
         const lastLog = priorLogs[priorLogs.length - 1] || null;
-        const referencesChain = priorLogs.map(l => l.messageId).filter(Boolean).map((id: string) => normalizeMessageId(id)).join(" ") || null;
+        const referencesChain = priorLogs.map(l => l.messageId).filter((id): id is string => !!id).map(id => normalizeMessageId(id)).join(" ") || null;
 
         let fupSubject = step.subject || "Re: Your conversation with Coldpilot";
         let fupBody = step.bodyHtml || "";
@@ -794,7 +794,7 @@ async function checkGmailAccountReplies(account: any): Promise<number> {
 
 async function checkGmailSpamReplies(
   account: any,
-  sentLogs: { id: string; leadId: string; threadId: string | null; messageId: string | null; subject: string | null }[],
+  sentLogs: { id: string; leadId: string; threadId: string | null; messageId: string | null; subject: string | null; lead?: { email: string | null } }[],
   leadEmailById: Map<string, string>
 ): Promise<number> {
   if (sentLogs.length === 0) return 0;
@@ -819,7 +819,7 @@ async function checkGmailSpamReplies(
   console.log(`[reply] Gmail SPAM: ${messages.length} messages in last 7 days for ${account.email}`);
 
   const normId = (id: string) => id.replace(/[<>]/g, "").trim();
-  const normSubject = (s: string) => s.replace(/^(re|fwd?|fw)\s*:\s*/i, "").trim().toLowerCase();
+  const normSubject = (s: string) => { let r = s.trim().toLowerCase(); while (/^(re|fwd?|fw)\s*:\s*/i.test(r)) r = r.replace(/^(re|fwd?|fw)\s*:\s*/i, ""); return r; };
 
   let replied = 0;
 
@@ -848,13 +848,10 @@ async function checkGmailSpamReplies(
       const fromEmailMatch = from.match(/<?([\w.+-]+@[\w.-]+\.\w+)>?/);
       const fromEmail = fromEmailMatch ? fromEmailMatch[1].toLowerCase() : "";
       if (fromEmail) {
-        const candidateLeadId = leadEmailById.get(fromEmail);
         const normReplySubject = normSubject(replySubject);
-        if (candidateLeadId && normReplySubject) {
-          matchedLog = sentLogs.find(l =>
-            l.leadId === candidateLeadId && l.subject && normSubject(l.subject) === normReplySubject
-          );
-        }
+        matchedLog = sentLogs.find(l =>
+          l.lead?.email?.toLowerCase() === fromEmail && l.subject && normSubject(l.subject) === normReplySubject
+        );
       }
     }
     if (!matchedLog) continue;
@@ -945,7 +942,6 @@ async function checkImapAccountReplies(account: any): Promise<number> {
       emailAccountId: account.id,
       type: "outgoing",
       repliedAt: null,
-      messageId: { not: null },
     },
     select: { id: true, leadId: true, messageId: true, threadId: true, subject: true, lead: { select: { email: true } } },
     take: 1000,
@@ -1021,7 +1017,7 @@ async function checkImapAccountReplies(account: any): Promise<number> {
         const replySubject = parsed.subject || "";
         // Normalize angle brackets for matching
         const normId = (id: string) => id.replace(/[<>]/g, "").trim();
-        const normSubject = (s: string) => s.replace(/^(re|fwd?|fw)\s*:\s*/i, "").trim().toLowerCase();
+        const normSubject = (s: string) => { let r = s.trim().toLowerCase(); while (/^(re|fwd?|fw)\s*:\s*/i.test(r)) r = r.replace(/^(re|fwd?|fw)\s*:\s*/i, ""); return r; };
 
         let matchedLog: typeof sentLogs[number] | undefined;
         let matchMethod = "";
@@ -1048,21 +1044,16 @@ async function checkImapAccountReplies(account: any): Promise<number> {
           const fromEmail = fromEmailMatch ? fromEmailMatch[1].toLowerCase() : "";
           if (fromEmail) {
             const normReplySubject = normSubject(replySubject);
-            const candidateLeadId = leadEmailById.get(fromEmail);
-            if (candidateLeadId && normReplySubject) {
-              matchedLog = sentLogs.find(l =>
-                l.leadId === candidateLeadId &&
-                l.subject && normSubject(l.subject) === normReplySubject
-              );
-              if (matchedLog) matchMethod = "subject+sender";
-            }
+            // Match across ALL leads with this email (may span multiple campaigns)
+            matchedLog = sentLogs.find(l =>
+              l.lead?.email?.toLowerCase() === fromEmail &&
+              l.subject && normSubject(l.subject) === normReplySubject
+            );
+            if (matchedLog) matchMethod = "subject+sender";
           }
         }
 
         if (!matchedLog) {
-          if (inReplyTo || references) {
-            console.log(`[reply] IMAP no match for message from ${from} — In-Reply-To/References present but didn't match any of ${sentLogs.length} pending Message-IDs`);
-          }
           continue;
         }
 
