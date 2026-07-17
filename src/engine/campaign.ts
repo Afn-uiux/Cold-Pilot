@@ -473,10 +473,6 @@ async function processReply(
       where: { leadId: log.leadId, type: "incoming", messageId: replyMessageId },
     });
     if (alreadyProcessed) {
-      await prisma.emailLog.update({
-        where: { id: log.id },
-        data: { repliedAt: new Date() },
-      });
       return false;
     }
   }
