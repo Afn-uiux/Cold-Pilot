@@ -736,13 +736,16 @@ async function checkGmailAccountReplies(account: any): Promise<number> {
   console.log(`[reply] Gmail check for ${account.email}: ${sentLogs.length} pending logs`);
 
   let authFailed = false;
+  const processedLeadIds = new Set<string>();
 
   for (const log of sentLogs) {
     if (!log.threadId) continue;
+    if (processedLeadIds.has(log.leadId)) continue;
     try {
       const threadResult = await checkGmailThread(account.gmailToken, log.threadId, account.email);
       if (threadResult) {
         const ok = await processReply(log, account, threadResult.subject, threadResult.body, threadResult.messageId);
+        processedLeadIds.add(log.leadId);
         if (ok) replied++;
       }
     } catch (err: any) {
