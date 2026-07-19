@@ -20,6 +20,20 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(pipeline);
 }
 
+export async function PATCH(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id, name, stages } = await req.json();
+  if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
+  const p = await prisma.pipeline.findFirst({ where: { id, userId: session.user.id } });
+  if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const data: Record<string, any> = {};
+  if (name) data.name = name;
+  if (stages) data.stages = stages;
+  await prisma.pipeline.update({ where: { id }, data });
+  return NextResponse.json({ success: true });
+}
+
 export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -125,7 +125,17 @@ export async function calculateNextWarmupTime(accountId: string): Promise<Date |
   if (account.isPaused) return null;
   if (!account.warmupEnabled && account.warmupStartedAt === null) return null;
 
-  const inCampaign = false; // Could check if mailbox backs a live campaign
+  // Check if this mailbox backs a live campaign
+  const activeCampaignLog = await prisma.emailLog.findFirst({
+    where: {
+      emailAccountId: accountId,
+      lead: {
+        campaign: { status: "active" },
+      },
+    },
+    select: { id: true },
+  });
+  const inCampaign = !!activeCampaignLog;
 
   // Check if today is a valid warmup day
   const now = new Date();

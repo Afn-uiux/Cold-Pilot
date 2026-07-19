@@ -10,7 +10,7 @@ export interface HealthAdjustment {
 export function adjustmentFor(state: WarmupHealthState): HealthAdjustment {
   switch (state) {
     case "throttled":
-      return { volumeMultiplier: 0.5, minWaitMultiplier: 2.0 };
+      return { volumeMultiplier: 0.25, minWaitMultiplier: 3.0 };
     case "watch":
       return { volumeMultiplier: 0.7, minWaitMultiplier: 1.5 };
     default:
@@ -22,7 +22,6 @@ export async function calculateHealthScore(mailboxId: string): Promise<{
   healthScore: number;
   healthState: WarmupHealthState;
   spamRate: number;
-  bounceRate: number;
 }> {
   const mailbox = await prisma.emailAccount.findUnique({
     where: { id: mailboxId },
@@ -34,7 +33,7 @@ export async function calculateHealthScore(mailboxId: string): Promise<{
   });
 
   if (totalSent === 0) {
-    return { healthScore: 100, healthState: "healthy", spamRate: 0, bounceRate: 0 };
+    return { healthScore: 100, healthState: "healthy", spamRate: 0 };
   }
 
   const spamCount = await prisma.warmupLog.count({
@@ -45,11 +44,9 @@ export async function calculateHealthScore(mailboxId: string): Promise<{
   });
 
   const spamRate = (spamCount / totalSent) * 100;
-  const bounceRate = 0;
 
   let score = 100;
   if (spamRate > 10) score -= 35;
-  if (bounceRate > 5) score -= 20;
 
   // Volume ramp consistency check
   if ((mailbox.warmupWeek || 1) > 2) {
@@ -68,26 +65,54 @@ export async function calculateHealthScore(mailboxId: string): Promise<{
   if (score < 50) healthState = "throttled";
   else if (score < 80) healthState = "watch";
 
-  return { healthScore: score, healthState, spamRate, bounceRate };
+  return { healthScore: score, healthState, spamRate };
 }
 
 export async function saveHealthLog(mailboxId: string): Promise<void> {
+  const mailbox = await prisma.emailAccount.findUnique({
+    where: { id: mailboxId },
+    select: { id: true, warmupStartedAt: true, warmupWeek: true, currentDailyVolume: true },
+  });
+  if (!mailbox) return;
+
   const { healthScore, healthState } = await calculateHealthScore(mailboxId);
+
+  // Increment warmupWeek based on days since warmupStartedAt
+  let warmupWeek = mailbox.warmupWeek || 1;
+  let currentDailyVolume = mailbox.currentDailyVolume || 5;
+
+  if (mailbox.warmupStartedAt) {
+    const daysSinceStart = Math.floor(
+      (Date.now() - new Date(mailbox.warmupStartedAt).getTime()) / (24 * 60 * 60 * 1000),
+    );
+    const newWeek = Math.floor(daysSinceStart / 7) + 1;
+    if (newWeek > warmupWeek) {
+      warmupWeek = newWeek;
+    }
+  }
+
+  // Update currentDailyVolume based on today's sent count
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todaySent = await prisma.warmupLog.count({
+    where: {
+      senderMailboxId: mailboxId,
+      sentAt: { gte: todayStart },
+      status: { not: "failed" },
+    },
+  });
+  if (todaySent > 0) {
+    currentDailyVolume = todaySent;
+  }
 
   await prisma.emailAccount.update({
     where: { id: mailboxId },
     data: {
       healthScore,
       healthState,
+      warmupWeek,
+      currentDailyVolume,
       lastHealthCheckAt: new Date(),
     },
   });
-
-  // Auto-pause if throttled
-  if (healthState === "throttled") {
-    await prisma.emailAccount.update({
-      where: { id: mailboxId },
-      data: { isPaused: true },
-    });
-  }
 }

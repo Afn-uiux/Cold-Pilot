@@ -78,7 +78,7 @@ export default function SettingsTabs({ user }: { user: { name: string | null; em
                   </div>
                   <div className="field-group">
                     <label className="block text-xs text-muted mb-2">Email</label>
-                    <input name="email" className="w-full bg-transparent border-b border-border pb-2.5 text-sm outline-none focus:border-ink transition-colors" defaultValue={user.email || ""} />
+                    <input name="email" suppressHydrationWarning className="w-full bg-transparent border-b border-border pb-2.5 text-sm outline-none focus:border-ink transition-colors" defaultValue={user.email || ""} />
                   </div>
                 </div>
                 {saved && <p className="text-xs text-green-600 mt-2">Saved!</p>}

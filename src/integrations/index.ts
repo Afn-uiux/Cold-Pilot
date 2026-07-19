@@ -1,12 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { sendSlackNotification } from "./slack";
 import { hubspotLogActivity } from "./hubspot";
-import { containsCalendlyLink } from "./calendly";
 
 export async function dispatchIntegrationEvent(userId: string, event: string, data: Record<string, any>) {
   const integrations = await prisma.integration.findMany({ where: { userId, active: true } });
-
-  let calendlyConfig: { link?: string } | null = null;
 
   for (const integration of integrations) {
     let config: any;
@@ -15,8 +12,19 @@ export async function dispatchIntegrationEvent(userId: string, event: string, da
     try {
       switch (integration.provider) {
         case "slack":
-          if (event === "reply") {
-            await sendSlackNotification(config.webhookUrl, `*New Reply* from ${data.email}: ${data.message || ""}`);
+          switch (event) {
+            case "reply":
+              await sendSlackNotification(config.webhookUrl, `:speech_balloon: *New Reply* from ${data.email}: ${data.message || ""}`);
+              break;
+            case "bounce":
+              await sendSlackNotification(config.webhookUrl, `:no_entry: *Bounced* ${data.email} — ${data.reason || "unknown"}`);
+              break;
+            case "campaign_completed":
+              await sendSlackNotification(config.webhookUrl, `:white_check_mark: Campaign *${data.name || "Untitled"}* completed — ${data.sent || 0} sent, ${data.replies || 0} replies`);
+              break;
+            case "daily_summary":
+              await sendSlackNotification(config.webhookUrl, `:bar_chart: *Daily Summary*\n• Sent: ${data.sent || 0}\n• Replies: ${data.replies || 0}\n• Bounces: ${data.bounces || 0}`);
+              break;
           }
           break;
         case "hubspot":
@@ -24,31 +32,9 @@ export async function dispatchIntegrationEvent(userId: string, event: string, da
             await hubspotLogActivity(config.apiKey, data.email, "Replied to cold email");
           }
           break;
-        case "calendly":
-          calendlyConfig = config;
-          break;
       }
     } catch (err) {
       console.error(`Integration ${integration.provider} failed:`, err);
-    }
-  }
-
-  // Calendly: on reply, check if the sent email contained the Calendly link
-  if (event === "reply" && calendlyConfig?.link && data.leadId) {
-    try {
-      const lastLog = await prisma.emailLog.findFirst({
-        where: { leadId: data.leadId, type: "outgoing" },
-        orderBy: { sentAt: "desc" },
-        select: { bodyHtml: true },
-      });
-      if (lastLog?.bodyHtml && containsCalendlyLink(lastLog.bodyHtml, calendlyConfig.link)) {
-        await prisma.lead.update({
-          where: { id: data.leadId },
-          data: { status: "replied" },
-        });
-      }
-    } catch (err) {
-      console.error("Calendly integration error:", err);
     }
   }
 }

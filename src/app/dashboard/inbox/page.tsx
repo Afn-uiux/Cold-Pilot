@@ -188,9 +188,12 @@ function InboxPage() {
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-cream-2/30 shrink-0">
         <h2 className="text-base font-medium">Coldbox</h2>
         <button onClick={() => setColdboxOpen(!coldboxOpen)}
-          className="text-muted hover:text-blue-accent transition-colors p-0.5">
-          <svg className={`w-4 h-4 transition-transform duration-200 ${coldboxOpen ? "rotate-180" : "-rotate-90"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="15 18 9 12 15 6" />
+          className="text-muted hover:text-blue-accent transition-colors p-0.5"
+          aria-label={coldboxOpen ? "Collapse sidebar" : "Expand sidebar"}>
+          <svg className={`w-4 h-4 transition-transform duration-300 ${coldboxOpen ? "" : "rotate-180"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <line x1="15" y1="3" x2="15" y2="21" />
+            <polyline points="11 9 7 12 11 15" />
           </svg>
         </button>
       </div>

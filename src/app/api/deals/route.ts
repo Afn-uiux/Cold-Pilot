@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   if (pipelineId) where.pipelineId = pipelineId;
   const deals = await prisma.deal.findMany({
     where,
-    include: { pipeline: { select: { name: true } }, _count: { select: { tasks: true } } },
+    include: { pipeline: { select: { name: true } }, lead: { select: { id: true, firstName: true, lastName: true, email: true, company: true } }, _count: { select: { tasks: true } } },
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json(deals);

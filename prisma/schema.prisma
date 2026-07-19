@@ -164,6 +164,7 @@ model WarmupLog {
   messageId        String?
   subject          String?
   bodyPreview      String?
+  bodyHtml         String?
   sentAt           DateTime?
   receivedAt       DateTime?
   repliedAt        DateTime?

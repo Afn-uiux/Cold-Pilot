@@ -6,7 +6,6 @@ import { dispatchWebhookEvent } from "@/lib/webhook";
 import { dispatchIntegrationEvent } from "@/integrations";
 import { classifyReply } from "@/lib/classify";
 import { categorizeBounce } from "@/lib/bounce";
-import { getCalendlyLink } from "@/integrations/calendly";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 
@@ -104,6 +103,8 @@ async function executeCampaignInner(campaignId: string) {
   });
   if (activeLeads === 0) {
     await prisma.campaign.update({ where: { id: campaignId }, data: { status: "completed" } });
+    const replyCount = await prisma.lead.count({ where: { campaignId, status: "replied" } });
+    dispatchIntegrationEvent(campaign.userId, "campaign_completed", { name: campaign.name, sent: 0, replies: replyCount }).catch(() => {});
     return { sent: 0, errors: 0, skipped: 0, reason: "completed" };
   }
 
@@ -121,8 +122,6 @@ async function executeCampaignInner(campaignId: string) {
     },
   });
   if (accounts.length === 0) return { sent: 0, errors: 0, reason: "no_accounts" };
-
-  const calendlyLink = await getCalendlyLink(campaign.userId);
 
   // Get all leads for this campaign — pending (unsent), sent (awaiting follow-up), or active
   // Leads that have replied are excluded via status filter ("replied" not in ["pending", "sent"])
@@ -245,7 +244,6 @@ async function executeCampaignInner(campaignId: string) {
           signature: accountSignature,
           accountSignature,
           personalization: lead.personalization || "",
-          calendlyLink: "",
         };
 
         let subject: string;
@@ -257,11 +255,6 @@ async function executeCampaignInner(campaignId: string) {
         htmlBody = htmlBody
           .replace(/\{\{signature\}\}/gi, accountSignature)
           .replace(/\{\{accountSignature\}\}/gi, accountSignature);
-
-        if (calendlyLink) {
-          subject = subject.replace(/\{\{calendlyLink\}\}/g, calendlyLink);
-          htmlBody = htmlBody.replace(/\{\{calendlyLink\}\}/g, calendlyLink);
-        }
 
         await sendEmail({
           to: lead.email,
@@ -303,6 +296,7 @@ async function executeCampaignInner(campaignId: string) {
             message: `${lead.email} — ${bounce.type}`,
           }).catch(() => {});
           dispatchWebhookEvent({ event: "bounce", userId: campaign.userId, data: { leadId: lead.id, email: lead.email, reason: bounce.type } }).catch(() => {});
+          dispatchIntegrationEvent(campaign.userId, "bounce", { email: lead.email, reason: bounce.type }).catch(() => {});
         } else {
           // Transient error (connection, timeout, auth) — roll back so it can be retried later.
           await prisma.lead.update({
@@ -344,14 +338,17 @@ async function executeCampaignInner(campaignId: string) {
 
       try {
         const priorLogs = await prisma.emailLog.findMany({
-          where: { leadId: lead.id, type: "outgoing", messageId: { not: null } },
+          where: { leadId: lead.id, type: "outgoing" },
           orderBy: { sentAt: "asc" },
-          select: { messageId: true, threadId: true },
+          select: { messageId: true, threadId: true, subject: true },
         });
         const lastLog = priorLogs[priorLogs.length - 1] || null;
         const referencesChain = priorLogs.map(l => l.messageId).filter((id): id is string => !!id).map(id => normalizeMessageId(id)).join(" ") || null;
+        const firstSubject = priorLogs[0]?.subject || "";
 
-        let fupSubject = step.subject || "Re: Your conversation with Coldpilot";
+        let fupSubject = firstSubject
+          ? firstSubject
+          : step.subject || "Re: Your conversation with Coldpilot";
         let fupBody = step.bodyHtml || "";
         const fupVars = {
           firstName: lead.firstName || "",
@@ -366,7 +363,6 @@ async function executeCampaignInner(campaignId: string) {
           signature: accountSignature,
           accountSignature,
           personalization: lead.personalization || "",
-          calendlyLink: "",
         };
         fupSubject = personalizeText(fupSubject, fupVars);
 
@@ -376,10 +372,6 @@ async function executeCampaignInner(campaignId: string) {
           .replace(/\{\{signature\}\}/gi, accountSignature)
           .replace(/\{\{accountSignature\}\}/gi, accountSignature);
 
-        if (calendlyLink) {
-          fupSubject = fupSubject.replace(/\{\{calendlyLink\}\}/g, calendlyLink);
-          fupBody = fupBody.replace(/\{\{calendlyLink\}\}/g, calendlyLink);
-        }
         if (lastLog && !/^re:/i.test(fupSubject.trim())) {
           fupSubject = `Re: ${fupSubject}`;
         }
@@ -427,6 +419,7 @@ async function executeCampaignInner(campaignId: string) {
             message: `${lead.email} — ${bounce.type}`,
           }).catch(() => {});
           dispatchWebhookEvent({ event: "bounce", userId: campaign.userId, data: { leadId: lead.id, email: lead.email, reason: bounce.type } }).catch(() => {});
+          dispatchIntegrationEvent(campaign.userId, "bounce", { email: lead.email, reason: bounce.type }).catch(() => {});
         } else {
           // Transient error — roll back step so it can be retried.
           await prisma.lead.update({
@@ -445,6 +438,8 @@ async function executeCampaignInner(campaignId: string) {
   });
   if (remainingActive === 0) {
     await prisma.campaign.update({ where: { id: campaignId }, data: { status: "completed" } });
+    const replyCount = await prisma.lead.count({ where: { campaignId, status: "replied" } });
+    dispatchIntegrationEvent(campaign.userId, "campaign_completed", { name: campaign.name, sent, replies: replyCount }).catch(() => {});
     return { sent, errors, skipped, reason: "completed" };
   }
 
@@ -1151,4 +1146,38 @@ async function checkImapAccountReplies(account: any): Promise<number> {
   }
 
   return replied;
+}
+
+export async function sendDailySummaries() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const usersWithIntegrations = await prisma.integration.findMany({
+    where: { active: true, provider: "slack" },
+    select: { userId: true },
+    distinct: ["userId"],
+  });
+
+  for (const { userId } of usersWithIntegrations) {
+    try {
+      const accountIds = (await prisma.emailAccount.findMany({
+        where: { userId },
+        select: { id: true },
+      })).map(a => a.id);
+
+      const sent = await prisma.emailLog.count({
+        where: { emailAccountId: { in: accountIds }, type: "outgoing", sentAt: { gte: today } },
+      });
+      const replies = await prisma.emailLog.count({
+        where: { emailAccountId: { in: accountIds }, type: "incoming", sentAt: { gte: today } },
+      });
+      const bounces = await prisma.emailLog.count({
+        where: { emailAccountId: { in: accountIds }, type: "outgoing", sentAt: { gte: today }, bounceCategory: { not: null } },
+      });
+
+      dispatchIntegrationEvent(userId, "daily_summary", { sent, replies, bounces }).catch(() => {});
+    } catch (err) {
+      console.error(`[daily-summary] failed for user ${userId}:`, err);
+    }
+  }
 }

@@ -599,13 +599,12 @@ export default function CampaignDetailPage() {
                     {/* Load data for lead */}
                     <div>
                       <label className="text-xs text-[#666] block mb-1">Load data for lead:</label>
-                      <select value={selectedLeadId} onChange={e => setSelectedLeadId(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-accent transition-colors bg-white text-[#222]">
-                        <option value="">Select a lead...</option>
-                        {leadList.map(l => (
-                          <option key={l.id} value={l.id}>{l.firstName || l.email} {l.lastName || ""}</option>
-                        ))}
-                      </select>
+                      <Select value={selectedLeadId} onChange={setSelectedLeadId}
+                        options={[{ value: "", label: "Select a lead..." }, ...leadList.map(l => ({ value: l.id, label: `${l.firstName || l.email} ${l.lastName || ""}` }))]}
+                        placeholder="Select a lead..."
+                        triggerClassName="w-full flex items-center justify-between gap-2 border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-accent transition-colors bg-transparent text-left"
+                        matchWidth
+                      />
                     </div>
 
                     {/* Variables */}

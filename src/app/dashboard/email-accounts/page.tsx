@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Select from "@/components/select";
 
-type Account = { id: string; email: string; provider: string; sent: number; dailySendLimit: number; warmupEnabled: boolean; warmupSent?: number; health?: number; status: string; };
+type Account = { id: string; email: string; provider: string; sent: number; dailySendLimit: number; warmupEnabled: boolean; warmupSent?: number; health?: number; healthScore?: number; status: string; };
 type ModalScreen =
   | "select"
   | "google" | "google-app-password"
@@ -257,6 +257,7 @@ export default function EmailAccountsPage() {
                     <th>Emails Sent</th>
                     <th>Daily Limit</th>
                     <th>Warmup</th>
+                    <th>Health Score</th>
                     <th></th>
                   </tr>
               </thead>
@@ -272,6 +273,7 @@ export default function EmailAccountsPage() {
                         <span className={`absolute block w-3.5 h-3.5 bg-white rounded-full top-1/2 -translate-y-1/2 transition-all ${a.warmupEnabled ? "left-[19px]" : "left-[3px]"}`} />
                       </button>
                     </td>
+                    <td className="text-muted">{a.healthScore ?? "—"}</td>
                     <td>
                       <button onClick={e => { e.stopPropagation(); handleRemove(a.id); }} className="text-xs text-muted-2 hover:text-red-600 transition-colors">Remove</button>
                     </td>

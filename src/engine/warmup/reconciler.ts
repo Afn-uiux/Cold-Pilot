@@ -64,6 +64,7 @@ export async function reconcileWarmupSchedules(): Promise<number> {
           seedMailboxId: partner.id,
           subject: content.subject,
           bodyPreview: content.body.slice(0, 200),
+          bodyHtml: content.body,
           status: "scheduled",
           sentAt: nextTime,
         },
@@ -97,19 +98,36 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
 
   for (const log of dueLogs) {
     try {
-      const senderName = log.senderMailbox.email.split("@")[0];
-      const content = await generateWarmupContent(
-        log.senderMailboxId,
-        senderName,
-        log.seedMailboxId,
-      );
+      // Use stored content if available, otherwise regenerate
+      let subject = log.subject;
+      let emailBody = log.bodyHtml || log.bodyPreview || "";
+
+      if (!subject || !emailBody) {
+        const senderName = log.senderMailbox.email.split("@")[0];
+        const content = await generateWarmupContent(
+          log.senderMailboxId,
+          senderName,
+          log.seedMailboxId,
+        );
+        subject = content.subject;
+        emailBody = content.body;
+
+        // Persist regenerated content back to the log
+        await prisma.warmupLog.update({
+          where: { id: log.id },
+          data: {
+            subject: content.subject,
+            bodyPreview: content.body.slice(0, 200),
+            bodyHtml: content.body,
+          },
+        });
+      }
 
       await prisma.warmupLog.update({
         where: { id: log.id },
         data: { status: "sending" },
       });
 
-      let emailBody = content.body;
       if (log.senderMailbox.warmupCustomTrackingDomain && log.senderMailbox.customTrackingDomain) {
         emailBody += `\n\n---\n${log.senderMailbox.customTrackingDomain}`;
       }
@@ -122,7 +140,7 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
         log.senderMailbox.smtpPass!,
         log.senderMailbox.displayName || undefined,
         log.seedMailbox.email,
-        content.subject,
+        subject,
         emailBody,
       );
 
@@ -132,8 +150,9 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
           data: {
             status: "sent",
             messageId: result.messageId,
-            subject: content.subject,
+            subject: subject,
             bodyPreview: emailBody.slice(0, 200),
+            bodyHtml: emailBody,
             sentAt: new Date(),
           },
         });
