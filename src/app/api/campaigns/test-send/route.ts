@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import { decryptAccount } from "@/lib/crypto";
+import { canSendFromAccount } from "@/lib/send-gate";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -13,8 +15,15 @@ export async function POST(req: NextRequest) {
   if (!recipientEmail?.includes("@")) return NextResponse.json({ error: "Valid recipient email required" }, { status: 400 });
   if (!subject?.trim() && !bodyHtml?.trim()) return NextResponse.json({ error: "Cannot send a blank email — add a subject or body first" }, { status: 400 });
 
-  const account = await prisma.emailAccount.findFirst({ where: { userId: session.user.id } });
-  if (!account) return NextResponse.json({ error: "No email account connected" }, { status: 400 });
+  const rawAccount = await prisma.emailAccount.findFirst({ where: { userId: session.user.id } });
+  if (!rawAccount) return NextResponse.json({ error: "No email account connected" }, { status: 400 });
+  const account = decryptAccount(rawAccount);
+
+  // Shared send gate
+  const gate = await canSendFromAccount(account.id, account.dailySendLimit || 50);
+  if (!gate.allowed) {
+    return NextResponse.json({ error: `Send blocked: ${gate.reason}` }, { status: 429 });
+  }
 
   const fromEmail = senderEmail || account.email;
 

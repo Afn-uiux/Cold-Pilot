@@ -1,6 +1,8 @@
 import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
 import { categorizeBounce } from "@/lib/bounce";
+import { decryptAccount } from "@/lib/crypto";
+import { canSendFromAccount } from "@/lib/send-gate";
 
 interface SendOptions {
   to: string;
@@ -64,11 +66,18 @@ function rewriteLinks(html: string, baseUrl: string, leadId: string, campaignSte
 }
 
 export async function sendEmail(opts: SendOptions) {
-  const account = await prisma.emailAccount.findUnique({
+  const rawAccount = await prisma.emailAccount.findUnique({
     where: { id: opts.emailAccountId },
   });
-  if (!account || account.status !== "active") {
+  if (!rawAccount || rawAccount.status !== "active") {
     throw new Error("Email account not found or not active");
+  }
+  const account = decryptAccount(rawAccount);
+
+  // Shared send gate — respects both campaign and warmup sends
+  const gate = await canSendFromAccount(opts.emailAccountId, account.dailySendLimit || 50);
+  if (!gate.allowed) {
+    throw new Error(`Send blocked: ${gate.reason}`);
   }
 
   const suppressed = await prisma.suppression.findUnique({

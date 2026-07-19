@@ -1,5 +1,6 @@
 import { ImapFlow } from "imapflow";
 import { prisma } from "@/lib/prisma";
+import { decryptAccount } from "@/lib/crypto";
 
 const MAX_INBOX_MESSAGES = 50000;
 const VALIDATION_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -28,7 +29,7 @@ async function validateSeed(seed: {
       auth: { user: seed.imapUser, pass: seed.imapPass },
       logger: false,
       connectionTimeout: 10000,
-      greetTimeout: 10000,
+      greetingTimeout: 10000,
     });
     await client.connect();
 
@@ -69,11 +70,12 @@ export async function pickWarmupPartner(
   });
   const recentIds = new Set(recentPartners.map(r => r.seedMailboxId));
 
-  const seeds = await prisma.seedMailbox.findMany({
+  const rawSeeds = await prisma.seedMailbox.findMany({
     where: { isActive: true },
     select: { id: true, email: true, lastUsed: true, imapHost: true, imapPort: true, imapUser: true, imapPass: true },
     orderBy: { lastUsed: "asc" },
   });
+  const seeds = rawSeeds.map(s => decryptAccount(s) as typeof s);
 
   // Validate seeds via IMAP before using
   const validSeeds: typeof seeds = [];

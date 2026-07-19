@@ -3,6 +3,8 @@ import { calculateNextWarmupTime } from "./scheduler";
 import { pickWarmupPartner } from "./partner";
 import { generateWarmupContent } from "./content";
 import { sendWarmupEmail } from "./sender";
+import { decryptAccount } from "@/lib/crypto";
+import { canSendFromAccount } from "@/lib/send-gate";
 
 export async function reconcileWarmupSchedules(): Promise<number> {
   const mailboxes = await prisma.emailAccount.findMany({
@@ -98,6 +100,10 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
 
   for (const log of dueLogs) {
     try {
+      // Decrypt credentials
+      log.senderMailbox = decryptAccount(log.senderMailbox) as any;
+      log.seedMailbox = decryptAccount(log.seedMailbox) as any;
+
       // Use stored content if available, otherwise regenerate
       let subject = log.subject;
       let emailBody = log.bodyHtml || log.bodyPreview || "";
@@ -130,6 +136,22 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
 
       if (log.senderMailbox.warmupCustomTrackingDomain && log.senderMailbox.customTrackingDomain) {
         emailBody += `\n\n---\n${log.senderMailbox.customTrackingDomain}`;
+      }
+
+      // Shared send gate — respects campaign sends too
+      const gate = await canSendFromAccount(
+        log.senderMailboxId,
+        log.senderMailbox.dailySendLimit || 50,
+      );
+      if (!gate.allowed) {
+        // Skip this warmup send, retry next tick
+        await prisma.warmupLog.update({
+          where: { id: log.id },
+          data: { status: "scheduled" },
+        });
+        console.log(`[warmup] Send blocked for ${log.senderMailbox.email}: ${gate.reason}`);
+        failed++;
+        continue;
       }
 
       const result = await sendWarmupEmail(

@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeMessageId } from "@/engine/send";
 import nodemailer from "nodemailer";
+import { decryptAccount } from "@/lib/crypto";
+import { canSendFromAccount } from "@/lib/send-gate";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -28,6 +30,13 @@ export async function POST(req: NextRequest) {
   }
   if (!account) {
     return NextResponse.json({ error: "No email account connected. Add one in Settings." }, { status: 400 });
+  }
+  account = decryptAccount(account) as typeof account;
+
+  // Shared send gate
+  const gate = await canSendFromAccount(account.id, account.dailySendLimit || 50);
+  if (!gate.allowed) {
+    return NextResponse.json({ error: `Send blocked: ${gate.reason}` }, { status: 429 });
   }
 
   const htmlBody = body.replace(/\n/g, "<br>");

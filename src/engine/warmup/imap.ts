@@ -1,6 +1,7 @@
 import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
+import { decryptAccount } from "@/lib/crypto";
 
 const SPAM_FOLDERS: Record<string, string[]> = {
   gmail: ["[Gmail]/Spam", "Spam"],
@@ -145,9 +146,10 @@ export async function processSeedInboxes(): Promise<{
   replied: number;
   rescued: number;
 }> {
-  const seeds = await prisma.seedMailbox.findMany({
+  const rawSeeds = await prisma.seedMailbox.findMany({
     where: { isActive: true },
   });
+  const seeds = rawSeeds.map(s => decryptAccount(s) as typeof s);
 
   const senders = await prisma.emailAccount.findMany({
     where: { status: "active" },

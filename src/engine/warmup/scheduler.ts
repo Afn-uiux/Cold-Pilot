@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { adjustmentFor, type WarmupHealthState } from "./health";
 
-const ACTIVE_CAMPAIGN_WARMUP_CAP = 5;
-
 interface EmailAccountWithWarmup {
   id: string;
   email: string;
@@ -53,13 +51,9 @@ export function warmupRampTarget(
   warmupIncrease: number,
   warmupMax: number,
   daysWarming: number,
-  inCampaign: boolean,
+  _inCampaign: boolean,
 ): number {
-  const target = Math.min(warmupBase + daysWarming * warmupIncrease, warmupMax);
-  if (inCampaign && target > ACTIVE_CAMPAIGN_WARMUP_CAP) {
-    return ACTIVE_CAMPAIGN_WARMUP_CAP;
-  }
-  return target;
+  return Math.min(warmupBase + daysWarming * warmupIncrease, warmupMax);
 }
 
 function randomJitter(minMinutes: number, maxMinutes: number): number {

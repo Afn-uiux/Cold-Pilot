@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { encryptAccount } from "@/lib/crypto";
 
 export async function GET(req: NextRequest) {
   try {
@@ -84,14 +85,14 @@ export async function GET(req: NextRequest) {
     if (existing) {
       await prisma.emailAccount.update({
         where: { id: existing.id },
-        data: {
+        data: encryptAccount({
           microsoftToken: accessToken,
           microsoftRefreshToken: refreshToken,
-        },
+        }),
       });
     } else {
       await prisma.emailAccount.create({
-        data: {
+        data: encryptAccount({
           userId: session.user.id,
           email,
           displayName,
@@ -103,7 +104,7 @@ export async function GET(req: NextRequest) {
           dailySendLimit: 50,
           microsoftToken: accessToken,
           microsoftRefreshToken: refreshToken,
-        },
+        }),
       });
     }
 
@@ -112,7 +113,7 @@ export async function GET(req: NextRequest) {
     const existingSeed = await prisma.seedMailbox.findUnique({ where: { email } });
     if (!existingSeed) {
       await prisma.seedMailbox.create({
-        data: {
+        data: encryptAccount({
           userId: session.user.id,
           email,
           smtpHost: "smtp.office365.com",
@@ -124,7 +125,7 @@ export async function GET(req: NextRequest) {
           imapUser: email,
           imapPass: accessToken,
           provider: "Outlook",
-        },
+        }),
       });
     }
 

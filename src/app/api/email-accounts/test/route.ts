@@ -5,6 +5,7 @@ import nodemailer from "nodemailer";
 import { ImapFlow } from "imapflow";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { decryptAccount, encryptAccount } from "@/lib/crypto";
 
 function getMicrosoftTokenUrl(tenant: string) {
   return `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
@@ -46,12 +47,13 @@ export async function POST(req: Request) {
   let useOAuth = false;
 
   if (emailAccountId) {
-    const account = await prisma.emailAccount.findFirst({
+    const rawAccount = await prisma.emailAccount.findFirst({
       where: { id: emailAccountId, userId: session.user.id },
     });
-    if (!account) {
+    if (!rawAccount) {
       return NextResponse.json({ success: false, error: "Account not found" }, { status: 404 });
     }
+    const account = decryptAccount(rawAccount);
     smtpHost = account.smtpHost;
     smtpPort = account.smtpPort;
     smtpUser = account.smtpUser;
@@ -71,7 +73,7 @@ export async function POST(req: Request) {
         imapPass = refreshed.accessToken;
         await prisma.emailAccount.update({
           where: { id: account.id },
-          data: { microsoftToken: refreshed.accessToken, microsoftRefreshToken: refreshed.refreshToken },
+          data: encryptAccount({ microsoftToken: refreshed.accessToken, microsoftRefreshToken: refreshed.refreshToken }),
         });
       }
     }

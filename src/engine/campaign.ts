@@ -8,6 +8,7 @@ import { classifyReply } from "@/lib/classify";
 import { categorizeBounce } from "@/lib/bounce";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
+import { decryptAccount } from "@/lib/crypto";
 
 function isWithinSchedule(campaign: { startDate: Date | null; endDate: Date | null; noEndDate: boolean; schedules: { startTime: string; endTime: string; timezone: string; days: string }[] }): boolean {
   const now = new Date();
@@ -51,6 +52,44 @@ function isWithinSchedule(campaign: { startDate: Date | null; endDate: Date | nu
   }
 
   return false;
+}
+
+/**
+ * Calculate how many emails should have been sent by now based on the
+ * schedule window. This spreads sends evenly across the window instead
+ * of bunching them at the start.
+ *
+ * Returns the cumulative number of emails that should be sent by now
+ * (capped at totalCapacity).
+ */
+function calculateScheduledSendCount(
+  schedule: { startTime: string; endTime: string; timezone: string },
+  totalCapacity: number,
+): number {
+  const now = new Date();
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: schedule.timezone,
+    hour: "numeric", minute: "numeric",
+    hour12: false,
+  } as any);
+  const parts = fmt.formatToParts(now);
+  const hour = parseInt(parts.find(p => p.type === "hour")?.value || "0", 10);
+  const minute = parseInt(parts.find(p => p.type === "minute")?.value || "0", 10);
+  const currentMins = hour * 60 + minute;
+
+  const [sh, sm] = schedule.startTime.split(":").map(Number);
+  const [eh, em] = schedule.endTime.split(":").map(Number);
+  const startMins = sh * 60 + sm;
+  const endMins = eh * 60 + em;
+
+  const windowMins = endMins - startMins;
+  if (windowMins <= 0) return totalCapacity; // invalid window, send all
+
+  const elapsed = currentMins - startMins;
+  if (elapsed <= 0) return 0; // not started yet
+  if (elapsed >= windowMins) return totalCapacity; // window ended, send all
+
+  return Math.floor((elapsed / windowMins) * totalCapacity);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -114,13 +153,14 @@ async function executeCampaignInner(campaignId: string) {
   let selectedIds: string[] = [];
   try { selectedIds = campaign.accountIds ? JSON.parse(campaign.accountIds) : []; } catch {}
 
-  const accounts = await prisma.emailAccount.findMany({
+  const rawAccounts = await prisma.emailAccount.findMany({
     where: {
       userId: campaign.userId,
       status: "active",
       ...(selectedIds.length > 0 ? { id: { in: selectedIds } } : {}),
     },
   });
+  const accounts = rawAccounts.map(a => decryptAccount(a));
   if (accounts.length === 0) return { sent: 0, errors: 0, reason: "no_accounts" };
 
   // Get all leads for this campaign — pending (unsent), sent (awaiting follow-up), or active
@@ -153,21 +193,40 @@ async function executeCampaignInner(campaignId: string) {
     },
   });
 
-  const minGap = (campaign.minTimeBetween || 0) * 60 * 1000;
-  const maxExtra = (campaign.randomExtraTime || 0) * 60 * 1000;
-
-  // Per-email pacing: nextAllowed tracks the earliest time the NEXT send for
-  // this campaign may go out, persisted in the database so it survives restarts.
-  // Every additional due lead within the same tick actually waits out the
-  // remaining gap via a real timer before sending.
-  let nextAllowed = campaign.nextAllowedSendAt ? campaign.nextAllowedSendAt.getTime() : 0;
-
-  // Slow ramp: start at 1/day, +2 each day
+  // Schedule-aware pacing: if schedules are set, spread sends evenly across the window
   let campaignCap = campaign.dailySendLimit || 30;
   if (campaign.slowRamp && campaign.rampStart) {
     const daysSince = Math.floor((Date.now() - new Date(campaign.rampStart).getTime()) / 86400000);
     campaignCap = Math.min(1 + daysSince * 2, campaignCap);
   }
+
+  if (campaign.schedules && campaign.schedules.length > 0) {
+    // Use the first matching schedule to determine pacing
+    const matchingSchedule = campaign.schedules.find(s => {
+      const days: boolean[] = typeof s.days === "string" ? JSON.parse(s.days) : s.days;
+      const dayNames = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: s.timezone, weekday: "short", hour12: false,
+      } as any);
+      const parts = fmt.formatToParts(new Date());
+      const weekday = parts.find(p => p.type === "weekday")?.value?.toLowerCase() || "";
+      const dayIndex = dayNames.indexOf(weekday);
+      return dayIndex >= 0 && dayIndex <= 6 ? days[dayIndex] : false;
+    });
+
+    if (matchingSchedule) {
+      const scheduledTotal = calculateScheduledSendCount(matchingSchedule, campaignCap);
+      const remaining = Math.max(0, scheduledTotal - todaySent);
+      if (remaining <= 0) {
+        return { sent: 0, errors: 0, skipped: 0, reason: "schedule_paced" };
+      }
+      campaignCap = todaySent + remaining; // cap at what's scheduled by now
+    }
+  }
+
+  const minGap = (campaign.minTimeBetween || 0) * 60 * 1000;
+  const maxExtra = (campaign.randomExtraTime || 0) * 60 * 1000;
+  let nextAllowed = campaign.nextAllowedSendAt ? campaign.nextAllowedSendAt.getTime() : 0;
 
   // Assign leads without a sticky account via round-robin
   const unassignedLeads = leads.filter(l => !(l as any).sendingAccountId);
@@ -555,9 +614,10 @@ async function processReply(
 }
 
 export async function checkForReplies(userId: string) {
-  const accounts = await prisma.emailAccount.findMany({
+  const rawAccounts = await prisma.emailAccount.findMany({
     where: { userId, status: "active" },
   });
+  const accounts = rawAccounts.map(a => decryptAccount(a));
 
   let replied = 0;
 

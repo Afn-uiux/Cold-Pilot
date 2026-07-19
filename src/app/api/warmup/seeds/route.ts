@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { encryptAccount } from "@/lib/crypto";
 
 export async function GET() {
   const session = await auth();
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
   }
 
   const seed = await prisma.seedMailbox.create({
-    data: {
+    data: encryptAccount({
       userId: session.user.id,
       email: email.toLowerCase().trim(),
       smtpHost, smtpPort: smtpPort || 587,
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
       imapHost, imapPort: imapPort || 993,
       imapUser, imapPass,
       provider: provider || "other",
-    },
+    }),
     select: {
       id: true, email: true, provider: true, isActive: true, createdAt: true,
     },

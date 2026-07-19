@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { encryptAccount, encrypt } from "@/lib/crypto";
 
 const IMAP_DEFAULTS: Record<string, { host: string; port: number }> = {
   gmail: { host: "imap.gmail.com", port: 993 },
@@ -174,7 +175,7 @@ export async function POST(req: Request) {
   const finalImapHost = imapHost || derivedImapHost;
 
   const account = await prisma.emailAccount.create({
-    data: {
+    data: encryptAccount({
       email, provider,
       displayName: displayName || null,
       smtpHost: smtpHost || null, smtpPort: smtpPort ? parseInt(smtpPort) : null,
@@ -186,27 +187,27 @@ export async function POST(req: Request) {
       warmupEnabled: provider === "Gmail",
       warmupFilterTag: generateFilterTag(),
       userId: session.user.id,
-    },
+    }),
   });
 
   if (finalImapHost && finalImapUser && finalImapPass) {
     await prisma.seedMailbox.upsert({
       where: { email },
-      update: {
+      update: encryptAccount({
         smtpHost: smtpHost || "", smtpPort: smtpPort ? parseInt(String(smtpPort)) : 465,
         smtpUser: smtpUser || "", smtpPass: smtpPass || "",
         imapHost: finalImapHost, imapPort: finalImapPortVal,
         imapUser: finalImapUser, imapPass: finalImapPass,
         provider: seedProvider, isActive: true,
-      },
-      create: {
+      }),
+      create: encryptAccount({
         email, userId: session.user.id,
         smtpHost: smtpHost || "", smtpPort: smtpPort ? parseInt(String(smtpPort)) : 465,
         smtpUser: smtpUser || "", smtpPass: smtpPass || "",
         imapHost: finalImapHost, imapPort: finalImapPortVal,
         imapUser: finalImapUser, imapPass: finalImapPass,
         provider: seedProvider, isActive: true,
-      },
+      }),
     });
   }
 
@@ -248,7 +249,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (Object.keys(updateData).length > 0) {
-    await prisma.emailAccount.update({ where: { id }, data: updateData });
+    await prisma.emailAccount.update({ where: { id }, data: encryptAccount(updateData) });
   }
 
   return NextResponse.json({ success: true });

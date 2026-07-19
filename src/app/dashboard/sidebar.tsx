@@ -15,6 +15,8 @@ const navItems = [
   { href: "/dashboard/settings", label: "Settings", icon: "gear" },
 ];
 
+const adminItem = { href: "/admin", label: "Admin", icon: "shield" };
+
 export default function Sidebar({ user }: { user: any }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -101,6 +103,26 @@ export default function Sidebar({ user }: { user: any }) {
               </Link>
             );
           })}
+          {(user as any).role === "admin" && (() => {
+            const item = adminItem;
+            const isActive = pathname === item.href || pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-6 py-2.5 text-sm relative transition-colors ${
+                  isActive ? "text-blue-accent" : "text-muted hover:text-blue-accent"
+                }`}
+              >
+                {isActive && (
+                  <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-accent rounded-r-sm" />
+                )}
+                <NavIcon name={item.icon} />
+                {item.label}
+              </Link>
+            );
+          })()}
         </nav>
 
         <div className="pt-3 border-t border-border px-6">
