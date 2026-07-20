@@ -174,10 +174,10 @@ export async function DELETE(req: NextRequest) {
 
   const leads = await prisma.lead.findMany({
     where: { campaignId: id, deletedAt: null },
-    select: { id: true, _count: { select: { deals: true, groups: true } } },
+    select: { id: true, _count: { select: { deals: true } } },
   });
-  const leadIdsToSoftDelete = leads.filter((l: { _count: { deals: number; groups: number } }) => l._count.deals === 0 && l._count.groups === 0).map((l: { id: string }) => l.id);
-  const leadIdsToDetach = leads.filter((l: { _count: { deals: number; groups: number } }) => l._count.deals > 0 || l._count.groups > 0).map((l: { id: string }) => l.id);
+  const leadIdsToSoftDelete = leads.filter((l: { _count: { deals: number } }) => l._count.deals === 0).map((l: { id: string }) => l.id);
+  const leadIdsToDetach = leads.filter((l: { _count: { deals: number } }) => l._count.deals > 0).map((l: { id: string }) => l.id);
 
   if (leadIdsToSoftDelete.length > 0) {
     await prisma.lead.updateMany({ where: { id: { in: leadIdsToSoftDelete } }, data: { deletedAt: new Date() } });

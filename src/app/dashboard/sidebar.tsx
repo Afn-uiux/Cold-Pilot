@@ -11,7 +11,6 @@ const navItems = [
   { href: "/dashboard/campaigns", label: "Campaigns", icon: "chart" },
   { href: "/dashboard/inbox", label: "Coldbox", icon: "inbox" },
   { href: "/dashboard/crm", label: "CRM", icon: "users" },
-  { href: "/dashboard/groups", label: "Groups", icon: "folder" },
   { href: "/dashboard/settings", label: "Settings", icon: "gear" },
 ];
 

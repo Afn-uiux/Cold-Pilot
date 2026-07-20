@@ -12,15 +12,13 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const campaignId = searchParams.get("campaignId");
-  const groupId = searchParams.get("groupId");
 
   const where: any = { userId: session.user.id, deletedAt: null };
   if (campaignId) where.campaignId = campaignId;
-  if (groupId) where.groups = { some: { groupId } };
 
   const leads = await prisma.lead.findMany({
     where,
-    include: { campaign: { select: { name: true } }, groups: { include: { group: { select: { name: true } } } } },
+    include: { campaign: { select: { name: true } } },
     orderBy: { createdAt: "asc" },
   });
 
