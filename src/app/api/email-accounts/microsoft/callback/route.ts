@@ -108,27 +108,6 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Also create SeedMailbox
-    const smtpPass = accessToken;
-    const existingSeed = await prisma.seedMailbox.findUnique({ where: { email } });
-    if (!existingSeed) {
-      await prisma.seedMailbox.create({
-        data: encryptAccount({
-          userId: session.user.id,
-          email,
-          smtpHost: "smtp.office365.com",
-          smtpPort: 587,
-          smtpUser: email,
-          smtpPass,
-          imapHost: "outlook.office365.com",
-          imapPort: 993,
-          imapUser: email,
-          imapPass: accessToken,
-          provider: "Outlook",
-        }),
-      });
-    }
-
     return htmlPage({ success: true });
   } catch (err: any) {
     return htmlPage({ success: false, error: err.message || "An unexpected error occurred." });

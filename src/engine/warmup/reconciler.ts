@@ -17,7 +17,6 @@ export async function reconcileWarmupSchedules(): Promise<number> {
       id: true,
       email: true,
       warmupStartedAt: true,
-      warmupPoolType: true,
     },
   });
 
@@ -48,11 +47,7 @@ export async function reconcileWarmupSchedules(): Promise<number> {
       if (!nextTime) continue;
 
       // Pick a partner seed
-      const partner = await pickWarmupPartner(
-        mailbox.id,
-        mailbox.warmupPoolType,
-        mailboxes.length,
-      );
+      const partner = await pickWarmupPartner(mailbox.id, mailboxes.length);
       if (!partner) continue;
 
       // Generate content
@@ -179,10 +174,10 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
           },
         });
 
-        // Update seed lastUsed
-        await prisma.seedMailbox.update({
+        // Update receiver lastHealthCheckAt as lastUsed proxy
+        await prisma.emailAccount.update({
           where: { id: log.seedMailboxId },
-          data: { lastUsed: new Date() },
+          data: { lastHealthCheckAt: new Date() },
         });
 
         sent++;

@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       const {
         warmupBase, warmupIncrease, warmupMax, warmupDays,
         warmupStartTime, warmupEndTime, minWaitTime, timezone,
-        targetDailyVolume, warmupPoolType,
+        targetDailyVolume,
       } = body;
 
       const data: Record<string, any> = {};
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       if (minWaitTime !== undefined) data.minWaitTime = minWaitTime;
       if (timezone !== undefined) data.timezone = timezone;
       if (targetDailyVolume !== undefined) data.targetDailyVolume = targetDailyVolume;
-      if (warmupPoolType !== undefined) data.warmupPoolType = warmupPoolType;
+
 
       await prisma.emailAccount.update({
         where: { id: emailAccountId },
@@ -96,7 +96,7 @@ export async function GET(req: Request) {
         id: true, email: true, warmupEnabled: true, warmupBase: true,
         warmupIncrease: true, warmupMax: true, warmupDays: true,
         warmupStartTime: true, warmupEndTime: true, minWaitTime: true,
-        timezone: true, warmupPoolType: true, healthScore: true,
+        timezone: true, healthScore: true,
         healthState: true, isPaused: true, warmupWeek: true,
         currentDailyVolume: true, targetDailyVolume: true,
         warmupStartedAt: true, lastHealthCheckAt: true,

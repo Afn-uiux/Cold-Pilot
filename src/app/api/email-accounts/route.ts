@@ -44,7 +44,7 @@ const SAFE_FIELDS = {
   displayName: true, domain: true,
   warmupEnabled: true, warmupBase: true, warmupIncrease: true, warmupMax: true,
   warmupDays: true, warmupFilterTag: true, disableSlowWarmup: true, warmupReplyRate: true, readEmulation: true, warmupOpenRate: true, warmupSpamProtection: true, warmupMarkImportant: true, customTrackingDomain: true, warmupCustomTrackingDomain: true, warmupStartTime: true, warmupEndTime: true,
-  minWaitTime: true, timezone: true, warmupPoolType: true,
+  minWaitTime: true, timezone: true,
   warmupAiEnabled: true, healthScore: true, healthState: true,
   isPaused: true, warmupWeek: true, currentDailyVolume: true,
   targetDailyVolume: true, dailySendLimit: true,
@@ -190,27 +190,6 @@ export async function POST(req: Request) {
     }),
   });
 
-  if (finalImapHost && finalImapUser && finalImapPass) {
-    await prisma.seedMailbox.upsert({
-      where: { email },
-      update: encryptAccount({
-        smtpHost: smtpHost || "", smtpPort: smtpPort ? parseInt(String(smtpPort)) : 465,
-        smtpUser: smtpUser || "", smtpPass: smtpPass || "",
-        imapHost: finalImapHost, imapPort: finalImapPortVal,
-        imapUser: finalImapUser, imapPass: finalImapPass,
-        provider: seedProvider, isActive: true,
-      }),
-      create: encryptAccount({
-        email, userId: session.user.id,
-        smtpHost: smtpHost || "", smtpPort: smtpPort ? parseInt(String(smtpPort)) : 465,
-        smtpUser: smtpUser || "", smtpPass: smtpPass || "",
-        imapHost: finalImapHost, imapPort: finalImapPortVal,
-        imapUser: finalImapUser, imapPass: finalImapPass,
-        provider: seedProvider, isActive: true,
-      }),
-    });
-  }
-
   return NextResponse.json(account);
 }
 
@@ -232,7 +211,7 @@ export async function PATCH(req: NextRequest) {
     "displayName", "dailySendLimit", "minWaitTime", "timezone",
     "warmupEnabled", "warmupBase", "warmupIncrease", "warmupMax",
     "warmupDays", "warmupFilterTag", "disableSlowWarmup", "warmupReplyRate", "readEmulation", "warmupOpenRate", "warmupSpamProtection", "warmupMarkImportant", "customTrackingDomain", "warmupCustomTrackingDomain", "warmupStartTime", "warmupEndTime",
-    "warmupPoolType", "warmupAiEnabled", "status",
+    "warmupAiEnabled", "status",
     "smtpHost", "smtpPort", "smtpUser", "smtpPass",
     "imapHost", "imapPort", "imapUser", "imapPass",
   ];
@@ -266,7 +245,6 @@ export async function DELETE(req: NextRequest) {
     const account = await prisma.emailAccount.findFirst({ where: { id, userId: session.user.id } });
     if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    await prisma.seedMailbox.deleteMany({ where: { email: account.email, userId: session.user.id } });
     await prisma.warmupLog.deleteMany({ where: { senderMailboxId: id } });
     await prisma.emailAccount.delete({ where: { id } });
     return NextResponse.json({ success: true });

@@ -23,13 +23,24 @@ export async function canSendFromAccount(
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
 
-  // Count total sends today (campaign + warmup combined)
-  const totalSentToday = await prisma.emailLog.count({
+  // Count campaign sends today
+  const campaignSentToday = await prisma.emailLog.count({
     where: {
       emailAccountId,
       sentAt: { gte: todayStart },
     },
   });
+
+  // Count warmup sends today
+  const warmupSentToday = await prisma.warmupLog.count({
+    where: {
+      senderMailboxId: emailAccountId,
+      sentAt: { gte: todayStart },
+      status: { in: ["sent", "delivered"] },
+    },
+  });
+
+  const totalSentToday = campaignSentToday + warmupSentToday;
 
   if (totalSentToday >= dailySendLimit) {
     return {
@@ -38,15 +49,28 @@ export async function canSendFromAccount(
     };
   }
 
-  // Check time since last send from this account
-  const lastSend = await prisma.emailLog.findFirst({
+  // Check time since last send from this account (campaign or warmup)
+  const lastCampaignSend = await prisma.emailLog.findFirst({
     where: { emailAccountId },
     orderBy: { sentAt: "desc" },
     select: { sentAt: true },
   });
 
-  if (lastSend?.sentAt) {
-    const elapsed = now.getTime() - lastSend.sentAt.getTime();
+  const lastWarmupSend = await prisma.warmupLog.findFirst({
+    where: { senderMailboxId: emailAccountId },
+    orderBy: { sentAt: "desc" },
+    select: { sentAt: true },
+  });
+
+  let lastSentAt: Date | null = null;
+  if (lastCampaignSend?.sentAt && lastWarmupSend?.sentAt) {
+    lastSentAt = lastCampaignSend.sentAt > lastWarmupSend.sentAt ? lastCampaignSend.sentAt : lastWarmupSend.sentAt;
+  } else {
+    lastSentAt = lastCampaignSend?.sentAt || lastWarmupSend?.sentAt || null;
+  }
+
+  if (lastSentAt) {
+    const elapsed = now.getTime() - lastSentAt.getTime();
     if (elapsed < GLOBAL_MIN_WAIT_MS) {
       return {
         allowed: false,

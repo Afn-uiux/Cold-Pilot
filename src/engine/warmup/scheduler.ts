@@ -13,7 +13,6 @@ interface EmailAccountWithWarmup {
   warmupEndTime: string;
   minWaitTime: number;
   timezone: string;
-  warmupPoolType: string;
   healthState: string;
   healthScore: number;
   isPaused: boolean;
@@ -159,10 +158,10 @@ export async function calculateNextWarmupTime(accountId: string): Promise<Date |
     if (varied < targetVolume) targetVolume = varied;
   }
 
-  // Cap to eligible seeds
-  const seedCount = await prisma.seedMailbox.count({ where: { isActive: true } });
-  if (seedCount > 0 && targetVolume > seedCount) {
-    targetVolume = seedCount;
+  // Cap to eligible accounts
+  const accountCount = await prisma.emailAccount.count({ where: { status: "active", id: { not: accountId } } });
+  if (accountCount > 0 && targetVolume > accountCount) {
+    targetVolume = accountCount;
   }
 
   // Apply health state adjustments
@@ -247,21 +246,4 @@ export async function calculateNextWarmupTime(accountId: string): Promise<Date |
   }
 
   return humanizeSeconds(candidateTime);
-}
-
-export async function scheduleNextWarmupSend(accountId: string): Promise<Date | null> {
-  const nextTime = await calculateNextWarmupTime(accountId);
-  if (!nextTime) return null;
-
-  // Store as pending warmup log entry
-  await prisma.warmupLog.create({
-    data: {
-      senderMailboxId: accountId,
-      seedMailboxId: "", // Will be assigned when sent
-      status: "scheduled",
-      sentAt: nextTime,
-    },
-  });
-
-  return nextTime;
 }

@@ -35,7 +35,6 @@ model User {
   suppressions  Suppression[]
   accounts      Account[]
   sessions      Session[]
-  seedMailboxes SeedMailbox[]
 }
 
 model Account {
@@ -111,7 +110,7 @@ model EmailAccount {
   warmupEndTime   String @default("17:00")
   minWaitTime    Int     @default(60)
   timezone       String  @default("UTC")
-  warmupPoolType String  @default("premium")
+
   warmupAiEnabled Boolean @default(false)
   healthScore    Float   @default(100)
   healthState    String  @default("healthy")
@@ -128,34 +127,10 @@ model EmailAccount {
 
   user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   emailLogs     EmailLog[]
-  warmupLogs    WarmupLog[]
-  warmupContent WarmupContent[]
-}
-
-model SeedMailbox {
-  id        String   @id @default(cuid())
-  userId    String
-  email     String   @unique
-  smtpHost  String
-  smtpPort  Int      @default(587)
-  smtpUser  String
-  smtpPass  String
-  imapHost  String
-  imapPort  Int      @default(993)
-  imapUser  String
-  imapPass  String
-  provider  String   @default("other")
-  isActive  Boolean  @default(true)
-  lastUsed  DateTime?
-  emailsReceivedTotal Int @default(0)
-  repliesSentTotal    Int @default(0)
-  spamRescuesTotal    Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  warmupLogs    WarmupLog[]
-  warmupContent WarmupContent[]
+  sentWarmupLogs    WarmupLog[] @relation("sentWarmupLogs")
+  receivedWarmupLogs WarmupLog[] @relation("receivedWarmupLogs")
+  sentWarmupContent WarmupContent[] @relation("sentWarmupContent")
+  receivedWarmupContent WarmupContent[] @relation("receivedWarmupContent")
 }
 
 model WarmupLog {
@@ -176,8 +151,8 @@ model WarmupLog {
   status           String    @default("sent")
   createdAt        DateTime  @default(now())
 
-  senderMailbox EmailAccount @relation(fields: [senderMailboxId], references: [id], onDelete: Cascade)
-  seedMailbox   SeedMailbox  @relation(fields: [seedMailboxId], references: [id], onDelete: Cascade)
+  senderMailbox EmailAccount @relation("sentWarmupLogs", fields: [senderMailboxId], references: [id], onDelete: Cascade)
+  seedMailbox   EmailAccount @relation("receivedWarmupLogs", fields: [seedMailboxId], references: [id], onDelete: Cascade)
 }
 
 model WarmupContent {
@@ -190,8 +165,8 @@ model WarmupContent {
   contentSource   String   @default("templates")
   usedAt          DateTime @default(now())
 
-  senderMailbox EmailAccount @relation(fields: [senderMailboxId], references: [id], onDelete: Cascade)
-  seedMailbox   SeedMailbox  @relation(fields: [seedMailboxId], references: [id], onDelete: Cascade)
+  senderMailbox EmailAccount @relation("sentWarmupContent", fields: [senderMailboxId], references: [id], onDelete: Cascade)
+  seedMailbox   EmailAccount @relation("receivedWarmupContent", fields: [seedMailboxId], references: [id], onDelete: Cascade)
 
   @@unique([senderMailboxId, seedMailboxId, contentHash])
   @@index([senderMailboxId])

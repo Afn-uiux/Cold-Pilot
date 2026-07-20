@@ -10,33 +10,14 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const accounts = await prisma.emailAccount.findMany({ take: 5 });
-  if (accounts.length === 0) {
-    console.log("No email accounts found. Create one first.");
+  if (accounts.length < 2) {
+    console.log("Need at least 2 email accounts. Create more first.");
     return;
   }
 
   const account = accounts[0];
-  console.log(`Seeding warmup data for: ${account.email} (${account.id})`);
-
-  let seed = await prisma.seedMailbox.findFirst({ where: { email: account.email } });
-  if (!seed) {
-    seed = await prisma.seedMailbox.create({
-      data: {
-        email: account.email,
-        userId: account.userId,
-        smtpHost: account.smtpHost || "smtp.example.com",
-        smtpPort: account.smtpPort || 587,
-        smtpUser: account.smtpUser || account.email,
-        smtpPass: account.smtpPass || "secret",
-        imapHost: account.imapHost || "imap.example.com",
-        imapPort: account.imapPort || 993,
-        imapUser: account.imapUser || account.email,
-        imapPass: account.imapPass || "secret",
-        provider: account.provider || "other",
-      },
-    });
-    console.log(`Created seed mailbox: ${seed.id}`);
-  }
+  const partner = accounts[1];
+  console.log(`Seeding warmup data: ${account.email} -> ${partner.email}`);
 
   await prisma.warmupLog.deleteMany({ where: { senderMailboxId: account.id } });
 
@@ -55,9 +36,9 @@ async function main() {
       ts.setMinutes(ts.getMinutes() + j * (2 + Math.floor(Math.random() * 5)));
       logs.push({
         senderMailboxId: account.id,
-        seedMailboxId: seed.id,
+        seedMailboxId: partner.id,
         subject: `Warmup email ${j + 1}`,
-        status: j < received ? "received" : "sent",
+        status: j < received ? "delivered" : "sent",
         sentAt: ts,
         receivedAt: j < received ? new Date(ts.getTime() + 60000 * (1 + Math.floor(Math.random() * 10))) : null,
         rescuedFromSpam: j < rescued,
