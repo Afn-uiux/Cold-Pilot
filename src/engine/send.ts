@@ -87,6 +87,14 @@ export async function sendEmail(opts: SendOptions) {
     throw new Error(`Email ${opts.to} is suppressed (${suppressed.reason})`);
   }
 
+  const lead = await prisma.lead.findUnique({
+    where: { id: opts.leadId },
+    select: { verificationStatus: true },
+  });
+  if (lead?.verificationStatus === "invalid" || lead?.verificationStatus === "unknown" || lead?.verificationStatus === "risky") {
+    throw new Error(`Email ${opts.to} blocked: verification status "${lead.verificationStatus}"`);
+  }
+
   const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
   const unsubscribeUrl = opts.unsubscribeHeader ? `${baseUrl}/api/unsubscribe?lead=${opts.leadId}` : null;
 

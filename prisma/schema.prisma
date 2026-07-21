@@ -263,6 +263,9 @@ model Lead {
   lastSentAt      DateTime?
   lastReadAt      DateTime?
   notes           String?
+  customFields    String?
+  verificationStatus String?
+  verifiedAt         DateTime?
   deletedAt       DateTime?
 
   createdAt DateTime @default(now())

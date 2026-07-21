@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import ConfirmModal from "@/components/confirm-modal";
 import Select from "@/components/select";
 
-type Lead = { id: string; email: string; firstName: string | null; lastName: string | null; company: string | null; title: string | null; phone: string | null; website: string | null; location: string | null; notes: string | null; campaignId: string | null; status: string; createdAt: string; campaign: { name: string } | null; };
+type Lead = { id: string; email: string; firstName: string | null; lastName: string | null; company: string | null; title: string | null; phone: string | null; website: string | null; location: string | null; notes: string | null; customFields: string | null; campaignId: string | null; status: string; verificationStatus: string | null; createdAt: string; campaign: { name: string } | null; };
 
 const PROVIDERS: Record<string, { name: string; colors: string; logo: string }> = {
   gmail: { name: "Gmail", colors: "bg-[#3C4043]", logo: "M" },
@@ -48,6 +48,9 @@ export default function LeadsPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [importCampaignId, setImportCampaignId] = useState(urlCampaignId);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
+  const [verifyResult, setVerifyResult] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -58,12 +61,18 @@ export default function LeadsPage() {
     ]).then(([leadsData, campaignsData]) => {
       setLeads(Array.isArray(leadsData) ? leadsData : []);
       setCampaigns(Array.isArray(campaignsData) ? campaignsData.map((c: any) => ({ id: c.id, name: c.name })) : []);
-      if (urlCampaignId) setShowImport(true);
+      if (urlCampaignId && (!Array.isArray(leadsData) || leadsData.length === 0)) setShowImport(true);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [urlCampaignId]);
 
   const columns = useMemo(() => {
     const has = (field: (l: Lead) => string | null) => leads.some(l => field(l)?.trim());
+    const customKeys = new Set<string>();
+    for (const l of leads) {
+      if (l.customFields) {
+        try { Object.keys(JSON.parse(l.customFields)).forEach(k => { const c = k.toLowerCase().replace(/[^\w]/g,""); if (c !== "email" && c !== "emailaddress" && c !== "e-mail" && c !== "emails") customKeys.add(k); }); } catch {}
+      }
+    }
     return {
       firstName: has(l => l.firstName),
       lastName: has(l => l.lastName),
@@ -73,6 +82,7 @@ export default function LeadsPage() {
       website: has(l => l.website),
       location: has(l => l.location),
       notes: has(l => l.notes),
+      customKeys: Array.from(customKeys),
     };
   }, [leads]);
 
@@ -116,6 +126,40 @@ export default function LeadsPage() {
     setLeads([]);
     setSelectedIds(new Set());
     setShowConfirmAll(false);
+  }
+
+  async function handleVerifyAll() {
+    setVerifying(true);
+    setVerifyResult(null);
+    const idsToVerify = selectedIds.size > 0
+      ? Array.from(selectedIds)
+      : leads.filter(l => !l.verificationStatus || l.verificationStatus === "unverified").map(l => l.id);
+    setVerifyingIds(new Set(idsToVerify));
+    try {
+      const leadIds = selectedIds.size > 0 ? Array.from(selectedIds) : undefined;
+      const body = leadIds
+        ? { leadIds }
+        : urlCampaignId ? { campaignId: urlCampaignId } : {};
+      if (!leadIds && !urlCampaignId) {
+        setVerifyResult({ error: "Select leads or filter by a campaign first" });
+        return;
+      }
+      const res = await fetch("/api/leads/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json();
+      setVerifyResult(result);
+      const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
+      const fresh = await fetch(freshUrl).then(r => r.json());
+      setLeads(Array.isArray(fresh) ? fresh : []);
+    } catch {
+      setVerifyResult({ error: "Verification failed" });
+    } finally {
+      setVerifying(false);
+      setVerifyingIds(new Set());
+    }
   }
 
   async function handlePasteImport() {
@@ -205,6 +249,9 @@ export default function LeadsPage() {
               {selectedIds.size > 0 && (
                 <button onClick={handleRemoveSelected} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Remove selected ({selectedIds.size})</button>
               )}
+              <button onClick={handleVerifyAll} disabled={verifying} className="btn btn-ghost btn-sm text-blue-accent hover:text-blue-accent disabled:opacity-40">
+                {verifying ? "Verifying..." : "Verify" + (selectedIds.size > 0 ? ` (${selectedIds.size})` : " All")}
+              </button>
               <button onClick={() => setShowConfirmAll(true)} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Remove all</button>
             </>
           )}
@@ -235,49 +282,83 @@ export default function LeadsPage() {
               <table>
                 <thead>
                   <tr>
+                    <th className="w-10">#</th>
                     <th className="w-10">
                       <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} className="w-4 h-4" />
                     </th>
                     <th>Email</th>
-                    <th>Provider</th>
-                    {columns.firstName && <th>First Name</th>}
-                    {columns.lastName && <th>Last Name</th>}
-                    {columns.company && <th>Company</th>}
-                    {columns.title && <th>Title</th>}
-                    {columns.phone && <th>Phone</th>}
-                    {columns.website && <th>Website</th>}
-                    {columns.location && <th>Location</th>}
-                    {columns.notes && <th>Notes</th>}
+                    {columns.customKeys.length > 0 ? (
+                      columns.customKeys.map(k => <th key={k}>{k}</th>)
+                    ) : (
+                      <>
+                        <th>Provider</th>
+                        {columns.firstName && <th>First Name</th>}
+                        {columns.lastName && <th>Last Name</th>}
+                        {columns.company && <th>Company</th>}
+                        {columns.title && <th>Title</th>}
+                        {columns.phone && <th>Phone</th>}
+                        {columns.website && <th>Website</th>}
+                        {columns.location && <th>Location</th>}
+                        {columns.notes && <th>Notes</th>}
+                      </>
+                    )}
                     <th>Status</th>
+                    <th>Verification</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr><td colSpan={99} className="text-center text-muted-2 py-12">No leads match your search</td></tr>
-                  ) : filtered.map(l => {
+                  ) : filtered.map((l, i) => {
                     const provider = getEmailProvider(l.email);
+                    let parsedCustom: Record<string, string> = {};
+                    if (l.customFields) { try { parsedCustom = JSON.parse(l.customFields); } catch {} }
                     return (
                       <tr key={l.id}>
+                        <td className="text-muted text-xs">{i + 1}</td>
                         <td>
                           <input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelect(l.id)} className="w-4 h-4" />
                         </td>
                         <td className="font-medium">{l.email}</td>
+                        {columns.customKeys.length > 0 ? (
+                          columns.customKeys.map(k => <td key={k} className="text-muted">{parsedCustom[k] || ""}</td>)
+                        ) : (
+                          <>
+                            <td>
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white ${provider.colors}`}>
+                                <span className="text-[10px] leading-none">{provider.logo}</span>
+                                {provider.name}
+                              </span>
+                            </td>
+                            {columns.firstName && <td>{l.firstName}</td>}
+                            {columns.lastName && <td>{l.lastName}</td>}
+                            {columns.company && <td className="text-muted">{l.company}</td>}
+                            {columns.title && <td className="text-muted">{l.title}</td>}
+                            {columns.phone && <td className="text-muted">{l.phone}</td>}
+                            {columns.website && <td className="text-muted">{l.website}</td>}
+                            {columns.location && <td className="text-muted">{l.location}</td>}
+                            {columns.notes && <td className="text-muted">{l.notes}</td>}
+                          </>
+                        )}
+                        <td><span className={`badge ${l.status === "replied" ? "active" : l.status === "pending" ? "draft" : ""}`}>{l.status}</span></td>
                         <td>
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white ${provider.colors}`}>
-                            <span className="text-[10px] leading-none">{provider.logo}</span>
-                            {provider.name}
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                            l.verificationStatus === "valid" ? "bg-emerald-100 text-emerald-700" :
+                            (l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "bg-red-100 text-red-700" :
+                            l.verificationStatus === "catch_all" ? "bg-orange-100 text-orange-700" :
+                            l.verificationStatus === "unknown" ? "bg-gray-100 text-gray-500" :
+                            "bg-blue-50 text-blue-400"
+                          }`}>
+                            {(l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "invalid / do not send" : l.verificationStatus || "unverified"}
+                            {verifyingIds.has(l.id) && (
+                              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                            )}
                           </span>
                         </td>
-                        {columns.firstName && <td>{l.firstName}</td>}
-                        {columns.lastName && <td>{l.lastName}</td>}
-                        {columns.company && <td className="text-muted">{l.company}</td>}
-                        {columns.title && <td className="text-muted">{l.title}</td>}
-                        {columns.phone && <td className="text-muted">{l.phone}</td>}
-                        {columns.website && <td className="text-muted">{l.website}</td>}
-                        {columns.location && <td className="text-muted">{l.location}</td>}
-                        {columns.notes && <td className="text-muted">{l.notes}</td>}
-                        <td><span className={`badge ${l.status === "replied" ? "active" : l.status === "pending" ? "draft" : ""}`}>{l.status}</span></td>
                         <td>
                           <button onClick={() => handleRemove(l.id)} className="text-xs text-red-500 hover:text-red-700 transition-colors font-medium">Delete</button>
                         </td>
@@ -316,11 +397,46 @@ export default function LeadsPage() {
             <div className="px-8 pb-8 overflow-y-auto pt-6">
               {importResult && (
                 <div className={`text-sm p-3 rounded-lg mb-4 whitespace-pre-line ${importResult.error || importResult.firstError ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
-                  {importResult.error || (importResult.firstError ? `${importResult.imported} imported, ${importResult.errors} errors (e.g. ${importResult.firstError})` : `${importResult.imported} imported, ${importResult.errors || 0} errors out of ${importResult.total}`)}
+                  {importResult.error || (importResult.firstError
+                    ? `${importResult.imported} imported, ${importResult.errors} errors (e.g. ${importResult.firstError})`
+                    : `${importResult.imported} imported, ${importResult.errors || 0} errors, ${importResult.skipped || 0} skipped (no email) out of ${importResult.total}${importResult.duplicates ? `, ${importResult.duplicates} duplicates skipped` : ""}`)}
+                  {importResult.duplicateEmails && importResult.duplicateEmails.length > 0 && (
+                    <div className="mt-2 text-xs opacity-70">
+                      Duplicates: {importResult.duplicateEmails.join(", ")}
+                    </div>
+                  )}
                 </div>
               )}
+              {verifyResult && !verifyResult.error && (
+                <div className="text-sm p-3 rounded-lg mb-4 bg-blue-50 text-blue-700">
+                  Verified: {verifyResult.valid} valid, {verifyResult.invalid + (verifyResult.risky || 0)} do not contact, {verifyResult.catch_all} catch-all, {verifyResult.unknown} unknown
+                </div>
+              )}
+              {verifyResult?.error && (
+                <div className="text-sm p-3 rounded-lg mb-4 bg-red-50 text-red-700">{verifyResult.error}</div>
+              )}
               {importResult?.imported > 0 && importCampaignId && (
-                <button onClick={() => router.push(`/dashboard/campaigns/${importCampaignId}`)} className="btn btn-primary w-full mb-4">Continue to Campaign</button>
+                <div className="flex gap-2 mb-4">
+                  <button onClick={() => { setShowImport(false); router.push(`/dashboard/campaigns/${importCampaignId}?tab=leads`); }} className="btn btn-primary flex-1">Continue to Leads</button>
+                  <button onClick={async () => {
+                    setVerifying(true);
+                    setVerifyingIds(new Set(leads.filter(l => !l.verificationStatus || l.verificationStatus === "unverified").map(l => l.id)));
+                    try {
+                      const res = await fetch("/api/leads/verify", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ campaignId: importCampaignId }),
+                      });
+                      const result = await res.json();
+                      setVerifyResult(result);
+                      const fresh = await fetch(`/api/leads?campaignId=${importCampaignId}`).then(r => r.json());
+                      setLeads(Array.isArray(fresh) ? fresh : []);
+                    } catch { setVerifyResult({ error: "Verification failed" }); }
+                    finally { setVerifying(false); setVerifyingIds(new Set()); }
+                  }} disabled={verifying} className="btn btn-ghost flex-1 text-blue-accent disabled:opacity-40">
+                    {verifying ? "Verifying..." : "Verify Now"}
+                  </button>
+                </div>
               )}
 
               {/* Campaign selector */}

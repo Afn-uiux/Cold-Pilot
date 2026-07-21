@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { VARIABLE_LIST, processSpintax, getPersonalizedPreview } from "@/engine/personalize";
 
 import Select from "@/components/select";
@@ -15,11 +15,12 @@ type Step = { id?: string; type: string; subject: string; bodyHtml: string; dela
 export default function CampaignDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id as string;
 
   const [campaign, setCampaign] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("analytics");
+  const [tab, setTab] = useState(searchParams.get("tab") || "analytics");
   const [state, setState] = useState<CampaignState>("draft");
   const [steps, setSteps] = useState<Step[]>([{ type: "email", subject: "", bodyHtml: "", delayDays: 0, delayUnit: "days", order: 0 }]);
   const [saving, setSaving] = useState(false);
@@ -736,6 +737,9 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showConfirmAll, setShowConfirmAll] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
+  const [verifyResult, setVerifyResult] = useState<any>(null);
   useEffect(() => {
     fetch(`/api/leads?campaignId=${campaignId}`).then(r => r.json()).then(data => setLeads(Array.isArray(data) ? data : [])).catch(() => {}).finally(() => setLoading(false));
   }, [campaignId]);
@@ -748,25 +752,101 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
     setLeads([]);
     setShowConfirmAll(false);
   }
+  async function handleVerifyAll() {
+    setVerifying(true);
+    setVerifyResult(null);
+    const idsToVerify = leads.filter(l => !l.verificationStatus || l.verificationStatus === "unverified").map(l => l.id);
+    setVerifyingIds(new Set(idsToVerify));
+    try {
+      const res = await fetch("/api/leads/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaignId }),
+      });
+      const result = await res.json();
+      setVerifyResult(result);
+      const fresh = await fetch(`/api/leads?campaignId=${campaignId}`).then(r => r.json());
+      setLeads(Array.isArray(fresh) ? fresh : []);
+    } catch { setVerifyResult({ error: "Verification failed" }); }
+    finally { setVerifying(false); setVerifyingIds(new Set()); }
+  }
+  const customKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const l of leads) {
+      if (l.customFields) {
+        try { Object.keys(JSON.parse(l.customFields)).forEach(k => { const c = k.toLowerCase().replace(/[^\w]/g,""); if (c !== "email" && c !== "emailaddress" && c !== "e-mail" && c !== "emails") keys.add(k); }); } catch {}
+      }
+    }
+    return Array.from(keys);
+  }, [leads]);
   if (loading) return <div className="text-sm text-muted py-8">Loading...</div>;
   if (leads.length === 0) return <div className="empty-state"><h3>Add some leads to get started</h3><p>Import a CSV or paste a list to add leads to this campaign.</p><Link href={`/dashboard/leads?campaignId=${campaignId}`} className="btn btn-primary">Import Leads</Link></div>;
   return (
     <>
       <div className="flex justify-between items-center mb-4">
         <p className="text-sm text-muted">{leads.length} leads</p>
-        <button onClick={() => setShowConfirmAll(true)} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Delete All</button>
+        <div className="flex gap-2">
+          <button onClick={handleVerifyAll} disabled={verifying} className="btn btn-ghost btn-sm text-blue-accent hover:text-blue-accent disabled:opacity-40">
+            {verifying ? "Verifying..." : "Verify All"}
+          </button>
+          <button onClick={() => setShowConfirmAll(true)} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Delete All</button>
+        </div>
       </div>
+      {verifyResult && !verifyResult.error && (
+        <div className="text-sm p-3 rounded-lg mb-4 bg-blue-50 text-blue-700">
+          Verified: {verifyResult.valid} valid, {verifyResult.invalid + (verifyResult.risky || 0)} do not send, {verifyResult.catch_all} catch-all, {verifyResult.unknown} unknown
+        </div>
+      )}
+      {verifyResult?.error && (
+        <div className="text-sm p-3 rounded-lg mb-4 bg-red-50 text-red-700">{verifyResult.error}</div>
+      )}
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Email</th><th>Name</th><th>Status</th><th></th></tr></thead>
-          <tbody>{leads.map((l: any) => (
-            <tr key={l.id}>
-              <td>{l.email}</td>
-              <td>{[l.firstName, l.lastName].filter(Boolean).join(" ") || "—"}</td>
-              <td><span className={`badge ${l.status === "replied" ? "active" : l.status === "completed" ? "completed" : ""}`}>{l.status}</span></td>
-              <td><button onClick={() => handleRemove(l.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button></td>
-            </tr>
-          ))}</tbody>
+          <thead><tr>
+            <th className="w-10">#</th>
+            <th>Email</th>
+            {customKeys.length > 0 ? (
+              customKeys.map(k => <th key={k}>{k}</th>)
+            ) : (
+              <th>Name</th>
+            )}
+            <th>Verification</th>
+            <th>Status</th><th></th>
+          </tr></thead>
+          <tbody>{leads.map((l: any, i: number) => {
+            let parsed: Record<string, string> = {};
+            if (l.customFields) { try { parsed = JSON.parse(l.customFields); } catch {} }
+            return (
+              <tr key={l.id}>
+                <td className="text-muted text-xs">{i + 1}</td>
+                <td className="font-medium">{l.email}</td>
+                {customKeys.length > 0 ? (
+                  customKeys.map(k => <td key={k} className="text-muted">{parsed[k] || ""}</td>)
+                ) : (
+                  <td>{[l.firstName, l.lastName].filter(Boolean).join(" ") || "—"}</td>
+                )}
+                <td>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                    l.verificationStatus === "valid" ? "bg-emerald-100 text-emerald-700" :
+                    (l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "bg-red-100 text-red-700" :
+                    l.verificationStatus === "catch_all" ? "bg-orange-100 text-orange-700" :
+                    l.verificationStatus === "unknown" ? "bg-gray-100 text-gray-500" :
+                    "bg-blue-50 text-blue-400"
+                  }`}>
+                    {(l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "invalid / do not send" : l.verificationStatus || "unverified"}
+                    {verifyingIds.has(l.id) && (
+                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    )}
+                  </span>
+                </td>
+                <td><span className={`badge ${l.status === "replied" ? "active" : l.status === "completed" ? "completed" : ""}`}>{l.status}</span></td>
+                <td><button onClick={() => handleRemove(l.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button></td>
+              </tr>
+            );
+          })}</tbody>
         </table>
       </div>
       <ConfirmModal

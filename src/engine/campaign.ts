@@ -9,6 +9,7 @@ import { categorizeBounce } from "@/lib/bounce";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { decryptAccount } from "@/lib/crypto";
+import { canSendToLead } from "@/lib/verify";
 
 function isWithinSchedule(campaign: { startDate: Date | null; endDate: Date | null; noEndDate: boolean; schedules: { startTime: string; endTime: string; timezone: string; days: string }[] }): boolean {
   const now = new Date();
@@ -289,6 +290,17 @@ async function executeCampaignInner(campaignId: string) {
       });
       if (claimResult.count === 0) { skipped++; continue; }
 
+      const sendCheck = canSendToLead(lead.verificationStatus, campaign.enableRiskyEmails, campaign.disableBounceProtect);
+      if (!sendCheck.allowed) {
+        console.log(`[campaign] Skipping ${lead.email}: ${sendCheck.reason}`);
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { status: "pending", currentStep: 0, lastSentAt: null },
+        });
+        skipped++;
+        continue;
+      }
+
       try {
         const vars = {
           firstName: lead.firstName || "",
@@ -394,6 +406,17 @@ async function executeCampaignInner(campaignId: string) {
         },
       });
       if (claimFup.count === 0) { skipped++; continue; }
+
+      const fupSendCheck = canSendToLead(lead.verificationStatus, campaign.enableRiskyEmails, campaign.disableBounceProtect);
+      if (!fupSendCheck.allowed) {
+        console.log(`[campaign] Skipping follow-up to ${lead.email}: ${fupSendCheck.reason}`);
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { currentStep: currentStepIdx, status: "sent", lastSentAt: lead.lastSentAt },
+        });
+        skipped++;
+        continue;
+      }
 
       try {
         const priorLogs = await prisma.emailLog.findMany({

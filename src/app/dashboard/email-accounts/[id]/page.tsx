@@ -135,7 +135,7 @@ export default function EmailAccountDetailPage() {
   if (!data) return <div className="px-6 lg:px-10 pt-8 text-sm text-muted">Account not found</div>;
 
   const { account, warmup, campaigns } = data;
-  const isActive = account.status === "active";
+  const isActive = account.warmupEnabled && !account.isPaused;
   const created = new Date(account.createdAt);
   const maxChartVal = warmup?.daily?.length
     ? Math.max(...warmup.daily.map((d: any) => Math.max(d.sent, d.received, d.rescued)), 1)

@@ -4,6 +4,76 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+const KNOWN_FIELDS = [
+  "email", "e-mail", "email address", "mail", "emails", "email addresses", "e mail", "e_mail",
+  "first name", "firstname", "first_name", "fname", "first", "given name", "given-name",
+  "last name", "lastname", "last_name", "lname", "surname", "family name", "family_name", "familyname", "second name", "last-name",
+  "company", "organization", "org", "business", "firm", "company name", "company_name", "company-name", "business name", "business_name", "employer", "co", "organisation", "account",
+  "title", "job title", "position", "role", "designation", "job position", "job_position", "job-title", "job role", "job_role", "position title", "position_title",
+  "phone", "telephone", "tel", "mobile", "cell", "phone number", "phone_number", "contact number", "contact_number", "phone #", "phone#", "phone no", "phone_no", "phone no.", "mobile phone", "mobile_number", "work phone", "work_phone", "cell phone", "cellphone",
+  "website", "web", "url", "site", "company website", "company_website", "web site", "website url", "website_url", "linkedin url", "linkedin_url", "linkedin", "company site", "company_site", "webpage", "web page", "web page url",
+  "personalization", "custom", "personalized", "custom field", "custom_field", "custom1", "custom2", "custom field 1", "personalize", "personalisation", "note personalization", "personalized note", "custom note", "personal note", "personal_note", "custom text", "notes_personalization",
+  "location", "loc", "office location", "work location", "address", "mailing address", "street address", "place",
+  "city", "town", "municipality", "locality", "city/town", "city town",
+  "state", "province", "territory", "prefecture", "county", "state/province", "state province",
+  "country", "nation", "country/region", "country region",
+  "notes", "note", "comments", "description", "additional notes", "additional_info", "extra notes", "remarks", "extra info", "extra_information",
+  "name",
+];
+
+function isKnownField(header: string): boolean {
+  const clean = header.replace(/\s+/g, "").replace(/[_-]/g, "").replace(/[.]/g, "").toLowerCase();
+  return KNOWN_FIELDS.some(kw => {
+    const k = clean.replace(/\s+/g, "").replace(/[_-]/g, "").replace(/[.]/g, "").toLowerCase();
+    if (k.length < 4) return clean === k;
+    return clean === k || clean.includes(k) || k.includes(clean);
+  });
+}
+
+function isNameGroupField(header: string): boolean {
+  const clean = header.replace(/[^\w\s]/g, "").replace(/\s+/g, "").replace(/[._/-]/g, "").toLowerCase();
+  const nameGroups = [
+    ["city", "town", "municipality", "locality", "city/town", "city town"],
+    ["state", "province", "territory", "prefecture", "county", "state/province", "state province"],
+    ["country", "nation", "country/region", "country region"],
+  ];
+  return nameGroups.some(group => group.some(n => {
+    const target = n.replace(/[^\w]/g, "").toLowerCase();
+    if (target.length < 3) return clean === target;
+    return clean === target || clean.includes(target) || target.includes(clean);
+  }));
+}
+
+function extractCustomFields(headers: string[], cols: string[]): Record<string, string> | null {
+  const custom: Record<string, string> = {};
+  let hasCustom = false;
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i];
+    const val = cols[i]?.trim();
+    if (!val) continue;
+    custom[h] = val;
+    hasCustom = true;
+  }
+  return hasCustom ? custom : null;
+}
+
+function splitCsvLines(text: string, delimiter: string = ","): string[] {
+  const lines: string[] = [];
+  let current = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i], next = text[i + 1];
+    if (char === '"' && quoted && next === '"') { current += '"'; i++; }
+    else if (char === '"') { quoted = !quoted; current += char; }
+    else if ((char === "\r" || char === "\n") && !quoted) {
+      if (current.trim()) lines.push(current);
+      current = "";
+      if (char === "\r" && next === "\n") i++;
+    } else { current += char; }
+  }
+  if (current.trim()) lines.push(current);
+  return lines;
+}
+
 function parseCsvLine(line: string, delimiter: string = ","): string[] {
   const cells: string[] = [];
   let current = "", quoted = false;
@@ -90,6 +160,60 @@ function findHeader(headers: string[], row: string[], ...names: string[]): strin
   return null;
 }
 
+function mapRowToLead(loweredHeaders: string[], cols: string[], originalHeaders?: string[], emailIdx?: number) {
+  const displayHeaders = originalHeaders || loweredHeaders;
+  const customFields = extractCustomFields(displayHeaders, cols);
+  return {
+    email: (emailIdx !== undefined && emailIdx >= 0 ? cols[emailIdx] : cols[findColumn(loweredHeaders, "email", "e-mail", "email address", "mail", "emails", "email addresses", "e mail", "e_mail")]) || "",
+    firstName: findHeader(loweredHeaders, cols,
+      "first name", "firstname", "first_name", "fname", "first",
+      "given name", "full name", "fullname", "forename", "given-name"
+    ) || findExact(loweredHeaders, cols, "name"),
+    lastName: findHeader(loweredHeaders, cols,
+      "last name", "lastname", "last_name", "lname", "surname",
+      "last", "family name", "family_name", "familyname", "second name",
+      "last-name"
+    ),
+    company: findHeader(loweredHeaders, cols,
+      "company", "organization", "org", "business", "firm",
+      "company name", "company_name", "company-name", "business name",
+      "business_name", "employer", "co", "organisation", "account"
+    ),
+    title: findHeader(loweredHeaders, cols,
+      "title", "job title", "position", "role", "designation",
+      "job position", "job_position", "job-title", "job role",
+      "job_role", "position title", "position_title"
+    ),
+    phone: findHeader(loweredHeaders, cols,
+      "phone", "telephone", "tel", "mobile", "cell",
+      "phone number", "phone_number", "contact number", "contact_number",
+      "phone #", "phone#", "phone no", "phone_no", "phone no.",
+      "mobile phone", "mobile_number", "work phone", "work_phone",
+      "cell phone", "cellphone"
+    ),
+    website: findHeader(loweredHeaders, cols,
+      "website", "web", "url", "site", "company website",
+      "company_website", "web site", "website url", "website_url",
+      "linkedin url", "linkedin_url", "linkedin", "company site",
+      "company_site", "webpage", "web page", "web page url"
+    ),
+    personalization: findHeader(loweredHeaders, cols,
+      "personalization", "custom", "personalized", "custom field",
+      "custom_field", "custom1", "custom2", "custom field 1",
+      "personalize", "personalisation", "note personalization",
+      "personalized note", "custom note", "personal note",
+      "personal_note", "custom text", "notes_personalization"
+    ),
+    location: findLocation(loweredHeaders, cols),
+    notes: findHeader(loweredHeaders, cols,
+      "notes", "note", "comments", "description",
+      "additional notes", "additional_info", "extra notes",
+      "remarks", "extra info", "extra_information"
+    ),
+    customFields: customFields ? JSON.stringify(customFields) : null,
+  };
+}
+
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -101,6 +225,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     let leads = body.leads;
     let campaignId: string | null = body.campaignId || null;
+    let rowsSkippedNoEmail = 0;
 
     // Fetch from URL
     if (body.url) {
@@ -125,11 +250,10 @@ export async function POST(req: Request) {
                   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                   "Accept": "text/csv, text/plain, */*",
                 },
-                signal: AbortSignal.timeout(15000),
+                signal: AbortSignal.timeout(30000),
               });
               if (!r.ok) continue;
               const text = await r.text();
-              // Skip HTML login/consent pages — real CSV starts with a header row
               if (text.trimStart().startsWith("<!")) continue;
               csvText = text;
               break;
@@ -140,135 +264,50 @@ export async function POST(req: Request) {
               error: "Could not read the Google Sheet. Make sure the sheet is set to 'Anyone with the link' can view, then try again.",
             }, { status: 400 });
           }
-          const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+          const firstLineGuess = csvText.split(/\r?\n/)[0] || "";
+          const delimGuess = detectDelimiter(firstLineGuess);
+          const lines = splitCsvLines(csvText, delimGuess);
           if (lines.length < 2) return NextResponse.json({ error: "Sheet has no data rows" }, { status: 400 });
           const delim = detectDelimiter(lines[0]);
-          const headers = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
+          const originalHeaders = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim());
+          const headers = originalHeaders.map(h => h.toLowerCase());
           const emailIdx = findColumn(headers,
             "email", "e-mail", "email address", "mail",
             "emails", "email addresses", "e mail", "e_mail"
           );
-          if (emailIdx === -1) return NextResponse.json({ error: "No 'email' column found in the sheet" }, { status: 400 });
-          leads = lines.slice(1).map(line => {
+          if (emailIdx === -1) return NextResponse.json({ error: "No 'email' column found in the sheet", headers: originalHeaders }, { status: 400 });
+          const allRows = lines.slice(1).map(line => {
             const cols = parseCsvLine(line, delim);
-            return {
-              email: cols[emailIdx] || "",
-              firstName: findHeader(headers, cols,
-                "first name", "firstname", "first_name", "fname", "first",
-                "given name", "full name", "fullname", "forename", "given-name"
-              ) || findExact(headers, cols, "name"),
-              lastName: findHeader(headers, cols,
-                "last name", "lastname", "last_name", "lname", "surname",
-                "last", "family name", "family_name", "familyname", "second name",
-                "last-name"
-              ),
-              company: findHeader(headers, cols,
-                "company", "organization", "org", "business", "firm",
-                "company name", "company_name", "company-name", "business name",
-                "business_name", "employer", "co", "organisation", "account"
-              ),
-              title: findHeader(headers, cols,
-                "title", "job title", "position", "role", "designation",
-                "job position", "job_position", "job-title", "job role",
-                "job_role", "position title", "position_title"
-              ),
-              phone: findHeader(headers, cols,
-                "phone", "telephone", "tel", "mobile", "cell",
-                "phone number", "phone_number", "contact number", "contact_number",
-                "phone #", "phone#", "phone no", "phone_no", "phone no.",
-                "mobile phone", "mobile_number", "work phone", "work_phone",
-                "cell phone", "cellphone"
-              ),
-              website: findHeader(headers, cols,
-                "website", "web", "url", "site", "company website",
-                "company_website", "web site", "website url", "website_url",
-                "linkedin url", "linkedin_url", "linkedin", "company site",
-                "company_site", "webpage", "web page", "web page url"
-              ),
-              personalization: findHeader(headers, cols,
-                "personalization", "custom", "personalized", "custom field",
-                "custom_field", "custom1", "custom2", "custom field 1",
-                "personalize", "personalisation", "note personalization",
-                "personalized note", "custom note", "personal note",
-                "personal_note", "custom text", "notes_personalization"
-              ),
-              location: findLocation(headers, cols),
-              notes: findHeader(headers, cols,
-                "notes", "note", "comments", "description",
-                "additional notes", "additional_info", "extra notes",
-                "remarks", "extra info", "extra_information"
-              ),
-            };
-          }).filter(l => l.email && l.email.includes("@"));
+            return mapRowToLead(headers, cols, originalHeaders, emailIdx);
+          });
+          rowsSkippedNoEmail = allRows.filter(l => !l.email || !l.email.includes("@")).length;
+          leads = allRows.filter(l => l.email && l.email.includes("@"));
         } else {
-          // Non-Google URL: fetch directly
           const res = await fetch(url, {
             redirect: "follow",
             headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-            signal: AbortSignal.timeout(15000),
+            signal: AbortSignal.timeout(30000),
           });
           if (!res.ok) return NextResponse.json({ error: `Server returned ${res.status}. Make sure the link is a public CSV file.` }, { status: 400 });
           const text = await res.text();
-          const lines = text.split(/\r?\n/).filter(l => l.trim());
+          const firstLineGuess2 = text.split(/\r?\n/)[0] || "";
+          const delimGuess2 = detectDelimiter(firstLineGuess2);
+          const lines = splitCsvLines(text, delimGuess2);
           if (lines.length < 2) return NextResponse.json({ error: "No data rows found in the file" }, { status: 400 });
           const delim = detectDelimiter(lines[0]);
-          const headers = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
+          const originalHeaders2 = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim());
+          const headers = originalHeaders2.map(h => h.toLowerCase());
           const emailIdx = findColumn(headers,
             "email", "e-mail", "email address", "mail",
             "emails", "email addresses", "e mail", "e_mail"
           );
-          if (emailIdx === -1) return NextResponse.json({ error: "No 'email' column found" }, { status: 400 });
-          leads = lines.slice(1).map(line => {
+          if (emailIdx === -1) return NextResponse.json({ error: "No 'email' column found", headers: originalHeaders2 }, { status: 400 });
+          const allRows = lines.slice(1).map(line => {
             const cols = parseCsvLine(line, delim);
-            return {
-              email: cols[emailIdx] || "",
-              firstName: findHeader(headers, cols,
-                "first name", "firstname", "first_name", "fname", "first",
-                "given name", "full name", "fullname", "forename", "given-name"
-              ) || findExact(headers, cols, "name"),
-              lastName: findHeader(headers, cols,
-                "last name", "lastname", "last_name", "lname", "surname",
-                "last", "family name", "family_name", "familyname", "second name",
-                "last-name"
-              ),
-              company: findHeader(headers, cols,
-                "company", "organization", "org", "business", "firm",
-                "company name", "company_name", "company-name", "business name",
-                "business_name", "employer", "co", "organisation", "account"
-              ),
-              title: findHeader(headers, cols,
-                "title", "job title", "position", "role", "designation",
-                "job position", "job_position", "job-title", "job role",
-                "job_role", "position title", "position_title"
-              ),
-              phone: findHeader(headers, cols,
-                "phone", "telephone", "tel", "mobile", "cell",
-                "phone number", "phone_number", "contact number", "contact_number",
-                "phone #", "phone#", "phone no", "phone_no", "phone no.",
-                "mobile phone", "mobile_number", "work phone", "work_phone",
-                "cell phone", "cellphone"
-              ),
-              website: findHeader(headers, cols,
-                "website", "web", "url", "site", "company website",
-                "company_website", "web site", "website url", "website_url",
-                "linkedin url", "linkedin_url", "linkedin", "company site",
-                "company_site", "webpage", "web page", "web page url"
-              ),
-              personalization: findHeader(headers, cols,
-                "personalization", "custom", "personalized", "custom field",
-                "custom_field", "custom1", "custom2", "custom field 1",
-                "personalize", "personalisation", "note personalization",
-                "personalized note", "custom note", "personal note",
-                "personal_note", "custom text", "notes_personalization"
-              ),
-              location: findLocation(headers, cols),
-              notes: findHeader(headers, cols,
-                "notes", "note", "comments", "description",
-                "additional notes", "additional_info", "extra notes",
-                "remarks", "extra info", "extra_information"
-              ),
-            };
-          }).filter(l => l.email && l.email.includes("@"));
+            return mapRowToLead(headers, cols, originalHeaders2, emailIdx);
+          });
+          rowsSkippedNoEmail = allRows.filter(l => !l.email || !l.email.includes("@")).length;
+          leads = allRows.filter(l => l.email && l.email.includes("@"));
         }
       } catch (err: any) {
         return NextResponse.json({ error: `Failed to fetch: ${err.message}` }, { status: 400 });
@@ -277,13 +316,19 @@ export async function POST(req: Request) {
 
     if (!Array.isArray(leads) || leads.length === 0) return NextResponse.json({ error: "No leads provided" }, { status: 400 });
 
-    let imported = 0, errors = 0, firstError = "";
+    const seenEmails = new Set<string>();
+    let imported = 0, errors = 0, skipped = 0, firstError = "";
+    const duplicateEmails: string[] = [];
     for (const lead of leads) {
-      if (!lead.email || !lead.email.includes("@")) { errors++; continue; }
+      if (!lead.email || !lead.email.includes("@")) { skipped++; continue; }
+      const normalized = lead.email.trim().toLowerCase();
+      if (seenEmails.has(normalized)) { duplicateEmails.push(normalized); continue; }
+      seenEmails.add(normalized);
+
       try {
         await prisma.lead.create({
           data: {
-            email: lead.email.trim().toLowerCase(),
+            email: normalized,
             firstName: lead.firstName || null,
             lastName: lead.lastName || null,
             company: lead.company || null,
@@ -293,6 +338,8 @@ export async function POST(req: Request) {
             personalization: lead.personalization || null,
             location: lead.location || null,
             notes: lead.notes || null,
+            customFields: lead.customFields || null,
+            verificationStatus: "unverified",
             campaignId,
             userId,
           },
@@ -300,7 +347,8 @@ export async function POST(req: Request) {
         imported++;
       } catch (e: any) { errors++; if (!firstError) firstError = e?.message || "Unknown"; }
     }
-    return NextResponse.json({ imported, errors, total: leads.length, firstError });
+    const totalParsed = imported + errors + skipped + rowsSkippedNoEmail + duplicateEmails.length;
+    return NextResponse.json({ imported, errors, skipped: skipped + rowsSkippedNoEmail, total: totalParsed, firstError, duplicates: duplicateEmails.length, duplicateEmails });
   }
 
   // CSV upload
@@ -310,75 +358,37 @@ export async function POST(req: Request) {
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
   const text = await file.text();
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const firstLineGuess3 = text.split(/\r?\n/)[0] || "";
+  const delimGuess3 = detectDelimiter(firstLineGuess3);
+  const lines = splitCsvLines(text, delimGuess3);
   if (lines.length < 2) return NextResponse.json({ error: "CSV must have a header row" }, { status: 400 });
 
   const delim = detectDelimiter(lines[0]);
-  const headers = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim().toLowerCase());
+  const originalHeaders3 = parseCsvLine(lines[0], delim).map(h => h.replace(/^﻿/, "").trim());
+  const headers = originalHeaders3.map(h => h.toLowerCase());
   const emailIdx = findColumn(headers,
     "email", "e-mail", "email address", "mail",
     "emails", "email addresses", "e mail", "e_mail"
   );
   if (emailIdx === -1) return NextResponse.json({ error: "CSV must have an 'email' column" }, { status: 400 });
 
-  let imported = 0, errors = 0, firstError = "";
+  const csvSeenEmails = new Set<string>();
+  let imported = 0, errors = 0, skipped = 0, firstError = "";
+  const duplicateEmails: string[] = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i], delim);
-    const email = cols[emailIdx];
-    if (!email || !email.includes("@")) { errors++; continue; }
+    const email = emailIdx >= 0 ? cols[emailIdx] : "";
+    if (!email || !email.includes("@")) { skipped++; continue; }
+    const normalized = email.trim().toLowerCase();
+    if (csvSeenEmails.has(normalized)) { duplicateEmails.push(normalized); continue; }
+    csvSeenEmails.add(normalized);
+
+    const leadRow = mapRowToLead(headers, cols, originalHeaders3, emailIdx);
+
     try {
-      const leadRow = {
-        email: email.trim().toLowerCase(),
-        firstName: findHeader(headers, cols,
-          "first name", "firstname", "first_name", "fname", "first",
-          "given name", "full name", "fullname", "forename", "given-name"
-        ) || findExact(headers, cols, "name"),
-        lastName: findHeader(headers, cols,
-          "last name", "lastname", "last_name", "lname", "surname",
-          "last", "family name", "family_name", "familyname", "second name",
-          "last-name"
-        ),
-        company: findHeader(headers, cols,
-          "company", "organization", "org", "business", "firm",
-          "company name", "company_name", "company-name", "business name",
-          "business_name", "employer", "co", "organisation", "account",
-          "company name"
-        ),
-        title: findHeader(headers, cols,
-          "title", "job title", "position", "role", "designation",
-          "job position", "job_position", "job-title", "job role",
-          "job_role", "position title", "position_title"
-        ),
-        phone: findHeader(headers, cols,
-          "phone", "telephone", "tel", "mobile", "cell",
-          "phone number", "phone_number", "contact number", "contact_number",
-          "phone #", "phone#", "phone no", "phone_no", "phone no.",
-          "mobile phone", "mobile_number", "work phone", "work_phone",
-          "cell phone", "cellphone"
-        ),
-        website: findHeader(headers, cols,
-          "website", "web", "url", "site", "company website",
-          "company_website", "web site", "website url", "website_url",
-          "linkedin url", "linkedin_url", "linkedin", "company site",
-          "company_site", "webpage", "web page", "web page url"
-        ),
-        personalization: findHeader(headers, cols,
-          "personalization", "custom", "personalized", "custom field",
-          "custom_field", "custom1", "custom2", "custom field 1",
-          "personalize", "personalisation", "note personalization",
-          "personalized note", "custom note", "personal note",
-          "personal_note", "custom text", "notes_personalization"
-        ),
-        location: findLocation(headers, cols),
-        notes: findHeader(headers, cols,
-          "notes", "note", "comments", "description",
-          "additional notes", "additional_info", "extra notes",
-          "remarks", "extra info", "extra_information"
-        ),
-      };
       await prisma.lead.create({
         data: {
-          email: leadRow.email,
+          email: normalized,
           firstName: leadRow.firstName,
           lastName: leadRow.lastName,
           company: leadRow.company,
@@ -388,6 +398,8 @@ export async function POST(req: Request) {
           personalization: leadRow.personalization,
           location: leadRow.location,
           notes: leadRow.notes,
+          customFields: leadRow.customFields,
+          verificationStatus: "unverified",
           campaignId,
           userId,
         },
@@ -396,5 +408,5 @@ export async function POST(req: Request) {
     } catch (e: any) { errors++; if (!firstError) firstError = e?.message || "Unknown"; }
   }
 
-  return NextResponse.json({ imported, errors, total: lines.length - 1, firstError });
+  return NextResponse.json({ imported, errors, skipped, total: lines.length - 1, firstError, duplicates: duplicateEmails.length, duplicateEmails });
 }
