@@ -10,6 +10,7 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { decryptAccount } from "@/lib/crypto";
 import { canSendToLead } from "@/lib/verify";
+import { canSendFromAccount } from "@/lib/send-gate";
 
 function isWithinSchedule(campaign: { startDate: Date | null; endDate: Date | null; noEndDate: boolean; schedules: { startTime: string; endTime: string; timezone: string; days: string }[] }): boolean {
   const now = new Date();
@@ -301,6 +302,17 @@ async function executeCampaignInner(campaignId: string) {
         continue;
       }
 
+      const accountGate = await canSendFromAccount(account.id, account.dailySendLimit || 30);
+      if (!accountGate.allowed) {
+        console.log(`[campaign] Account gate: ${lead.email} blocked — ${accountGate.reason}`);
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { status: "pending", currentStep: 0, lastSentAt: null },
+        });
+        skipped++;
+        continue;
+      }
+
       try {
         const vars = {
           firstName: lead.firstName || "",
@@ -410,6 +422,17 @@ async function executeCampaignInner(campaignId: string) {
       const fupSendCheck = canSendToLead(lead.verificationStatus, campaign.enableRiskyEmails, campaign.disableBounceProtect);
       if (!fupSendCheck.allowed) {
         console.log(`[campaign] Skipping follow-up to ${lead.email}: ${fupSendCheck.reason}`);
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { currentStep: currentStepIdx, status: "sent", lastSentAt: lead.lastSentAt },
+        });
+        skipped++;
+        continue;
+      }
+
+      const fupAccountGate = await canSendFromAccount(account.id, account.dailySendLimit || 30);
+      if (!fupAccountGate.allowed) {
+        console.log(`[campaign] Follow-up account gate: ${lead.email} blocked — ${fupAccountGate.reason}`);
         await prisma.lead.update({
           where: { id: lead.id },
           data: { currentStep: currentStepIdx, status: "sent", lastSentAt: lead.lastSentAt },

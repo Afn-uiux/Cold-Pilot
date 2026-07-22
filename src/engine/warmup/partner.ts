@@ -17,6 +17,7 @@ export async function pickWarmupPartner(
   const accounts = await prisma.emailAccount.findMany({
     where: {
       status: "active",
+      warmupEnabled: true,
       id: { not: senderMailboxId },
     },
     select: { id: true, email: true },
