@@ -740,6 +740,27 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
   const [verifying, setVerifying] = useState(false);
   const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
   const [verifyResult, setVerifyResult] = useState<any>(null);
+
+  function getProviderName(email: string, dbProvider?: string): string {
+    if (dbProvider && dbProvider !== "Unknown") return dbProvider;
+    const domain = email.split("@")[1]?.toLowerCase() || "";
+    if (domain === "gmail.com" || domain === "googlemail.com") return "Google";
+    if (domain === "yahoo.com" || domain === "ymail.com" || domain === "rocketmail.com") return "Yahoo";
+    if (domain === "hotmail.com" || domain === "outlook.com" || domain === "live.com" || domain === "hotmail.co.uk") return "Microsoft";
+    if (domain === "aol.com") return "AOL";
+    if (domain === "icloud.com" || domain === "me.com" || domain === "mac.com") return "Apple";
+    if (domain === "protonmail.com" || domain === "proton.me" || domain === "pm.me") return "ProtonMail";
+    return dbProvider || "Other";
+  }
+
+  function getProviderBadge(provider: string) {
+    const colors: Record<string, string> = {
+      Google: "bg-red-500", Yahoo: "bg-purple-600", Microsoft: "bg-blue-500",
+      AOL: "bg-blue-400", Apple: "bg-gray-800", ProtonMail: "bg-indigo-600",
+      Zoho: "bg-red-600", Other: "bg-gray-400",
+    };
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white ${colors[provider] || colors.Other}`}>{provider}</span>;
+  }
   useEffect(() => {
     fetch(`/api/leads?campaignId=${campaignId}`).then(r => r.json()).then(data => setLeads(Array.isArray(data) ? data : [])).catch(() => {}).finally(() => setLoading(false));
   }, [campaignId]);
@@ -805,6 +826,7 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
           <thead><tr>
             <th className="w-10">#</th>
             <th>Email</th>
+            <th>Provider</th>
             {customKeys.length > 0 ? (
               customKeys.map(k => <th key={k}>{k}</th>)
             ) : (
@@ -820,6 +842,7 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
               <tr key={l.id}>
                 <td className="text-muted text-xs">{i + 1}</td>
                 <td className="font-medium">{l.email}</td>
+                <td className="text-muted text-xs">{getProviderBadge(getProviderName(l.email, l.provider))}</td>
                 {customKeys.length > 0 ? (
                   customKeys.map(k => <td key={k} className="text-muted">{parsed[k] || ""}</td>)
                 ) : (

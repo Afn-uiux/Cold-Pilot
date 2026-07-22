@@ -265,6 +265,7 @@ model Lead {
   notes           String?
   customFields    String?
   verificationStatus String?
+  provider           String?
   verifiedAt         DateTime?
   deletedAt       DateTime?
 
