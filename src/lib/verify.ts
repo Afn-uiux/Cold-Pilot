@@ -17,7 +17,7 @@ const ROLE_PREFIXES = [
   "donotreply","do-not-reply","notifications","notification","alert","alerts",
 ];
 
-export type VerificationStatus = "valid" | "invalid" | "risky" | "catch_all" | "unknown";
+export type VerificationStatus = "valid" | "invalid" | "risky" | "unknown";
 
 export interface SmtpConfig {
   host: string;
@@ -397,7 +397,7 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
     if (accountResult.valid) {
       const isCatchAll = await verifyCatchAll(domain, mxRecords[0]);
       if (isCatchAll) {
-        return { status: "catch_all", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
+        return { status: "invalid", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
       }
       return { status: "valid", reason: "mailbox_exists", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: false };
     }
@@ -422,7 +422,7 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
   if (smtpResult.valid) {
     const isCatchAll = await verifyCatchAll(domain, mxRecords[0]);
     if (isCatchAll) {
-      return { status: "catch_all", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
+      return { status: "invalid", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
     }
     return { status: "valid", reason: "mailbox_exists", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: false };
   }
@@ -451,12 +451,6 @@ export function canSendToLead(verificationStatus: string | null, enableRiskyEmai
   }
   if (verificationStatus === "risky") {
     return { allowed: false, reason: "disposable_or_role_account" };
-  }
-  if (verificationStatus === "catch_all") {
-    if (!disableBounceProtect) {
-      return { allowed: true, reason: "catch_all_allowed" };
-    }
-    return { allowed: false, reason: "catch_all_blocked_by_bounce_protect" };
   }
   if (verificationStatus === "invalid") {
     return { allowed: false, reason: "invalid" };
