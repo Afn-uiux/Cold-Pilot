@@ -2,6 +2,7 @@ import dns from "dns/promises";
 import net from "net";
 import tls from "tls";
 import { isDisposable } from "./disposable";
+import { isTyposquat } from "./typosquat";
 import { getDomainReputation, isHighBounceDomain, isMediumBounceDomain } from "./domain-reputation";
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
@@ -361,6 +362,11 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
     return { status: "risky", reason: "disposable_email", provider: "Unknown", format: true, disposable: true };
   }
 
+  const domain = extractDomain(normalized);
+  if (isTyposquat(domain)) {
+    return { status: "invalid", reason: "typosquat_domain", provider: "Unknown", format: true };
+  }
+
   const local = extractLocal(normalized);
   if (ROLE_PREFIXES.includes(local)) {
     return { status: "risky", reason: "role_account", provider: "Unknown", format: true, roleAccount: true };
@@ -373,7 +379,6 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
 
   const provider = detectProvider(mxRecords);
 
-  const domain = extractDomain(normalized);
   const reputation = await getDomainReputation(domain);
 
   if (isHighBounceDomain(reputation)) {
@@ -390,7 +395,6 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
     const accountResult = await smtpVerifyViaAccount(normalized, smtpConfig);
 
     if (accountResult.valid) {
-      const domain = extractDomain(normalized);
       const isCatchAll = await verifyCatchAll(domain, mxRecords[0]);
       if (isCatchAll) {
         return { status: "catch_all", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
@@ -416,7 +420,6 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
   const smtpResult = await smtpVerify(normalized, mxRecords[0]);
 
   if (smtpResult.valid) {
-    const domain = extractDomain(normalized);
     const isCatchAll = await verifyCatchAll(domain, mxRecords[0]);
     if (isCatchAll) {
       return { status: "catch_all", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
