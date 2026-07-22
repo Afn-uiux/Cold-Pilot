@@ -2,6 +2,7 @@ import dns from "dns/promises";
 import net from "net";
 import tls from "tls";
 import { isDisposable } from "./disposable";
+import { getDomainReputation, isHighBounceDomain, isMediumBounceDomain } from "./domain-reputation";
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 
@@ -371,6 +372,19 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
   }
 
   const provider = detectProvider(mxRecords);
+
+  const domain = extractDomain(normalized);
+  const reputation = await getDomainReputation(domain);
+
+  if (isHighBounceDomain(reputation)) {
+    return {
+      status: "risky",
+      reason: `high_bounce_domain_${Math.round(reputation.bounceRate * 100)}pct`,
+      provider,
+      format: true,
+      mxValid: true,
+    };
+  }
 
   if (smtpConfig) {
     const accountResult = await smtpVerifyViaAccount(normalized, smtpConfig);

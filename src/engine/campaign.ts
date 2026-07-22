@@ -11,6 +11,7 @@ import { simpleParser } from "mailparser";
 import { decryptAccount } from "@/lib/crypto";
 import { canSendToLead } from "@/lib/verify";
 import { canSendFromAccount } from "@/lib/send-gate";
+import { recordBounce, recordSend } from "@/lib/domain-reputation";
 
 function isWithinSchedule(campaign: { startDate: Date | null; endDate: Date | null; noEndDate: boolean; schedules: { startTime: string; endTime: string; timezone: string; days: string }[] }): boolean {
   const now = new Date();
@@ -354,6 +355,7 @@ async function executeCampaignInner(campaignId: string) {
           plainTextOnly: campaign.plainTextOnly || campaign.firstEmailPlainText,
         });
 
+        recordSend(lead.email).catch(() => {});
         sent++;
         emailCount++;
         nextAllowed = Date.now() + minGap + (maxExtra > 0 ? Math.random() * maxExtra : 0);
@@ -362,6 +364,7 @@ async function executeCampaignInner(campaignId: string) {
         console.error(`Failed to send initial to ${lead.email}:`, err);
         const bounce = categorizeBounce(err);
         if (bounce.type === "hard_bounce" && bounce.suppress) {
+          recordBounce(lead.email, null, bounce.type, bounce.type, account.id, lead.id).catch(() => {});
           // Terminal failure — mark lead as bounced so it is never retried.
           await prisma.suppression.upsert({
             where: { userId_email: { userId: campaign.userId, email: lead.email.toLowerCase().trim() } },
@@ -499,6 +502,7 @@ async function executeCampaignInner(campaignId: string) {
           plainTextOnly: campaign.plainTextOnly,
         });
 
+        recordSend(lead.email).catch(() => {});
         sent++;
         emailCount++;
         nextAllowed = Date.now() + minGap + (maxExtra > 0 ? Math.random() * maxExtra : 0);
@@ -507,6 +511,7 @@ async function executeCampaignInner(campaignId: string) {
         console.error(`Failed to send follow-up to ${lead.email}:`, err);
         const bounce = categorizeBounce(err);
         if (bounce.type === "hard_bounce" && bounce.suppress) {
+          recordBounce(lead.email, null, bounce.type, bounce.type, account.id, lead.id).catch(() => {});
           // Terminal failure — mark lead as bounced so it is never retried.
           await prisma.suppression.upsert({
             where: { userId_email: { userId: campaign.userId, email: lead.email.toLowerCase().trim() } },
@@ -790,6 +795,7 @@ async function checkImapAccountBounces(account: any): Promise<number> {
             create: { userId: account.userId, email: failedRecipient, reason: bounce.type, type: "bounce" },
           });
         }
+        recordBounce(failedRecipient, null, bounce.type, bounce.type, account.id, lead.id).catch(() => {});
         await prisma.lead.update({ where: { id: lead.id }, data: { status: "bounced" } }).catch(() => {});
         createNotification({
           userId: account.userId,
