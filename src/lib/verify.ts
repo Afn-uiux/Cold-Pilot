@@ -341,9 +341,13 @@ function generateRandomAddress(domain: string): string {
 }
 
 export async function verifyCatchAll(domain: string, mxHost: string): Promise<boolean> {
-  const fakeEmail = generateRandomAddress(domain);
-  const result = await smtpVerify(fakeEmail, mxHost);
-  return result.valid;
+  const tests = [
+    generateRandomAddress(domain),
+    generateRandomAddress(domain),
+    generateRandomAddress(domain),
+  ];
+  const results = await Promise.all(tests.map(email => smtpVerify(email, mxHost)));
+  return results.every(r => r.valid);
 }
 
 const SMTP_UNREACHABLE_REASONS = new Set([
