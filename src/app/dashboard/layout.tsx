@@ -4,6 +4,7 @@ import Sidebar from "./sidebar";
 import NotificationBell from "@/components/notification-bell";
 import OnboardingWizard from "@/components/onboarding-wizard";
 import StateToggle from "./state-toggle";
+import CommandPalette from "@/components/command-palette";
 
 export default async function DashboardLayout({
   children,
@@ -24,6 +25,7 @@ export default async function DashboardLayout({
         <OnboardingWizard />
       </main>
       <StateToggle />
+      <CommandPalette />
     </div>
   );
 }

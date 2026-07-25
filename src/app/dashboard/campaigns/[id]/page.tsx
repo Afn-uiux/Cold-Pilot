@@ -737,9 +737,6 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showConfirmAll, setShowConfirmAll] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
-  const [verifyResult, setVerifyResult] = useState<any>(null);
 
   function getProviderName(email: string, dbProvider?: string): string {
     if (dbProvider && dbProvider !== "Unknown") return dbProvider;
@@ -773,24 +770,6 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
     setLeads([]);
     setShowConfirmAll(false);
   }
-  async function handleVerifyAll() {
-    setVerifying(true);
-    setVerifyResult(null);
-    const idsToVerify = leads.filter(l => !l.verificationStatus || l.verificationStatus === "unverified").map(l => l.id);
-    setVerifyingIds(new Set(idsToVerify));
-    try {
-      const res = await fetch("/api/leads/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaignId }),
-      });
-      const result = await res.json();
-      setVerifyResult(result);
-      const fresh = await fetch(`/api/leads?campaignId=${campaignId}`).then(r => r.json());
-      setLeads(Array.isArray(fresh) ? fresh : []);
-    } catch { setVerifyResult({ error: "Verification failed" }); }
-    finally { setVerifying(false); setVerifyingIds(new Set()); }
-  }
   const customKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const l of leads) {
@@ -807,20 +786,9 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
       <div className="flex justify-between items-center mb-4">
         <p className="text-sm text-muted">{leads.length} leads</p>
         <div className="flex gap-2">
-          <button onClick={handleVerifyAll} disabled={verifying} className="btn btn-ghost btn-sm text-blue-accent hover:text-blue-accent disabled:opacity-40">
-            {verifying ? "Verifying..." : "Verify All"}
-          </button>
           <button onClick={() => setShowConfirmAll(true)} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Delete All</button>
         </div>
       </div>
-      {verifyResult && !verifyResult.error && (
-        <div className="text-sm p-3 rounded-lg mb-4 bg-blue-50 text-blue-700">
-          Verified: {verifyResult.valid} valid, {verifyResult.invalid + (verifyResult.risky || 0)} do not send, {verifyResult.catch_all} catch-all, {verifyResult.unknown} unknown
-        </div>
-      )}
-      {verifyResult?.error && (
-        <div className="text-sm p-3 rounded-lg mb-4 bg-red-50 text-red-700">{verifyResult.error}</div>
-      )}
       <div className="table-wrap">
         <table>
           <thead><tr>
@@ -832,7 +800,6 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
             ) : (
               <th>Name</th>
             )}
-            <th>Verification</th>
             <th>Status</th><th></th>
           </tr></thead>
           <tbody>{leads.map((l: any, i: number) => {
@@ -848,23 +815,6 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
                 ) : (
                   <td>{[l.firstName, l.lastName].filter(Boolean).join(" ") || "—"}</td>
                 )}
-                <td>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                    l.verificationStatus === "valid" ? "bg-emerald-100 text-emerald-700" :
-                    (l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "bg-red-100 text-red-700" :
-                    l.verificationStatus === "catch_all" ? "bg-orange-100 text-orange-700" :
-                    l.verificationStatus === "unknown" ? "bg-gray-100 text-gray-500" :
-                    "bg-blue-50 text-blue-400"
-                  }`}>
-                    {(l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "invalid / do not send" : l.verificationStatus || "unverified"}
-                    {verifyingIds.has(l.id) && (
-                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                    )}
-                  </span>
-                </td>
                 <td><span className={`badge ${l.status === "replied" ? "active" : l.status === "completed" ? "completed" : ""}`}>{l.status}</span></td>
                 <td><button onClick={() => handleRemove(l.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button></td>
               </tr>

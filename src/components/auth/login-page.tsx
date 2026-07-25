@@ -18,12 +18,14 @@ export default function LoginPage() {
       else setError("Login failed");
     }
   }, []);
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetPass, setResetPass] = useState("");
   const [resetMsg, setResetMsg] = useState<string | null>(null);
   const [resetLoading, setResetLoading] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -108,17 +110,41 @@ export default function LoginPage() {
 
             <div>
               <label style={{ display: "block", fontSize: 13, color: "#5A6B87", marginBottom: 8 }} htmlFor="password">Password</label>
-              <input id="password" name="password" type="password" required autoComplete="current-password" placeholder="Your password"
-                style={{
-                  width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929",
-                  background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)",
-                  padding: "10px 0", outline: "none", borderRadius: 0
-                }}
-                onFocus={e => e.target.style.borderBottomColor = "#0F1929"}
-                onBlur={e => e.target.style.borderBottomColor = "rgba(15,25,41,0.08)"} />
+              <div style={{ position: "relative" }}>
+                <input id="password" name="password" type={showPassword ? "text" : "password"} required autoComplete="current-password" placeholder="Your password"
+                  style={{
+                    width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929",
+                    background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)",
+                    padding: "10px 36px 10px 0", outline: "none", borderRadius: 0
+                  }}
+                  onFocus={e => e.target.style.borderBottomColor = "#0F1929"}
+                  onBlur={e => e.target.style.borderBottomColor = "rgba(15,25,41,0.08)"} />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8A9BB5", display: "flex" }}
+                  tabIndex={-1} aria-label={showPassword ? "Hide password" : "Show password"}>
+                  {showPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: -8 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#5A6B87", cursor: "pointer" }}>
+                <input type="checkbox" name="remember" style={{ width: 14, height: 14, accentColor: "#0F1929" }} />
+                Remember me
+              </label>
+            </div>
+
+            <button type="submit" className="btn btn-primary" disabled={loading || isPending} style={{ width: "100%", opacity: loading || isPending ? 0.7 : 1 }}>
               {loading || isPending ? "Logging in..." : "Log in"}
             </button>
           </form>
@@ -170,8 +196,25 @@ export default function LoginPage() {
             <form onSubmit={handleReset} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <input value={resetEmail} onChange={e => setResetEmail(e.target.value)} type="email" required placeholder="Email"
                 style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 0", outline: "none" }} />
-              <input value={resetPass} onChange={e => setResetPass(e.target.value)} type="password" required placeholder="New password (min 6 chars)"
-                style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 0", outline: "none" }} />
+              <div style={{ position: "relative" }}>
+                <input value={resetPass} onChange={e => setResetPass(e.target.value)} type={showResetPassword ? "text" : "password"} required placeholder="New password (min 6 chars)"
+                  style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 36px 10px 0", outline: "none" }} />
+                <button type="button" onClick={() => setShowResetPassword(v => !v)}
+                  style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8A9BB5", display: "flex" }}
+                  tabIndex={-1} aria-label={showResetPassword ? "Hide password" : "Show password"}>
+                  {showResetPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
                 <button type="button" onClick={() => setResetOpen(false)}
                   style={{ padding: "8px 16px", fontSize: 13, color: "#5A6B87", background: "none", border: "1px solid rgba(15,25,41,0.08)", borderRadius: 6, cursor: "pointer" }}>Cancel</button>

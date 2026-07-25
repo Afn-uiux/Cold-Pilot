@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Select from "@/components/select";
+import ConfirmModal from "@/components/confirm-modal";
+import { useToast } from "@/components/toast";
 
 type Account = { id: string; email: string; provider: string; sent: number; dailySendLimit: number; warmupEnabled: boolean; warmupSent?: number; health?: number; healthScore?: number; status: string; };
 type ModalScreen =
@@ -16,10 +18,12 @@ type Encryption = "none" | "ssl" | "starttls";
 
 export default function EmailAccountsPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [screen, setScreen] = useState<ModalScreen>("select");
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   const [msName, setMsName] = useState("");
   const [msEmail, setMsEmail] = useState("");
@@ -201,8 +205,14 @@ export default function EmailAccountsPage() {
   }
 
   async function handleRemove(id: string) {
+    setConfirmRemove(id);
+  }
+
+  async function doRemove(id: string) {
     await fetch(`/api/email-accounts?id=${id}`, { method: "DELETE" });
     refreshAccounts();
+    toast("Account removed", "success");
+    setConfirmRemove(null);
   }
 
   async function handleWarmupToggle(id: string) {
@@ -241,7 +251,7 @@ export default function EmailAccountsPage() {
 
       <div className="px-6 lg:px-10 pt-7 pb-16">
         {loading ? (
-          <div className="text-center text-muted py-16 text-sm">Loading...</div>
+          <div className="text-center text-muted py-16 text-sm">Loading accounts...</div>
         ) : accounts.length === 0 ? (
           <div className="empty-state">
             <h3>No accounts connected</h3>
@@ -524,6 +534,15 @@ export default function EmailAccountsPage() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={!!confirmRemove}
+        title="Remove account?"
+        message="This will permanently disconnect this email account. Warmup and sending will stop."
+        confirmLabel="Remove"
+        onConfirm={() => confirmRemove && doRemove(confirmRemove)}
+        onCancel={() => setConfirmRemove(null)}
+        variant="danger"
+      />
     </div>
   );
 }

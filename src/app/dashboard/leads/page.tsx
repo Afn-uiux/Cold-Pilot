@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ConfirmModal from "@/components/confirm-modal";
 import Select from "@/components/select";
+import { useToast } from "@/components/toast";
 
 type Lead = { id: string; email: string; firstName: string | null; lastName: string | null; company: string | null; title: string | null; phone: string | null; website: string | null; location: string | null; notes: string | null; customFields: string | null; campaignId: string | null; status: string; verificationStatus: string | null; createdAt: string; campaign: { name: string } | null; };
 
@@ -34,6 +35,7 @@ export default function LeadsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlCampaignId = searchParams.get("campaignId") || "";
+  const { toast } = useToast();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
   const [search, setSearch] = useState("");
@@ -41,6 +43,8 @@ export default function LeadsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showImport, setShowImport] = useState(false);
   const [showConfirmAll, setShowConfirmAll] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [showConfirmSelected, setShowConfirmSelected] = useState(false);
   const [importTab, setImportTab] = useState<"upload" | "link" | "type">("upload");
   const [manualEmails, setManualEmails] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
@@ -48,9 +52,6 @@ export default function LeadsPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [importCampaignId, setImportCampaignId] = useState(urlCampaignId);
-  const [verifying, setVerifying] = useState(false);
-  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
-  const [verifyResult, setVerifyResult] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -109,15 +110,31 @@ export default function LeadsPage() {
   }
 
   async function handleRemove(id: string) {
+    setConfirmDelete(id);
+  }
+
+  async function doRemove(id: string) {
     const res = await fetch(`/api/leads?id=${id}`, { method: "DELETE" });
-    if (res.ok) setLeads(prev => prev.filter(l => l.id !== id));
+    if (res.ok) {
+      setLeads(prev => prev.filter(l => l.id !== id));
+      toast("Lead deleted", "success");
+    } else {
+      toast("Failed to delete lead", "error");
+    }
+    setConfirmDelete(null);
   }
 
   async function handleRemoveSelected() {
+    setShowConfirmSelected(true);
+  }
+
+  async function doRemoveSelected() {
     const ids = Array.from(selectedIds);
     await Promise.all(ids.map(id => fetch(`/api/leads?id=${id}`, { method: "DELETE" })));
     setLeads(prev => prev.filter(l => !ids.includes(l.id)));
     setSelectedIds(new Set());
+    toast(`${ids.length} lead${ids.length > 1 ? "s" : ""} deleted`, "success");
+    setShowConfirmSelected(false);
   }
 
   async function handleRemoveAll() {
@@ -126,40 +143,7 @@ export default function LeadsPage() {
     setLeads([]);
     setSelectedIds(new Set());
     setShowConfirmAll(false);
-  }
-
-  async function handleVerifyAll() {
-    setVerifying(true);
-    setVerifyResult(null);
-    const idsToVerify = selectedIds.size > 0
-      ? Array.from(selectedIds)
-      : leads.filter(l => !l.verificationStatus || l.verificationStatus === "unverified").map(l => l.id);
-    setVerifyingIds(new Set(idsToVerify));
-    try {
-      const leadIds = selectedIds.size > 0 ? Array.from(selectedIds) : undefined;
-      const body = leadIds
-        ? { leadIds }
-        : urlCampaignId ? { campaignId: urlCampaignId } : {};
-      if (!leadIds && !urlCampaignId) {
-        setVerifyResult({ error: "Select leads or filter by a campaign first" });
-        return;
-      }
-      const res = await fetch("/api/leads/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const result = await res.json();
-      setVerifyResult(result);
-      const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
-      const fresh = await fetch(freshUrl).then(r => r.json());
-      setLeads(Array.isArray(fresh) ? fresh : []);
-    } catch {
-      setVerifyResult({ error: "Verification failed" });
-    } finally {
-      setVerifying(false);
-      setVerifyingIds(new Set());
-    }
+    toast("All leads removed", "success");
   }
 
   async function handlePasteImport() {
@@ -249,9 +233,6 @@ export default function LeadsPage() {
               {selectedIds.size > 0 && (
                 <button onClick={handleRemoveSelected} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Remove selected ({selectedIds.size})</button>
               )}
-              <button onClick={handleVerifyAll} disabled={verifying} className="btn btn-ghost btn-sm text-blue-accent hover:text-blue-accent disabled:opacity-40">
-                {verifying ? "Verifying..." : "Verify" + (selectedIds.size > 0 ? ` (${selectedIds.size})` : " All")}
-              </button>
               <button onClick={() => setShowConfirmAll(true)} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Remove all</button>
             </>
           )}
@@ -270,7 +251,7 @@ export default function LeadsPage() {
         </div>
 
         {loading ? (
-          <div className="text-center text-muted py-16 text-sm">Loading...</div>
+          <div className="text-center text-muted py-16 text-sm">Loading leads...</div>
         ) : leads.length === 0 ? (
           <div className="empty-state">
             <h3>No leads yet</h3>
@@ -303,7 +284,6 @@ export default function LeadsPage() {
                       </>
                     )}
                     <th>Status</th>
-                    <th>Verification</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -342,23 +322,6 @@ export default function LeadsPage() {
                           </>
                         )}
                         <td><span className={`badge ${l.status === "replied" ? "active" : l.status === "pending" ? "draft" : ""}`}>{l.status}</span></td>
-                        <td>
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                            l.verificationStatus === "valid" ? "bg-emerald-100 text-emerald-700" :
-                            (l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "bg-red-100 text-red-700" :
-                            l.verificationStatus === "catch_all" ? "bg-orange-100 text-orange-700" :
-                            l.verificationStatus === "unknown" ? "bg-gray-100 text-gray-500" :
-                            "bg-blue-50 text-blue-400"
-                          }`}>
-                            {(l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "invalid / do not send" : l.verificationStatus || "unverified"}
-                            {verifyingIds.has(l.id) && (
-                              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                              </svg>
-                            )}
-                          </span>
-                        </td>
                         <td>
                           <button onClick={() => handleRemove(l.id)} className="text-xs text-red-500 hover:text-red-700 transition-colors font-medium">Delete</button>
                         </td>
@@ -407,35 +370,9 @@ export default function LeadsPage() {
                   )}
                 </div>
               )}
-              {verifyResult && !verifyResult.error && (
-                <div className="text-sm p-3 rounded-lg mb-4 bg-blue-50 text-blue-700">
-                  Verified: {verifyResult.valid} valid, {verifyResult.invalid + (verifyResult.risky || 0)} do not contact, {verifyResult.catch_all} catch-all, {verifyResult.unknown} unknown
-                </div>
-              )}
-              {verifyResult?.error && (
-                <div className="text-sm p-3 rounded-lg mb-4 bg-red-50 text-red-700">{verifyResult.error}</div>
-              )}
               {importResult?.imported > 0 && importCampaignId && (
                 <div className="flex gap-2 mb-4">
                   <button onClick={() => { setShowImport(false); router.push(`/dashboard/campaigns/${importCampaignId}?tab=leads`); }} className="btn btn-primary flex-1">Continue to Leads</button>
-                  <button onClick={async () => {
-                    setVerifying(true);
-                    setVerifyingIds(new Set(leads.filter(l => !l.verificationStatus || l.verificationStatus === "unverified").map(l => l.id)));
-                    try {
-                      const res = await fetch("/api/leads/verify", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ campaignId: importCampaignId }),
-                      });
-                      const result = await res.json();
-                      setVerifyResult(result);
-                      const fresh = await fetch(`/api/leads?campaignId=${importCampaignId}`).then(r => r.json());
-                      setLeads(Array.isArray(fresh) ? fresh : []);
-                    } catch { setVerifyResult({ error: "Verification failed" }); }
-                    finally { setVerifying(false); setVerifyingIds(new Set()); }
-                  }} disabled={verifying} className="btn btn-ghost flex-1 text-blue-accent disabled:opacity-40">
-                    {verifying ? "Verifying..." : "Verify Now"}
-                  </button>
                 </div>
               )}
 
@@ -508,6 +445,24 @@ export default function LeadsPage() {
         confirmLabel="Remove all"
         onConfirm={handleRemoveAll}
         onCancel={() => setShowConfirmAll(false)}
+        variant="danger"
+      />
+      <ConfirmModal
+        open={!!confirmDelete}
+        title="Delete lead?"
+        message="This lead will be permanently removed."
+        confirmLabel="Delete"
+        onConfirm={() => confirmDelete && doRemove(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+        variant="danger"
+      />
+      <ConfirmModal
+        open={showConfirmSelected}
+        title={`Delete ${selectedIds.size} lead${selectedIds.size > 1 ? "s" : ""}?`}
+        message="These leads will be permanently removed."
+        confirmLabel="Delete"
+        onConfirm={doRemoveSelected}
+        onCancel={() => setShowConfirmSelected(false)}
         variant="danger"
       />
     </>

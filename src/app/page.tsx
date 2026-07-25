@@ -44,11 +44,30 @@ export default async function Home() {
         .sec-head h2{font-family:"Instrument Serif",Georgia,serif;font-size:clamp(30px,4.5vw,44px);font-weight:400;line-height:1.08;letter-spacing:-.02em;margin-top:16px}
         .sec-head p{margin-top:14px;font-size:16px;color:var(--muted);line-height:1.7}
         .feat-list{list-style:none}
-        .feat-item{display:grid;grid-template-columns:56px 1fr;gap:clamp(20px,4vw,40px);padding:36px 0;border-top:1px solid var(--border)}
-        .feat-item:last-child{border-bottom:1px solid var(--border)}
-        .feat-num{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted-2);padding-top:4px}
-        .feat-item h3{font-family:'Geist',sans-serif;font-size:17px;font-weight:500;margin-bottom:8px}
-        .feat-item p{font-size:15px;max-width:560px;color:var(--muted);line-height:1.7}
+        .feat-rows{display:flex;flex-direction:column}
+        .feat-row{display:grid;grid-template-columns:1fr 1fr;gap:clamp(32px,5vw,64px);align-items:center;padding:56px 0;border-top:1px solid var(--border)}
+        .feat-row:first-child{border-top:none;padding-top:8px}
+        .feat-row[data-side="left"] .feat-illust{order:-1}
+        .feat-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:var(--muted);margin-bottom:16px}
+        .feat-eyebrow svg{width:15px;height:15px;flex-shrink:0}
+        .feat-text h3{font-family:'Geist',sans-serif;font-size:clamp(22px,2.6vw,28px);font-weight:600;letter-spacing:-0.02em;line-height:1.2;margin-bottom:14px}
+        .feat-text p{font-size:15px;color:var(--muted);line-height:1.7;max-width:420px;margin-bottom:18px}
+        .feat-link{display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:500;color:var(--blue)}
+        .feat-link svg{width:13px;height:13px;transition:transform .2s ease}
+        .feat-link:hover svg{transform:translateX(3px)}
+        .feat-illust{background:#F5F4F1;border-radius:16px;height:280px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+        .feat-illust svg{width:88%;height:88%}
+        .feat-glow{animation:featFloat 4s ease-in-out infinite}
+        .feat-pulse{animation:featPulse 2.6s ease-in-out infinite}
+        .feat-flow{stroke-dasharray:6 6;animation:featFlow 1.4s linear infinite}
+        @keyframes featFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+        @keyframes featPulse{0%,100%{opacity:.55;r:15}50%{opacity:0;r:30}}
+        @keyframes featFlow{to{stroke-dashoffset:-24}}
+        @media(prefers-reduced-motion:reduce){.feat-glow,.feat-pulse,.feat-flow{animation:none}}
+        @media(max-width:820px){.feat-row{grid-template-columns:1fr;gap:24px;padding:40px 0}.feat-row[data-side="left"] .feat-illust{order:0}.feat-illust{height:220px}}
+        .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s cubic-bezier(.2,.7,.3,1), transform .7s cubic-bezier(.2,.7,.3,1)}
+        .reveal.in{opacity:1;transform:translateY(0)}
+        @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
         .why-grid{display:grid;grid-template-columns:repeat(3,1fr)}
         @media(max-width:760px){.why-grid{grid-template-columns:1fr 1fr}}
         @media(max-width:520px){.why-grid{grid-template-columns:1fr}}
@@ -56,9 +75,11 @@ export default async function Home() {
         .why-item h3{font-family:'Geist',sans-serif;font-size:15px;font-weight:500;margin-bottom:8px}
         .why-item p{font-size:14px;color:var(--muted);line-height:1.7}
         .steps{list-style:none;max-width:600px}
-        .step{display:grid;grid-template-columns:40px 1fr;gap:24px;padding:32px 0;border-top:1px solid var(--border)}
+        .step{display:grid;grid-template-columns:48px 1fr;gap:24px;padding:32px 0;border-top:1px solid var(--border)}
         .step:last-child{border-bottom:1px solid var(--border)}
         .step-num{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted-2);padding-top:3px}
+        .step-illust{width:48px;height:48px;border-radius:10px;background:var(--cream-2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .step-illust svg{width:24px;height:24px;stroke:var(--muted);stroke-width:1.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
         .step h3{font-family:'Geist',sans-serif;font-size:17px;font-weight:500;margin-bottom:6px}
         .step p{font-size:15px;color:var(--muted);line-height:1.7}
         .how-aside{margin-top:64px;padding-top:40px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:24px}
@@ -113,7 +134,7 @@ export default async function Home() {
         h1{text-wrap:balance}
         ::selection{background:var(--blue);color:#fff}
         .btn-mobile-menu{display:none!important}@media(max-width:860px){.btn-mobile-menu{display:flex!important}}
-        @media(max-width:640px){.hero{padding:60px 0 50px}.hero h1{font-size:32px;margin-top:16px}.hero-desc{font-size:15px;margin-top:16px}.hero-cta{flex-direction:column;gap:14px;width:100%}.hero-cta .btn{width:100%;text-align:center}.section{padding:50px 0}.sec-head{margin-bottom:32px}.sec-head h2{font-size:26px}.feat-item{grid-template-columns:1fr;gap:8px;padding:24px 0}.feat-num{display:none}.step{grid-template-columns:1fr;gap:6px;padding:20px 0}.step-num{display:none}.how-aside{flex-direction:column;align-items:flex-start}.pricing-layout{gap:40px}.price-main .btn{width:100%}.cta{padding:50px 0}.cta-actions{flex-direction:column;gap:14px;width:100%}.cta-actions .btn{width:100%}.foot-top{flex-direction:column;gap:24px}}
+        @media(max-width:640px){.hero{padding:60px 0 50px}.hero h1{font-size:32px;margin-top:16px}.hero-desc{font-size:15px;margin-top:16px}.hero-cta{flex-direction:column;gap:14px;width:100%}.hero-cta .btn{width:100%;text-align:center}.section{padding:50px 0}.sec-head{margin-bottom:32px}.sec-head h2{font-size:26px}.feat-row{padding:32px 0}.step{grid-template-columns:1fr;gap:12px;padding:24px 0}.step-illust{width:40px;height:40px}.step-num{display:none}.how-aside{flex-direction:column;align-items:flex-start}.pricing-layout{gap:40px}.price-main .btn{width:100%}.cta{padding:50px 0}.cta-actions{flex-direction:column;gap:14px;width:100%}.cta-actions .btn{width:100%}.foot-top{flex-direction:column;gap:24px}}
       `}</style>
 
       <nav className="nav" id="nav">
@@ -167,6 +188,18 @@ export default async function Home() {
         </div>
       </header>
 
+      <svg style={{position:'absolute',width:0,height:0}}>
+        <defs>
+          <filter id="blob"><feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="soft"><feGaussianBlur in="SourceGraphic" stdDeviation="3"/></filter>
+          <radialGradient id="gPeach" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#F5D5C8"/><stop offset="100%" stopColor="#E8C0B0" stopOpacity=".3"/></radialGradient>
+          <radialGradient id="gLavender" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#D8C8E8"/><stop offset="100%" stopColor="#C0B0D8" stopOpacity=".3"/></radialGradient>
+          <radialGradient id="gSky" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#C0D8E8"/><stop offset="100%" stopColor="#A8C8E0" stopOpacity=".3"/></radialGradient>
+          <radialGradient id="gMint" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#C8E0D0"/><stop offset="100%" stopColor="#B0D0B8" stopOpacity=".3"/></radialGradient>
+          <radialGradient id="gRose" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#E8C8D0"/><stop offset="100%" stopColor="#D8B0C0" stopOpacity=".3"/></radialGradient>
+          <radialGradient id="gSand" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#E8E0D0"/><stop offset="100%" stopColor="#D8D0C0" stopOpacity=".3"/></radialGradient>
+        </defs>
+      </svg>
       <section className="section" id="product">
         <div className="wrap">
           <div className="sec-head">
@@ -174,14 +207,168 @@ export default async function Home() {
             <h2>Everything the big tools do.<br />Priced for one person.</h2>
             <p>Six things run in the background every time you launch a sequence.</p>
           </div>
-          <ul className="feat-list">
-            <li className="feat-item"><span className="feat-num">01</span><div><h3>Inbox warm-up</h3><p>New inboxes send a slow, human-looking pattern for two weeks so mailbox providers learn to trust the address before your campaign starts.</p></div></li>
-            <li className="feat-item"><span className="feat-num">02</span><div><h3>Multi-inbox rotation</h3><p>Connect as many inboxes as you want. Sends spread across all of them so no single address carries the volume — or the risk.</p></div></li>
-            <li className="feat-item"><span className="feat-num">03</span><div><h3>Reply detection</h3><p>The moment a lead replies, books, or bounces, their sequence stops. No awkward follow-up after they've already answered.</p></div></li>
-            <li className="feat-item"><span className="feat-num">04</span><div><h3>Personalization tokens</h3><p>Pull first name, company, or any custom field into the subject line and body — no manual find-and-replace.</p></div></li>
-            <li className="feat-item"><span className="feat-num">05</span><div><h3>Deliverability monitor</h3><p>A spam-score check runs before every send, so you catch a flagged domain or spammy subject line before your leads do.</p></div></li>
-            <li className="feat-item"><span className="feat-num">06</span><div><h3>Plain analytics</h3><p>Opens, replies, and bounces on one screen. Just what you need to know if the sequence is working.</p></div></li>
-          </ul>
+          <div className="feat-rows">
+            <div className="feat-row reveal">
+              <div className="feat-text">
+                <span className="feat-eyebrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2c-1 3-4 4-4 9a4 4 0 0 0 8 0c0-2-1-3-1-3s.5 2-1 3c-2 1-2-1-2-3 0-2 2-3 0-6Z"/></svg>
+                  Warmup
+                </span>
+                <h3>Inbox warm-up</h3>
+                <p>New inboxes send a slow, human-looking pattern for two weeks so mailbox providers learn to trust the address before your campaign starts.</p>
+                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+              </div>
+              <div className="feat-illust">
+                <svg viewBox="0 0 300 210" fill="none">
+                  <path d="M27 146 L55 160 L55 182 L27 168 Z" fill="#E4E2DC"/>
+                  <path d="M55 160 L83 146 L83 168 L55 182 Z" fill="#D3D0C7"/>
+                  <path d="M55 132 L83 146 L55 160 L27 146 Z" fill="#F1F0ED" stroke="#C7C4BA"/>
+                  <path d="M92 126 L120 140 L120 182 L92 168 Z" fill="#E4E2DC"/>
+                  <path d="M120 140 L148 126 L148 168 L120 182 Z" fill="#D3D0C7"/>
+                  <path d="M120 112 L148 126 L120 140 L92 126 Z" fill="#F1F0ED" stroke="#C7C4BA"/>
+                  <g className="feat-glow">
+                    <path d="M157 102 L185 116 L185 158 L157 144 Z" fill="#BFDBFE"/>
+                    <path d="M185 116 L213 102 L213 144 L185 158 Z" fill="#93C5FD"/>
+                    <path d="M185 88 L213 102 L185 116 L157 102 Z" fill="#DCEAFE" stroke="#2563EB" strokeWidth="1.5"/>
+                    <circle cx="185" cy="70" r="3" fill="#2563EB"/>
+                    <circle cx="172" cy="60" r="2" fill="#60A5FA"/>
+                    <circle cx="198" cy="58" r="2" fill="#60A5FA"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
+            <div className="feat-row reveal" data-side="left">
+              <div className="feat-text">
+                <span className="feat-eyebrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+                  Rotation
+                </span>
+                <h3>Multi-inbox rotation</h3>
+                <p>Connect as many inboxes as you want. Sends spread across all of them so no single address carries the volume — or the risk.</p>
+                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+              </div>
+              <div className="feat-illust">
+                <svg viewBox="0 0 300 210" fill="none">
+                  <path d="M118 60 L150 76 L150 88 L118 72 Z" fill="#E4E2DC"/>
+                  <path d="M150 76 L182 60 L182 72 L150 88 Z" fill="#D3D0C7"/>
+                  <path d="M150 44 L182 60 L150 76 L118 60 Z" fill="#F1F0ED" stroke="#C7C4BA"/>
+                  <path d="M178 140 L210 156 L210 168 L178 152 Z" fill="#E4E2DC"/>
+                  <path d="M210 156 L242 140 L242 152 L210 168 Z" fill="#D3D0C7"/>
+                  <path d="M210 124 L242 140 L210 156 L178 140 Z" fill="#F1F0ED" stroke="#C7C4BA"/>
+                  <g className="feat-glow">
+                    <path d="M58 140 L90 156 L90 168 L58 152 Z" fill="#BFDBFE"/>
+                    <path d="M90 156 L122 140 L122 152 L90 168 Z" fill="#93C5FD"/>
+                    <path d="M90 124 L122 140 L90 156 L58 140 Z" fill="#DCEAFE" stroke="#2563EB" strokeWidth="1.5"/>
+                  </g>
+                  <path className="feat-flow" d="M138 66 C 90 90, 70 110, 88 132 M132 152 C 160 168, 190 168, 200 150 M198 68 C 168 82, 150 98, 148 118" stroke="#93C5FD" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                </svg>
+              </div>
+            </div>
+
+            <div className="feat-row reveal">
+              <div className="feat-text">
+                <span className="feat-eyebrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 17 4 12l5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v2"/></svg>
+                  Detection
+                </span>
+                <h3>Reply detection</h3>
+                <p>The moment a lead replies, books, or bounces, their sequence stops. No awkward follow-up after they've already answered.</p>
+                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+              </div>
+              <div className="feat-illust">
+                <svg viewBox="0 0 300 210" fill="none">
+                  <rect x="88" y="118" width="124" height="72" rx="8" fill="#E4E2DC"/>
+                  <rect x="96" y="106" width="124" height="72" rx="8" fill="#F1F0ED" stroke="#D3D0C7"/>
+                  <path d="M96 114 L158 148 L220 114" stroke="#C7C4BA" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  <g className="feat-glow">
+                    <rect x="104" y="72" width="124" height="72" rx="8" fill="#DCEAFE" stroke="#2563EB" strokeWidth="1.5"/>
+                    <path d="M104 80 L166 114 L228 80" stroke="#60A5FA" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  </g>
+                  <circle cx="222" cy="150" r="20" fill="#059669"/>
+                  <path d="M213 150 l6 6 l12 -13" stroke="#fff" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            </div>
+
+            <div className="feat-row reveal" data-side="left">
+              <div className="feat-text">
+                <span className="feat-eyebrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+                  Personalization
+                </span>
+                <h3>Personalization tokens</h3>
+                <p>Pull first name, company, or any custom field into the subject line and body — no manual find-and-replace.</p>
+                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+              </div>
+              <div className="feat-illust">
+                <svg viewBox="0 0 300 210" fill="none">
+                  <path d="M70 60 h120 a8 8 0 0 1 8 8 v14 a12 12 0 0 0 0 24 v14 a8 8 0 0 1 -8 8 h-120 a8 8 0 0 1 -8 -8 v-52 a8 8 0 0 1 8 -8 Z" fill="#fff" stroke="#D3D0C7" strokeWidth="1.5"/>
+                  <rect x="86" y="78" width="46" height="8" rx="4" fill="#D3D0C7"/>
+                  <rect x="86" y="94" width="70" height="8" rx="4" fill="#E4E2DC"/>
+                  <rect x="86" y="110" width="30" height="8" rx="4" fill="#E4E2DC"/>
+                  <g className="feat-glow">
+                    <path d="M182 66 h30 a8 8 0 0 1 8 8 v14 a12 12 0 0 0 0 24 v14 a8 8 0 0 1 -8 8 h-30 a8 8 0 0 1 -8 -8 v-52 a8 8 0 0 1 8 -8 Z" fill="#DCEAFE" stroke="#2563EB" strokeWidth="1.5"/>
+                    <text x="197" y="118" textAnchor="middle" fontSize="10" fontWeight="600" fill="#1D4ED8" transform="rotate(90 197 118)">Ari</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
+            <div className="feat-row reveal">
+              <div className="feat-text">
+                <span className="feat-eyebrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2 3 6v6c0 5 4 8 9 10 5-2 9-5 9-10V6l-9-4Z"/></svg>
+                  Deliverability
+                </span>
+                <h3>Deliverability monitor</h3>
+                <p>A spam-score check runs before every send, so you catch a flagged domain or spammy subject line before your leads do.</p>
+                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+              </div>
+              <div className="feat-illust">
+                <svg viewBox="0 0 300 210" fill="none">
+                  <circle className="feat-pulse" cx="150" cy="120" r="15" fill="none" stroke="#60A5FA" strokeWidth="2"/>
+                  <circle className="feat-pulse" cx="150" cy="120" r="15" fill="none" stroke="#60A5FA" strokeWidth="2" style={{animationDelay:"1.3s"}}/>
+                  <path d="M118 120 L150 136 L150 148 L118 132 Z" fill="#E4E2DC"/>
+                  <path d="M150 136 L182 120 L182 132 L150 148 Z" fill="#D3D0C7"/>
+                  <g className="feat-glow">
+                    <path d="M150 104 L182 120 L150 136 L118 120 Z" fill="#DCEAFE" stroke="#2563EB" strokeWidth="1.5"/>
+                    <path d="M138 118 l7 7 l14 -15" stroke="#1D4ED8" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
+            <div className="feat-row reveal" data-side="left">
+              <div className="feat-text">
+                <span className="feat-eyebrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>
+                  Analytics
+                </span>
+                <h3>Plain analytics</h3>
+                <p>Opens, replies, and bounces on one screen. Just what you need to know if the sequence is working.</p>
+                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+              </div>
+              <div className="feat-illust">
+                <svg viewBox="0 0 300 210" fill="none">
+                  <path d="M27 146 L55 160 L55 182 L27 168 Z" fill="#E4E2DC"/>
+                  <path d="M55 160 L83 146 L83 168 L55 182 Z" fill="#D3D0C7"/>
+                  <path d="M55 132 L83 146 L55 160 L27 146 Z" fill="#F1F0ED" stroke="#C7C4BA"/>
+                  <path d="M92 126 L120 140 L120 182 L92 168 Z" fill="#E4E2DC"/>
+                  <path d="M120 140 L148 126 L148 168 L120 182 Z" fill="#D3D0C7"/>
+                  <path d="M120 112 L148 126 L120 140 L92 126 Z" fill="#F1F0ED" stroke="#C7C4BA"/>
+                  <path d="M157 102 L185 116 L185 168 L157 154 Z" fill="#E4E2DC"/>
+                  <path d="M185 116 L213 102 L213 154 L185 168 Z" fill="#D3D0C7"/>
+                  <path d="M185 88 L213 102 L185 116 L157 102 Z" fill="#F1F0ED" stroke="#C7C4BA"/>
+                  <g className="feat-glow">
+                    <path d="M222 72 L250 86 L250 182 L222 168 Z" fill="#BFDBFE"/>
+                    <path d="M250 86 L278 72 L278 168 L250 182 Z" fill="#93C5FD"/>
+                    <path d="M250 58 L278 72 L250 86 L222 72 Z" fill="#DCEAFE" stroke="#2563EB" strokeWidth="1.5"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -209,10 +396,22 @@ export default async function Home() {
             <h2>From cold list to running sequence, same afternoon</h2>
           </div>
           <ol className="steps">
-            <li className="step"><span className="step-num">01</span><div><h3>Connect your inbox</h3><p>Link Gmail or Outlook. Warm-up starts immediately, even before your first sequence.</p></div></li>
-            <li className="step"><span className="step-num">02</span><div><h3>Import your leads</h3><p>Upload a CSV or paste a list. Map columns once and you're set.</p></div></li>
-            <li className="step"><span className="step-num">03</span><div><h3>Write your sequence</h3><p>First email, follow-ups, delays. Tokens pull from your lead list.</p></div></li>
-            <li className="step"><span className="step-num">04</span><div><h3>Launch and track</h3><p>Sends rotate across connected inboxes automatically. Watch replies come in.</p></div></li>
+            <li className="step">
+              <div className="step-illust"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+              <div><h3>Connect your inbox</h3><p>Link Gmail or Outlook. Warm-up starts immediately, even before your first sequence.</p></div>
+            </li>
+            <li className="step">
+              <div className="step-illust"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18"/><path d="M9 3v18"/><path d="M13 13h4"/><path d="M13 17h4"/></svg></div>
+              <div><h3>Import your leads</h3><p>Upload a CSV or paste a list. Map columns once and you're set.</p></div>
+            </li>
+            <li className="step">
+              <div className="step-illust"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+              <div><h3>Write your sequence</h3><p>First email, follow-ups, delays. Tokens pull from your lead list.</p></div>
+            </li>
+            <li className="step">
+              <div className="step-illust"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></div>
+              <div><h3>Launch and track</h3><p>Sends rotate across connected inboxes automatically. Watch replies come in.</p></div>
+            </li>
           </ol>
           <div className="how-aside">
             <div className="how-stat"><div className="val">142</div><div className="key">sent today</div></div>
@@ -283,8 +482,8 @@ export default async function Home() {
             <div className="foot-brand"><div className="logo">Coldpilot</div><p>Cold email for solo founders. One flat price, nothing bolted on.</p></div>
             <div className="foot-links">
               <div className="foot-col"><h4>Product</h4><ul><li><a href="#product">Features</a></li><li><a href="#how">How it works</a></li><li><a href="#pricing">Pricing</a></li></ul></div>
-              <div className="foot-col"><h4>Company</h4><ul><li><a href="#">About</a></li><li><a href="#">Contact</a></li><li><a href="#">Changelog</a></li></ul></div>
-              <div className="foot-col"><h4>Legal</h4><ul><li><a href="#">Privacy</a></li><li><a href="#">Terms</a></li></ul></div>
+              <div className="foot-col"><h4>Company</h4><ul><li><a href="#product">About</a></li><li><a href="mailto:hello@coldpilot.io">Contact</a></li></ul></div>
+              <div className="foot-col"><h4>Legal</h4><ul><li><Link href="/legal/privacy">Privacy</Link></li><li><Link href="/legal/terms">Terms</Link></li></ul></div>
             </div>
           </div>
           <div className="foot-bottom"><span>&copy; 2026 Coldpilot. Built by Too Design.</span><span>Made for the inbox, not the spam folder.</span></div>

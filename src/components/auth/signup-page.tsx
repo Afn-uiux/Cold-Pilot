@@ -7,12 +7,28 @@ import Link from "next/link";
 
 export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordStrength, setPasswordStrength] = useState(0);
+
+  function getPasswordStrength(pw: string) {
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
+    if (/\d/.test(pw)) score++;
+    if (/[^a-zA-Z0-9]/.test(pw)) score++;
+    return score;
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setLoading(true);
     const form = new FormData(e.currentTarget);
     const result = await signup(form);
+    setLoading(false);
     if (result?.error) {
       setError(result.error);
     }
@@ -62,13 +78,52 @@ export default function SignupPage() {
             </div>
             <div>
               <label style={{ display: "block", fontSize: 13, color: "#5A6B87", marginBottom: 8 }} htmlFor="password">Password</label>
-              <input id="password" name="password" type="password" required minLength={6} autoComplete="new-password" placeholder="At least 8 characters"
-                style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 0", outline: "none", borderRadius: 0 }}
-                onFocus={e => e.target.style.borderBottomColor = "#0F1929"}
-                onBlur={e => e.target.style.borderBottomColor = "rgba(15,25,41,0.08)"} />
-              <p style={{ fontSize: 12, color: "#8A9BB5", marginTop: 8 }}>Use 8+ characters with a mix of letters and numbers.</p>
+              <div style={{ position: "relative" }}>
+                <input id="password" name="password" type={showPassword ? "text" : "password"} required minLength={6} autoComplete="new-password" placeholder="At least 8 characters"
+                  value={password}
+                  onChange={e => { setPassword(e.target.value); setPasswordStrength(getPasswordStrength(e.target.value)); }}
+                  style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 36px 10px 0", outline: "none", borderRadius: 0 }}
+                  onFocus={e => e.target.style.borderBottomColor = "#0F1929"}
+                  onBlur={e => e.target.style.borderBottomColor = "rgba(15,25,41,0.08)"} />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8A9BB5", display: "flex" }}
+                  tabIndex={-1} aria-label={showPassword ? "Hide password" : "Show password"}>
+                  {showPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              {password.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <div key={i} style={{
+                        height: 3, flex: 1, borderRadius: 2,
+                        background: passwordStrength >= i
+                          ? passwordStrength <= 2 ? "#C62828" : passwordStrength <= 3 ? "#F59E0B" : "#2E7D32"
+                          : "#E8E5E0",
+                        transition: "background 0.2s",
+                      }} />
+                    ))}
+                  </div>
+                  <span style={{ fontSize: 11, color: passwordStrength <= 2 ? "#C62828" : passwordStrength <= 3 ? "#F59E0B" : "#2E7D32" }}>
+                    {passwordStrength <= 1 ? "Very weak" : passwordStrength <= 2 ? "Weak" : passwordStrength <= 3 ? "Fair" : passwordStrength <= 4 ? "Strong" : "Very strong"}
+                  </span>
+                </div>
+              )}
+              {password.length === 0 && <p style={{ fontSize: 12, color: "#8A9BB5", marginTop: 8 }}>Use 8+ characters with a mix of letters and numbers.</p>}
             </div>
-            <button type="submit" className="btn btn-primary" style={{ width: "100%" }}>Create account</button>
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: "100%", opacity: loading ? 0.7 : 1 }}>
+              {loading ? "Creating account..." : "Create account"}
+            </button>
           </form>
 
           <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "#8A9BB5", margin: "4px 0" }}>

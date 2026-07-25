@@ -4,7 +4,20 @@ import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
   title: "Coldpilot — Cold email that lands in the inbox",
-  description: "Send campaigns that land in inboxes, not spam folders.",
+  description: "Send campaigns that land in inboxes, not spam folders. Warm-up, rotation, reply detection — all in one place.",
+  openGraph: {
+    title: "Coldpilot — Cold email that lands in the inbox",
+    description: "Send campaigns that land in inboxes, not spam folders.",
+    url: "https://coldpilot.io",
+    siteName: "Coldpilot",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Coldpilot — Cold email that lands in the inbox",
+    description: "Send campaigns that land in inboxes, not spam folders.",
+  },
+  metadataBase: new URL("https://coldpilot.io"),
 };
 
 export default function RootLayout({

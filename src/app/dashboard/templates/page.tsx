@@ -1,16 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import ConfirmModal from "@/components/confirm-modal";
+import { useToast } from "@/components/toast";
 
 type Template = { id: string; name: string; subject: string; bodyHtml: string; updatedAt: string; };
 
 export default function TemplatesPage() {
+  const { toast } = useToast();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("My Template");
   const [newSubject, setNewSubject] = useState("");
   const [creating, setCreating] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/templates")
@@ -35,9 +39,21 @@ export default function TemplatesPage() {
         setShowCreate(false);
         setNewName("My Template");
         setNewSubject("");
+        toast("Template created", "success");
       }
     } catch {}
     setCreating(false);
+  }
+
+  async function doDelete(id: string) {
+    const res = await fetch(`/api/templates?id=${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setTemplates(prev => prev.filter(t => t.id !== id));
+      toast("Template deleted", "success");
+    } else {
+      toast("Failed to delete template", "error");
+    }
+    setConfirmDelete(null);
   }
 
   return (
@@ -68,8 +84,10 @@ export default function TemplatesPage() {
                   <div className="font-medium text-[11px] text-muted-2 mb-3">{t.subject}</div>
                   <p className="text-sm text-muted leading-relaxed line-clamp-3">{t.bodyHtml.replace(/<[^>]*>/g, "").slice(0, 150)}</p>
                 </div>
-                <div className="flex gap-4 font-medium text-[11px] text-muted-2 mt-4">
+                <div className="flex items-center justify-between font-medium text-[11px] text-muted-2 mt-4">
                   <span>Updated {new Date(t.updatedAt).toLocaleDateString()}</span>
+                  <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(t.id); }}
+                    className="text-red-500 hover:text-red-700 transition-colors">Delete</button>
                 </div>
               </div>
             ))}
@@ -108,6 +126,15 @@ export default function TemplatesPage() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={!!confirmDelete}
+        title="Delete template?"
+        message="This template will be permanently removed."
+        confirmLabel="Delete"
+        onConfirm={() => confirmDelete && doDelete(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+        variant="danger"
+      />
     </div>
   );
 }

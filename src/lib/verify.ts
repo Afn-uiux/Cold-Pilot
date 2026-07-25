@@ -226,12 +226,12 @@ function smtpVerifyViaAccount(targetEmail: string, config: SmtpConfig): Promise<
           step = 1;
           socket.write(`EHLO coldpilot.com\r\n`);
         } else if (step === 1 && code === 250) {
-          if (line.startsWith("250-")) continue;
           if (!useTls && /STARTTLS/i.test(line)) {
             step = 11;
             socket.write("STARTTLS\r\n");
             continue;
           }
+          if (line.startsWith("250-")) continue;
           step = 2;
           socket.write(`AUTH LOGIN\r\n`);
         } else if (step === 11 && code === 220) {
@@ -454,6 +454,9 @@ export function canSendToLead(verificationStatus: string | null, enableRiskyEmai
     return { allowed: true, reason: "valid" };
   }
   if (verificationStatus === "risky") {
+    if (enableRiskyEmails) {
+      return { allowed: true, reason: "risky_allowed_by_user" };
+    }
     return { allowed: false, reason: "disposable_or_role_account" };
   }
   if (verificationStatus === "invalid") {
