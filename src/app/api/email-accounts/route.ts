@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { sendEmailSafe } from "@/lib/email/send";
 import { encryptAccount, encrypt } from "@/lib/crypto";
 
 const IMAP_DEFAULTS: Record<string, { host: string; port: number }> = {
@@ -189,6 +190,12 @@ export async function POST(req: Request) {
       userId: session.user.id,
     }),
   });
+
+  // Send onboarding email if this is the user's first account
+  const accountCount = await prisma.emailAccount.count({ where: { userId: session.user.id } });
+  if (accountCount === 1) {
+    sendEmailSafe(email, "onboarding-connect-account");
+  }
 
   return NextResponse.json(account);
 }

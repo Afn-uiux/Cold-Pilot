@@ -482,7 +482,7 @@ export default async function Home() {
             <div className="foot-brand"><div className="logo">Coldpilot</div><p>Cold email for solo founders. One flat price, nothing bolted on.</p></div>
             <div className="foot-links">
               <div className="foot-col"><h4>Product</h4><ul><li><a href="#product">Features</a></li><li><a href="#how">How it works</a></li><li><a href="#pricing">Pricing</a></li></ul></div>
-              <div className="foot-col"><h4>Company</h4><ul><li><a href="#product">About</a></li><li><a href="mailto:hello@coldpilot.io">Contact</a></li></ul></div>
+              <div className="foot-col"><h4>Company</h4><ul><li><Link href="/about">About</Link></li><li><a href="mailto:hello@coldpilot.io">Contact</a></li></ul></div>
               <div className="foot-col"><h4>Legal</h4><ul><li><Link href="/legal/privacy">Privacy</Link></li><li><Link href="/legal/terms">Terms</Link></li></ul></div>
             </div>
           </div>

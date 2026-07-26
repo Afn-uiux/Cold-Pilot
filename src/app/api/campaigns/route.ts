@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { sendEmailSafe } from "@/lib/email/send";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -125,6 +126,19 @@ export async function PATCH(req: NextRequest) {
   }
   if (Object.keys(campaignData).length > 0) {
     await prisma.campaign.update({ where: { id }, data: campaignData });
+    // Send transactional emails on status changes
+    if (body.status && body.status !== c.status) {
+      const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true, name: true } });
+      if (user?.email) {
+        if (body.status === "active" && c.status !== "active") {
+          const leadCount = await prisma.lead.count({ where: { campaignId: id, deletedAt: null } });
+          sendEmailSafe(user.email, "campaign-launched");
+        }
+        if (body.status === "paused") {
+          sendEmailSafe(user.email, "campaign-paused");
+        }
+      }
+    }
   }
 
   // Handle schedules upsert/delete
@@ -160,6 +174,12 @@ export async function POST(req: NextRequest) {
     data: { name, userId: session.user.id, status: "draft", steps: { create: steps.map((s: any, i: number) => ({ order: i, type: s.type || "email", subject: s.subject || null, bodyHtml: s.body || null, delayDays: s.delayDays ?? 0 })) } },
     include: { steps: true },
   });
+  // Send onboarding email if this is the user's first campaign
+  const campaignCount = await prisma.campaign.count({ where: { userId: session.user.id, deletedAt: null } });
+  if (campaignCount === 1) {
+    const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true } });
+    if (user?.email) sendEmailSafe(user.email, "onboarding-create-campaign");
+  }
   return NextResponse.json(campaign);
 }
 

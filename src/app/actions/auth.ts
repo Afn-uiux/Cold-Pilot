@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { signIn } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { sendEmailSafe } from "@/lib/email/send";
 
 export async function signup(formData: FormData) {
   const name = formData.get("name") as string;
@@ -32,6 +33,8 @@ export async function signup(formData: FormData) {
       password: hashedPassword,
     },
   });
+
+  sendEmailSafe(email, "welcome");
 
   await signIn("credentials", { email, password, redirectTo: "/dashboard" });
 
@@ -82,6 +85,7 @@ export async function resetPassword(email: string, newPassword: string) {
   }
   const hashedPassword = await bcrypt.hash(newPassword, 12);
   await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
+  sendEmailSafe(email, "password-changed");
   return { success: true };
 }
 

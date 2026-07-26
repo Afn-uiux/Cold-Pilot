@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { sendEmailSafe } from "./email/send";
 
 const GLOBAL_MIN_WAIT_MS = 60 * 1000; // 60 seconds between any sends from same account
 
@@ -41,6 +42,18 @@ export async function canSendFromAccount(
   });
 
   const totalSentToday = campaignSentToday + warmupSentToday;
+
+  // Send approaching limit warning at 85%
+  if (totalSentToday >= dailySendLimit * 0.85 && totalSentToday < dailySendLimit) {
+    const account = await prisma.emailAccount.findUnique({
+      where: { id: emailAccountId },
+      select: { userId: true },
+    });
+    if (account) {
+      const user = await prisma.user.findUnique({ where: { id: account.userId }, select: { email: true } });
+      if (user?.email) sendEmailSafe(user.email, "approaching-limit");
+    }
+  }
 
   if (totalSentToday >= dailySendLimit) {
     return {

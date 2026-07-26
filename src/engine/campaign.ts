@@ -6,6 +6,7 @@ import { dispatchWebhookEvent } from "@/lib/webhook";
 import { dispatchIntegrationEvent } from "@/integrations";
 import { classifyReply } from "@/lib/classify";
 import { categorizeBounce } from "@/lib/bounce";
+import { sendEmailSafe } from "@/lib/email/send";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { decryptAccount } from "@/lib/crypto";
@@ -147,6 +148,9 @@ async function executeCampaignInner(campaignId: string) {
     await prisma.campaign.update({ where: { id: campaignId }, data: { status: "completed" } });
     const replyCount = await prisma.lead.count({ where: { campaignId, status: "replied" } });
     dispatchIntegrationEvent(campaign.userId, "campaign_completed", { name: campaign.name, sent: 0, replies: replyCount }).catch(() => {});
+    // Send campaign completed email
+    const campaignUser = await prisma.user.findUnique({ where: { id: campaign.userId }, select: { email: true } });
+    if (campaignUser?.email) sendEmailSafe(campaignUser.email, "campaign-completed");
     return { sent: 0, errors: 0, skipped: 0, reason: "completed" };
   }
 
@@ -550,6 +554,9 @@ async function executeCampaignInner(campaignId: string) {
     await prisma.campaign.update({ where: { id: campaignId }, data: { status: "completed" } });
     const replyCount = await prisma.lead.count({ where: { campaignId, status: "replied" } });
     dispatchIntegrationEvent(campaign.userId, "campaign_completed", { name: campaign.name, sent, replies: replyCount }).catch(() => {});
+    // Send campaign completed email
+    const campaignUser2 = await prisma.user.findUnique({ where: { id: campaign.userId }, select: { email: true } });
+    if (campaignUser2?.email) sendEmailSafe(campaignUser2.email, "campaign-completed");
     return { sent, errors, skipped, reason: "completed" };
   }
 
@@ -876,6 +883,9 @@ async function checkGmailAccountReplies(account: any): Promise<number> {
           title: "Reconnect your email account",
           message: `${account.email} needs to be reconnected — reply detection has stopped working for it.`,
         }).catch(() => {});
+        // Send account disconnected email
+        const acctUser = await prisma.user.findUnique({ where: { id: account.userId }, select: { email: true } });
+        if (acctUser?.email) sendEmailSafe(acctUser.email, "account-disconnected");
         break;
       }
       console.error(`Gmail reply check failed for thread ${log.threadId}:`, err);
@@ -1252,6 +1262,9 @@ async function checkImapAccountReplies(account: any): Promise<number> {
         title: "Reconnect your email account",
         message: `${account.email} failed to connect over IMAP — reply detection has stopped working for it. If this is Yahoo, Outlook, or another provider that requires an app-specific password, make sure IMAP access is enabled and you're using an app password, not your regular login password.`,
       }).catch(() => {});
+      // Send account disconnected email
+      const imapUser = await prisma.user.findUnique({ where: { id: account.userId }, select: { email: true } });
+      if (imapUser?.email) sendEmailSafe(imapUser.email, "account-disconnected");
     }
   } finally {
     try { await client.logout(); } catch {}

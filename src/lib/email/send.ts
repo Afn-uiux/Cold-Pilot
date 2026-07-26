@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { EMAIL_TEMPLATES, getTemplateById, type EmailTemplateId } from "./templates";
+import { getTemplateById, type EmailTemplateId } from "./templates";
 
 interface SendEmailOptions {
   to: string;
@@ -39,5 +39,15 @@ export async function sendTransactionalEmail({ to, template }: SendEmailOptions)
     to,
     subject,
     html,
+  });
+}
+
+/**
+ * Fire-and-forget email sender. Never throws. Safe to call in try/catch
+ * blocks where the main action should proceed regardless of email delivery.
+ */
+export function sendEmailSafe(to: string, template: EmailTemplateId, data?: Record<string, any>) {
+  sendTransactionalEmail({ to, template, data }).catch((err) => {
+    console.error(`[email] Failed to send ${template} to ${to}:`, err?.message || err);
   });
 }

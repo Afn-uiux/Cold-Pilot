@@ -4,9 +4,13 @@ export async function register() {
   const { prisma } = await import("@/lib/prisma");
   const { executeCampaign, checkForReplies, sendDailySummaries } = await import("@/engine/campaign");
   const { reconcileWarmupSchedules, processDueWarmupSends, processSeedInboxes, saveHealthLog } = await import("@/engine/warmup");
+  const { sendEmailSafe } = await import("@/lib/email/send");
 
   let lastSummaryDate = "";
   let lastHealthCheckHour = -1;
+  let lastWeeklyDigestDate = "";
+  let lastMonthlyDigestDate = "";
+  let lastReengagementDate = "";
 
   async function tick() {
     try {
@@ -103,6 +107,62 @@ export async function register() {
           console.log(`[scheduler] health check: ${accounts.length} accounts`);
         } catch (e) {
           console.error("[scheduler] health check error:", e);
+        }
+      }
+
+      // Weekly digest — every Monday
+      const todayDate = new Date().toISOString().slice(0, 10);
+      const dayOfWeek = new Date().getDay();
+      if (dayOfWeek === 1 && todayDate !== lastWeeklyDigestDate) {
+        lastWeeklyDigestDate = todayDate;
+        try {
+          const users = await prisma.user.findMany({
+            select: { id: true, email: true },
+          });
+          for (const user of users) {
+            if (user.email) sendEmailSafe(user.email, "weekly-digest");
+          }
+          console.log(`[scheduler] weekly digest sent to ${users.length} users`);
+        } catch (e) {
+          console.error("[scheduler] weekly digest error:", e);
+        }
+      }
+
+      // Monthly summary — 1st of each month
+      const dayOfMonth = new Date().getDate();
+      if (dayOfMonth === 1 && todayDate !== lastMonthlyDigestDate) {
+        lastMonthlyDigestDate = todayDate;
+        try {
+          const users = await prisma.user.findMany({
+            select: { id: true, email: true },
+          });
+          for (const user of users) {
+            if (user.email) sendEmailSafe(user.email, "monthly-summary");
+          }
+          console.log(`[scheduler] monthly summary sent to ${users.length} users`);
+        } catch (e) {
+          console.error("[scheduler] monthly summary error:", e);
+        }
+      }
+
+      // Re-engagement — users inactive for 14 days
+      if (todayDate !== lastReengagementDate) {
+        lastReengagementDate = todayDate;
+        try {
+          const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+          const inactiveUsers = await prisma.user.findMany({
+            where: {
+              updatedAt: { lt: fourteenDaysAgo },
+              campaigns: { none: { status: "active", deletedAt: null } },
+            },
+            select: { id: true, email: true },
+          });
+          for (const user of inactiveUsers) {
+            if (user.email) sendEmailSafe(user.email, "we-miss-you");
+          }
+          console.log(`[scheduler] re-engagement sent to ${inactiveUsers.length} users`);
+        } catch (e) {
+          console.error("[scheduler] re-engagement error:", e);
         }
       }
     } catch (e) {

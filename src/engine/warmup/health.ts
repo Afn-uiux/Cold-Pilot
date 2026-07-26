@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { sendEmailSafe } from "@/lib/email/send";
 
 export type WarmupHealthState = "healthy" | "watch" | "throttled";
 
@@ -76,6 +77,16 @@ export async function saveHealthLog(mailboxId: string): Promise<void> {
   if (!mailbox) return;
 
   const { healthScore, healthState } = await calculateHealthScore(mailboxId);
+
+  // Send warmup health warning if state degraded
+  const fullMailbox = await prisma.emailAccount.findUnique({
+    where: { id: mailboxId },
+    select: { userId: true, email: true, healthState: true },
+  });
+  if (fullMailbox && healthState !== "healthy" && fullMailbox.healthState === "healthy") {
+    const user = await prisma.user.findUnique({ where: { id: fullMailbox.userId }, select: { email: true } });
+    if (user?.email) sendEmailSafe(user.email, "warmup-health-dropped");
+  }
 
   // Increment warmupWeek based on days since warmupStartedAt
   let warmupWeek = mailbox.warmupWeek || 1;

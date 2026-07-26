@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { sendEmailSafe } from "./email/send";
 
 const HIGH_BOUNCE_THRESHOLD = 0.3;
 const MEDIUM_BOUNCE_THRESHOLD = 0.15;
@@ -53,6 +54,18 @@ export async function recordBounce(
         lastBouncedAt: new Date(),
       },
     });
+    // Send bounce rate alert if crossing threshold
+    if (existing.totalSent >= MIN_SAMPLES_FOR_TRUST && bounceRate >= MEDIUM_BOUNCE_THRESHOLD) {
+      // Find the user who owns this domain's email accounts
+      const account = await prisma.emailAccount.findFirst({
+        where: { email: { endsWith: `@${domain}` } },
+        select: { userId: true },
+      });
+      if (account) {
+        const user = await prisma.user.findUnique({ where: { id: account.userId }, select: { email: true } });
+        if (user?.email) sendEmailSafe(user.email, "bounce-rate-alert");
+      }
+    }
   } else {
     await prisma.domainReputation.create({
       data: {
@@ -103,6 +116,18 @@ export async function getDomainReputation(domain: string): Promise<DomainReputat
     if (record.bounceRate >= HIGH_BOUNCE_THRESHOLD) riskLevel = "high";
     else if (record.bounceRate >= MEDIUM_BOUNCE_THRESHOLD) riskLevel = "medium";
     else if (record.bounceRate > 0) riskLevel = "low";
+  }
+
+  // Send domain reputation warning if risk level is medium or high
+  if (riskLevel === "medium" || riskLevel === "high") {
+    const account = await prisma.emailAccount.findFirst({
+      where: { email: { endsWith: `@${domain}` } },
+      select: { userId: true },
+    });
+    if (account) {
+      const user = await prisma.user.findUnique({ where: { id: account.userId }, select: { email: true } });
+      if (user?.email) sendEmailSafe(user.email, "domain-reputation-warning");
+    }
   }
 
   return {
