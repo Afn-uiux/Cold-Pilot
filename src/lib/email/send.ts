@@ -1,4 +1,6 @@
-import { emailTemplates, type EmailTemplateId } from "./templates";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { EMAIL_TEMPLATES, getTemplateById, type EmailTemplateId } from "./templates";
 
 interface SendEmailOptions {
   to: string;
@@ -6,19 +8,20 @@ interface SendEmailOptions {
   data?: Record<string, any>;
 }
 
-export function renderEmail(templateId: EmailTemplateId, data: Record<string, any> = {}) {
-  const template = emailTemplates[templateId];
+export function renderEmail(templateId: EmailTemplateId) {
+  const template = getTemplateById(templateId);
   if (!template) throw new Error(`Unknown email template: ${templateId}`);
+  const filePath = join(process.cwd(), "src", "lib", "email", "templates-html", template.filename);
+  const html = readFileSync(filePath, "utf-8");
   return {
     subject: template.subject,
-    html: template.html(data),
+    html,
   };
 }
 
-export async function sendTransactionalEmail({ to, template, data = {} }: SendEmailOptions) {
-  const { subject, html } = renderEmail(template, data);
+export async function sendTransactionalEmail({ to, template }: SendEmailOptions) {
+  const { subject, html } = renderEmail(template);
 
-  // Use the existing email sending infrastructure
   const { default: nodemailer } = await import("nodemailer");
 
   const transporter = nodemailer.createTransport({
