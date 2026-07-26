@@ -1,12 +1,12 @@
 # Coldpilot
 
-All-in-one sales outreach platform designed to help businesses find leads and automate cold email campaigns at scale. It combines lead generation, campaign management, and AI-powered tools for businesses running high-volume outbound sales.
+All-in-one sales outreach platform designed to help businesses automate cold email campaigns at scale. It combines campaign management, email verification, and AI-powered tools for businesses running high-volume outbound sales.
 
 ## What it does
 
 Coldpilot handles the full outbound workflow — from finding and verifying leads to sending personalized sequences and tracking what works.
 
-### Lead generation & management
+### Lead management
 
 - **Lead import** — Upload CSVs or add leads manually. Coldpilot deduplicates automatically and validates emails on import.
 - **Email verification** — Multi-layer verification catches bad emails before you send: disposable domain detection (129,000+ known domains), typosquat detection for common misspellings, DNS MX validation, and SMTP-level checks.
@@ -106,39 +106,6 @@ npx next build
 pm2 start ecosystem.config.cjs
 ```
 
-## Environment variables
-
-```env
-# Database
-DATABASE_URL="file:./dev.db"
-
-# NextAuth
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-secret-here"
-
-# Google OAuth (optional)
-GOOGLE_CLIENT_ID=""
-GOOGLE_CLIENT_SECRET=""
-
-# SMTP (for sending emails)
-SMTP_HOST=""
-SMTP_PORT="587"
-SMTP_USER=""
-SMTP_PASS=""
-
-# IMAP (for reply detection)
-IMAP_HOST=""
-IMAP_PORT="993"
-IMAP_USER=""
-IMAP_PASS=""
-
-# Redis (for BullMQ queues)
-REDIS_URL="redis://localhost:6379"
-
-# OpenAI (for AI features)
-OPENAI_API_KEY=""
-```
-
 ## Project structure
 
 ```
@@ -189,4 +156,4 @@ Proprietary. All rights reserved.
 
 ## Built by
 
-[Too Design](mailto:hello@coldpilot.io) — built for the inbox, not the spam folder.
+[Coldpilot](mailto:hello@coldpilot.io) — built for the inbox, not the spam folder.

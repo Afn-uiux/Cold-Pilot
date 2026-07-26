@@ -460,7 +460,7 @@ export default async function Home() {
       <div className="wrap">
         <div className="quote-block">
           <blockquote>I built Coldpilot because every tool wanted <em style={{fontStyle:"italic"}}>$47 to start</em> and another charge for leads before I'd sent a single email.</blockquote>
-          <p className="quote-attr">— Builder's note, Too Design</p>
+          <p className="quote-attr">— Builder's note</p>
         </div>
       </div>
 
@@ -486,7 +486,7 @@ export default async function Home() {
               <div className="foot-col"><h4>Legal</h4><ul><li><Link href="/legal/privacy">Privacy</Link></li><li><Link href="/legal/terms">Terms</Link></li></ul></div>
             </div>
           </div>
-          <div className="foot-bottom"><span>&copy; 2026 Coldpilot. Built by Too Design.</span><span>Made for the inbox, not the spam folder.</span></div>
+          <div className="foot-bottom"><span>&copy; 2026 Coldpilot.</span><span>Made for the inbox, not the spam folder.</span></div>
         </div>
       </footer>
 
