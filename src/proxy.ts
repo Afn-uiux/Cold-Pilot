@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { decode } from "next-auth/jwt";
+import { rateLimit } from "@/lib/rate-limit";
 
 const protectedPaths = ["/dashboard"];
 const authPaths = ["/auth/login", "/auth/signup"];
@@ -51,6 +52,15 @@ export async function proxy(request: NextRequest) {
     const res = NextResponse.next();
     res.cookies.delete("session-binding");
     return res;
+  }
+
+  // Rate limit auth pages (login/signup)
+  if (authPaths.some((p) => pathname.startsWith(p))) {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const result = rateLimit(`auth:${ip}`, { max: 5, windowMs: 60_000 });
+    if (!result.ok) {
+      return new NextResponse("Too many requests. Try again later.", { status: 429 });
+    }
   }
 
   // Redirect authenticated users away from auth pages
