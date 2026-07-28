@@ -9,11 +9,13 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
     };
+    sid?: string;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     role?: string;
+    sid?: string;
   }
 }

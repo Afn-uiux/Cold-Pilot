@@ -47,11 +47,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.sub;
         session.user.role = token.role as string || "user";
       }
+      session.sid = token.sid as string | undefined;
       return session;
     },
     async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
+        token.sid = crypto.randomUUID();
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
           select: { role: true },
