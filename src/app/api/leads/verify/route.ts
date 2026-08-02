@@ -35,11 +35,11 @@ export async function POST(req: Request) {
   const targetCampaignId = campaignId || leads[0]?.campaignId;
   if (targetCampaignId) {
     try {
-      const campaign = await prisma.campaign.findUnique({ where: { id: targetCampaignId }, select: { accountIds: true } });
+      const campaign = await prisma.campaign.findFirst({ where: { id: targetCampaignId, userId }, select: { accountIds: true } });
       if (campaign?.accountIds) {
         const accountIds: string[] = JSON.parse(campaign.accountIds);
         if (accountIds.length > 0) {
-          const account = await prisma.emailAccount.findUnique({ where: { id: accountIds[0] } });
+          const account = await prisma.emailAccount.findFirst({ where: { id: accountIds[0], userId } });
           if (account && account.smtpHost && account.smtpUser && account.smtpPass) {
             const decrypted = decryptAccount(account);
             smtpConfig = {

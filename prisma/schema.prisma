@@ -451,3 +451,15 @@ model BounceEvent {
   emailAccount EmailAccount? @relation(fields: [emailAccountId], references: [id], onDelete: SetNull)
   lead         Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
 }
+
+// Distributed leader election for background schedulers. Each app instance
+// renews a lease with its own token; only the holder of the live lease runs
+// the scheduler tick, so N instances never double-send.
+model SchedulerLock {
+  key       String   @id
+  token     String
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

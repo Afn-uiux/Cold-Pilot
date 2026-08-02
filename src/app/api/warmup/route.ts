@@ -61,6 +61,12 @@ export async function POST(req: Request) {
     }
 
     case "tick": {
+      // Global warmup processing must not be triggerable by any authenticated
+      // user — that would let a single tenant run (and load) the warmup engine
+      // for every account in the product. Cron-secret only.
+      if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
       const { sent, failed } = await processDueWarmupSends();
       const seeded = await reconcileWarmupSchedules();
       return NextResponse.json({ sent, failed, seeded });

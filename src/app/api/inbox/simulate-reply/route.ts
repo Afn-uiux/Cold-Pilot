@@ -14,8 +14,8 @@ export async function POST() {
     return NextResponse.json({ error: "Connect an email account first" }, { status: 400 });
   }
 
-  // Check if we already have a simulated lead, reuse it
-  let lead = await prisma.lead.findFirst({ where: { email: "amberdenson85@gmail.com" } });
+  // Check if we already have a simulated lead for this user, reuse it
+  let lead = await prisma.lead.findFirst({ where: { email: "amberdenson85@gmail.com", userId: session.user.id } });
   if (!lead) {
     lead = await prisma.lead.create({
       data: {

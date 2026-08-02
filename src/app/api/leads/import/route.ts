@@ -226,6 +226,12 @@ export async function POST(req: Request) {
     const body = await req.json();
     let leads = body.leads;
     let campaignId: string | null = body.campaignId || null;
+    if (campaignId) {
+      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { userId: true } });
+      if (!campaign || campaign.userId !== userId) {
+        return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+      }
+    }
     let rowsSkippedNoEmail = 0;
 
     // Fetch from URL
@@ -284,7 +290,25 @@ export async function POST(req: Request) {
           rowsSkippedNoEmail = allRows.filter(l => !l.email || !l.email.includes("@")).length;
           leads = allRows.filter(l => l.email && l.email.includes("@"));
         } else {
-          const res = await fetch(url, {
+          let parsed: URL;
+          try { parsed = new URL(url); } catch {
+            return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+          }
+          // SSRF guard: only https, and never allow private/internal hosts
+          // (localhost, RFC1918, link-local, metadata endpoint).
+          if (parsed.protocol !== "https:") {
+            return NextResponse.json({ error: "Only https URLs are allowed" }, { status: 400 });
+          }
+          const hostname = parsed.hostname.toLowerCase();
+          const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(":");
+          if (isIp || hostname === "localhost" || hostname.endsWith(".local") || hostname.endsWith(".internal")) {
+            return NextResponse.json({ error: "URL host is not allowed" }, { status: 400 });
+          }
+          const blockedHosts = ["169.254.169.254", "metadata.google.internal", "metadata"];
+          if (blockedHosts.includes(hostname)) {
+            return NextResponse.json({ error: "URL host is not allowed" }, { status: 400 });
+          }
+          const res = await fetch(parsed, {
             redirect: "follow",
             headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
             signal: AbortSignal.timeout(30000),
@@ -356,6 +380,12 @@ export async function POST(req: Request) {
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
   const campaignId = (formData.get("campaignId") as string) || null;
+  if (campaignId) {
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { userId: true } });
+    if (!campaign || campaign.userId !== userId) {
+      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    }
+  }
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
   const text = await file.text();

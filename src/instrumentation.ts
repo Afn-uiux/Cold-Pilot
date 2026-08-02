@@ -5,7 +5,9 @@ export async function register() {
   const { executeCampaign, checkForReplies, sendDailySummaries } = await import("@/engine/campaign");
   const { reconcileWarmupSchedules, processDueWarmupSends, processSeedInboxes, saveHealthLog } = await import("@/engine/warmup");
   const { sendEmailSafe } = await import("@/lib/email/send");
+  const { acquireLock, newLeaderToken } = await import("@/lib/leader-lock");
 
+  const leaderToken = newLeaderToken();
   let lastSummaryDate = "";
   let lastHealthCheckHour = -1;
   let lastWeeklyDigestDate = "";
@@ -14,6 +16,14 @@ export async function register() {
 
   async function tick() {
     try {
+      // Leader election: only the instance holding the live lease may run
+      // background work. Without this, every deployed instance would execute
+      // the same campaign sends / reply checks on its own 2-minute timer and
+      // duplicate emails. The lease is renewed each tick; if this instance
+      // loses the lease (another instance won the race), skip this round.
+      const isLeader = await acquireLock("scheduler", leaderToken);
+      if (!isLeader) return;
+
       const campaigns = await prisma.campaign.findMany({
         where: { status: "active", deletedAt: null },
         select: { id: true, userId: true },

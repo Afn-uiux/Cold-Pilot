@@ -80,6 +80,21 @@ export async function sendEmail(opts: SendOptions) {
     throw new Error(`Send blocked: ${gate.reason}`);
   }
 
+  const lead = await prisma.lead.findUnique({
+    where: { id: opts.leadId },
+    select: { userId: true, verificationStatus: true },
+  });
+  if (!lead) {
+    throw new Error("Lead not found");
+  }
+
+  // Cross-tenant guard: the sending account and the target lead must belong
+  // to the same tenant. Without this, any authenticated caller could send
+  // through another user's email account and mutate their lead's logs.
+  if (account.userId !== lead.userId) {
+    throw new Error("Email account does not belong to this lead's owner");
+  }
+
   const suppressed = await prisma.suppression.findUnique({
     where: { userId_email: { userId: account.userId, email: opts.to.toLowerCase().trim() } },
   });
@@ -87,10 +102,6 @@ export async function sendEmail(opts: SendOptions) {
     throw new Error(`Email ${opts.to} is suppressed (${suppressed.reason})`);
   }
 
-  const lead = await prisma.lead.findUnique({
-    where: { id: opts.leadId },
-    select: { verificationStatus: true },
-  });
   if (lead?.verificationStatus === "invalid" || lead?.verificationStatus === "unknown" || lead?.verificationStatus === "risky") {
     throw new Error(`Email ${opts.to} blocked: verification status "${lead.verificationStatus}"`);
   }

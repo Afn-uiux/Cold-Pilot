@@ -24,6 +24,12 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { pipelineId, name, value, stage, leadId } = await req.json();
   if (!pipelineId || !name) return NextResponse.json({ error: "Pipeline and name required" }, { status: 400 });
+  const pipeline = await prisma.pipeline.findFirst({ where: { id: pipelineId, userId: session.user.id }, select: { id: true } });
+  if (!pipeline) return NextResponse.json({ error: "Pipeline not found" }, { status: 404 });
+  if (leadId) {
+    const lead = await prisma.lead.findFirst({ where: { id: leadId, userId: session.user.id }, select: { id: true } });
+    if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+  }
   const deal = await prisma.deal.create({ data: { userId: session.user.id, pipelineId, leadId: leadId || null, name, value: value || 0, stage: stage || "qualified" } });
   return NextResponse.json(deal);
 }

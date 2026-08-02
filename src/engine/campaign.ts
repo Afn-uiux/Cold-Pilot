@@ -175,6 +175,7 @@ async function executeCampaignInner(campaignId: string) {
   const leads = await prisma.lead.findMany({
     where: {
       campaignId,
+      userId: campaign.userId,
       status: { in: ["pending", "sent"] },
       deletedAt: null,
     },

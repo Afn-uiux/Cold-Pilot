@@ -16,6 +16,10 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { title, dealId, dueDate } = await req.json();
   if (!title) return NextResponse.json({ error: "Title required" }, { status: 400 });
+  if (dealId) {
+    const deal = await prisma.deal.findFirst({ where: { id: dealId, userId: session.user.id }, select: { id: true } });
+    if (!deal) return NextResponse.json({ error: "Deal not found" }, { status: 404 });
+  }
   const task = await prisma.task.create({ data: { userId: session.user.id, title, dealId: dealId || null, dueDate: dueDate ? new Date(dueDate) : null } });
   return NextResponse.json(task);
 }

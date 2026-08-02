@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { sendEmailSafe } from "@/lib/email/send";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
@@ -11,23 +12,22 @@ export async function POST(req: Request) {
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    return NextResponse.json({ error: "No account found" }, { status: 404 });
-  }
-  if (user.emailVerified) {
-    return NextResponse.json({ message: "Already verified" });
+  if (!user || user.emailVerified) {
+    // Same response whether or not the account exists — avoids account enumeration.
+    return NextResponse.json({ message: "If an unverified account exists, a verification email was sent." });
   }
 
   const token = crypto.randomBytes(32).toString("hex");
-  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const expires = new Date(Date.now() + 15 * 60 * 1000);
 
   await prisma.verificationToken.create({
     data: { identifier: email, token, expires },
   });
 
-  // TODO: Send verification email with `token` when SMTP is available
-  // For now, return the token so it can be used manually
-  return NextResponse.json({ message: "Verification token generated", token });
+  const verifyUrl = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/auth/verify?token=${token}`;
+  sendEmailSafe(email, "email-verification", { verifyUrl });
+
+  return NextResponse.json({ message: "If an unverified account exists, a verification email was sent." });
 }
 
 export async function GET(req: Request) {
