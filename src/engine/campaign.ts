@@ -861,7 +861,9 @@ async function recordGmailSentActivity(account: any): Promise<number> {
     }
   }
 
-  return recordSentMessages(account, candidates);
+  const recorded = await recordSentMessages(account, candidates);
+  console.log(`[sent] Gmail scanned ${messages.length} sent messages for ${account.email}: ${candidates.length} candidates, ${recorded} recorded`);
+  return recorded;
 }
 
 // IMAP accounts (Yahoo, Outlook, custom servers): scan the Sent folder with
@@ -899,9 +901,16 @@ async function recordImapSentActivity(account: any): Promise<number> {
 
     const lock = await client.getMailboxLock(sentPath);
     const candidates: SentCandidate[] = [];
+    let scannedCount = 0;
     try {
-      const allUids = (await client.search({})) || [];
+      let allUids: number[] = [];
+      try {
+        allUids = (await client.search({ since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) })) || [];
+      } catch {
+        allUids = (await client.search({})) || [];
+      }
       const uids = allUids.slice(-1000);
+      scannedCount = uids.length;
       for await (const msg of client.fetch(uids, { uid: true, source: true })) {
         if (!msg.source) continue;
         let parsed;
@@ -934,7 +943,9 @@ async function recordImapSentActivity(account: any): Promise<number> {
       lock.release();
     }
 
-    return recordSentMessages(account, candidates);
+    const recorded = await recordSentMessages(account, candidates);
+    console.log(`[sent] IMAP scanned ${scannedCount} sent messages for ${account.email}: ${candidates.length} candidates, ${recorded} recorded`);
+    return recorded;
   } catch (err: any) {
     console.error(`[sent] IMAP sent-scan failed for ${account.email}:`, err?.message || err);
     return 0;
