@@ -900,10 +900,22 @@ async function recordImapSentActivity(account: any): Promise<number> {
     const candidates: SentCandidate[] = [];
     let scannedCount = 0;
     try {
-      const allUids = (await client.search({})) || [];
-      const uids = allUids.slice(-1000);
+      // Search with { uid: true } to get real UIDs (Gmail's UIDs are not
+      // contiguous with sequence numbers when messages are deleted) so the
+      // cursor comparison is valid. The cursor skips already-seen messages,
+      // making this scan cheap even on a large Sent folder.
+      const allUids = (await client.search({}, { uid: true })) || [];
+      const maxUid = allUids.length ? allUids[allUids.length - 1] : 0;
+      const lastUid = account.lastSentUid || 0;
+      let uids: number[] = allUids;
+      if (lastUid > 0) {
+        // If the folder was rebuilt (UIDVALIDITY change), uids drop below the
+        // cursor — rescan from scratch. Otherwise only new messages.
+        uids = maxUid < lastUid ? allUids : allUids.filter(u => u > lastUid);
+      }
       scannedCount = uids.length;
-      for await (const msg of client.fetch(uids, { uid: true, source: true })) {
+      let cursorUid = lastUid;
+      for await (const msg of client.fetch(uids, { source: true }, { uid: true })) {
         if (!msg.source) continue;
         let parsed;
         try {
@@ -911,6 +923,7 @@ async function recordImapSentActivity(account: any): Promise<number> {
         } catch {
           continue;
         }
+        if (msg.uid && msg.uid > cursorUid) cursorUid = msg.uid;
         const from = parsed.from?.text || "";
         if (!from.toLowerCase().includes(account.email.toLowerCase())) continue;
         const messageId = (parsed.messageId || "").replace(/[<>]/g, "").trim();
@@ -929,6 +942,12 @@ async function recordImapSentActivity(account: any): Promise<number> {
           to: toText,
           body: cleanReplyBody((parsed.text || (parsed.html ? parsed.html.replace(/<[^>]*>/g, " ") : "") || "").slice(0, 2000)),
           date: parsed.date || new Date(),
+        });
+      }
+      if (cursorUid > lastUid) {
+        await prisma.emailAccount.update({
+          where: { id: account.id },
+          data: { lastSentUid: cursorUid },
         });
       }
     } finally {

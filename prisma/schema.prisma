@@ -120,6 +120,7 @@ model EmailAccount {
   dailySendLimit    Int       @default(30)
   warmupStartedAt DateTime?
   lastHealthCheckAt DateTime?
+  lastSentUid      Int?
   status         String  @default("active")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
