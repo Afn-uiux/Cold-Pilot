@@ -722,12 +722,10 @@ type SentCandidate = {
 async function recordSentMessages(account: any, candidates: SentCandidate[]): Promise<number> {
   if (candidates.length === 0) return 0;
 
-  const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
-  const recentLogs = await prisma.emailLog.findMany({
+  const logs = await prisma.emailLog.findMany({
     where: {
       emailAccountId: account.id,
       messageId: { not: null },
-      sentAt: { gte: since },
     },
     select: { messageId: true, leadId: true, threadId: true },
     take: 10000,
@@ -737,7 +735,7 @@ async function recordSentMessages(account: any, candidates: SentCandidate[]): Pr
   const idToLead = new Map<string, { leadId: string; threadId: string | null }>();
   const knownIds = new Set<string>();
 
-  for (const log of recentLogs) {
+  for (const log of logs) {
     if (!log.messageId) continue;
     const key = normId(log.messageId);
     knownIds.add(key);
@@ -811,7 +809,6 @@ async function recordGmailSentActivity(account: any): Promise<number> {
       userId: "me",
       labelIds: ["SENT"],
       maxResults: 100,
-      q: "newer_than:3d",
     });
   } catch (err: any) {
     console.error(`[sent] Gmail sent-list failed for ${account.email}:`, err?.message || err);
@@ -903,12 +900,7 @@ async function recordImapSentActivity(account: any): Promise<number> {
     const candidates: SentCandidate[] = [];
     let scannedCount = 0;
     try {
-      let allUids: number[] = [];
-      try {
-        allUids = (await client.search({ since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) })) || [];
-      } catch {
-        allUids = (await client.search({})) || [];
-      }
+      const allUids = (await client.search({})) || [];
       const uids = allUids.slice(-1000);
       scannedCount = uids.length;
       for await (const msg of client.fetch(uids, { uid: true, source: true })) {
