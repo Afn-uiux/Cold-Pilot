@@ -55,10 +55,18 @@ export async function POST(req: NextRequest) {
       const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
       const fromName = account.displayName || account.email;
+      // Gmail's API response id is an internal identifier that never appears
+      // in the delivered message, so In-Reply-To/References on later sends
+      // (and Sent-folder mirroring) would never match it. Generate and set our
+      // own RFC Message-ID so the stored id equals the one actually sent —
+      // mirroring sendViaGmailApi in the campaign send path.
+      const domain = account.email.split("@").pop() || "coldpilot.local";
+      const generatedMessageId = normalizeMessageId(`${Date.now()}.${Math.random().toString(36).slice(2)}@${domain}`);
       const headers = [
         `From: ${fromName} <${account.email}>`,
         `To: ${lead.email}`,
         "MIME-Version: 1.0",
+        `Message-ID: ${generatedMessageId}`,
         "Content-Type: text/html; charset=utf-8",
         `Subject: ${subjectLine}`,
         `In-Reply-To: ${normalizeMessageId(lastLog?.messageId || "")}`,
@@ -71,11 +79,11 @@ export async function POST(req: NextRequest) {
         .replace(/\//g, "_")
         .replace(/=+$/, "");
 
-      const res = await gmail.users.messages.send({
+      await gmail.users.messages.send({
         userId: "me",
         requestBody: { raw, threadId: lastLog?.threadId || undefined },
       });
-      messageId = res.data.id!;
+      messageId = generatedMessageId;
     } else if (account.smtpHost && account.smtpUser && account.smtpPass) {
       // SMTP fallback
       const transporter = nodemailer.createTransport({

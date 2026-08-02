@@ -682,15 +682,265 @@ export async function checkForReplies(userId: string) {
   for (const account of accounts) {
     if (account.gmailToken) {
       replied += await checkGmailAccountReplies(account);
+      // Mirror replies/follow-ups the user sent from their real email app so
+      // Coldbox stays in sync with the actual conversation. Failure here must
+      // never break the reply/bounce checks, so it's guarded separately.
+      try { await recordGmailSentActivity(account); } catch (err: any) { console.error(`[sent] Gmail sent-scan failed for ${account.email}:`, err?.message || err); }
     } else if (account.imapHost && account.imapUser && account.imapPass) {
       replied += await checkImapAccountReplies(account);
       await checkImapAccountBounces(account);
+      try { await recordImapSentActivity(account); } catch (err: any) { console.error(`[sent] IMAP sent-scan failed for ${account.email}:`, err?.message || err); }
     } else {
       console.log(`[reply] Skipping ${account.email}: no gmailToken and no IMAP creds`);
     }
   }
 
   return { replied };
+}
+
+// A sent message from the user's real email app/site that continues a
+// conversation Coldpilot already tracks. `recordSentMessages` is the shared
+// matching + insert core; `recordGmailSentActivity` and `recordImapSentActivity`
+// feed it candidates from the Gmail SENT label / IMAP Sent folder.
+type SentCandidate = {
+  messageId: string;
+  threadId?: string | null;
+  inReplyTo: string;
+  references: string;
+  subject: string;
+  to: string;
+  body: string;
+  date: Date;
+};
+
+// Matches the user's out-of-app sent messages to leads we already track and
+// records them as outgoing email logs. Matching is strict: it only fires when
+// the message's In-Reply-To/References reference a message-id we already have
+// on file for this account (i.e. an existing campaign conversation). Dedup
+// skips any message whose own message-id is already logged, so Coldpilot's own
+// sends (campaign + Coldbox replies) are never double-recorded.
+async function recordSentMessages(account: any, candidates: SentCandidate[]): Promise<number> {
+  if (candidates.length === 0) return 0;
+
+  const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+  const recentLogs = await prisma.emailLog.findMany({
+    where: {
+      emailAccountId: account.id,
+      messageId: { not: null },
+      sentAt: { gte: since },
+    },
+    select: { messageId: true, leadId: true, threadId: true },
+    take: 10000,
+  });
+
+  const normId = (id: string) => id.replace(/[<>]/g, "").trim().toLowerCase();
+  const idToLead = new Map<string, { leadId: string; threadId: string | null }>();
+  const knownIds = new Set<string>();
+
+  for (const log of recentLogs) {
+    if (!log.messageId) continue;
+    const key = normId(log.messageId);
+    knownIds.add(key);
+    if (!idToLead.has(key)) {
+      idToLead.set(key, { leadId: log.leadId, threadId: log.threadId });
+    }
+  }
+
+  let recorded = 0;
+  const seenThisBatch = new Set<string>();
+
+  for (const c of candidates) {
+    const cid = normId(c.messageId);
+    if (!cid || knownIds.has(cid) || seenThisBatch.has(cid)) continue;
+
+    // Match strictly via threading headers against known logs — a message only
+    // counts if it continues a conversation we already track.
+    const refText = `${c.inReplyTo || ""} ${c.references || ""}`;
+    let match: { leadId: string; threadId: string | null } | null = null;
+    const refTokens = refText.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g) || [];
+    for (const tok of refTokens) {
+      const hit = idToLead.get(normId(tok));
+      if (hit) { match = hit; break; }
+    }
+    // Fallback: same substring scan the reply checkers use, for message-ids
+    // whose local part contains characters our token regex skips.
+    if (!match) {
+      const refLower = refText.toLowerCase();
+      for (const [key, val] of idToLead) {
+        if (refLower.includes(key)) { match = val; break; }
+      }
+    }
+    if (!match) continue;
+
+    await prisma.emailLog.create({
+      data: {
+        leadId: match.leadId,
+        emailAccountId: account.id,
+        type: "outgoing",
+        status: "sent",
+        subject: c.subject || "No subject",
+        bodyHtml: c.body || "",
+        messageId: c.messageId,
+        threadId: c.threadId || match.threadId || null,
+        sentAt: c.date || new Date(),
+      },
+    });
+    recorded++;
+    seenThisBatch.add(cid);
+  }
+
+  if (recorded > 0) {
+    console.log(`[sent] recorded ${recorded} out-of-app reply(ies) for ${account.email}`);
+  }
+  return recorded;
+}
+
+// Gmail accounts: list the SENT label and match against tracked threads.
+async function recordGmailSentActivity(account: any): Promise<number> {
+  const { google } = await import("googleapis");
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  );
+  oauth2Client.setCredentials({ refresh_token: account.gmailToken });
+  const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+  let listRes;
+  try {
+    listRes = await gmail.users.messages.list({
+      userId: "me",
+      labelIds: ["SENT"],
+      maxResults: 100,
+      q: "newer_than:3d",
+    });
+  } catch (err: any) {
+    console.error(`[sent] Gmail sent-list failed for ${account.email}:`, err?.message || err);
+    return 0;
+  }
+  const messages = listRes.data.messages || [];
+  if (messages.length === 0) return 0;
+
+  const candidates: SentCandidate[] = [];
+  for (const m of messages) {
+    if (!m.id) continue;
+    try {
+      const full = await gmail.users.messages.get({ userId: "me", id: m.id, format: "full" });
+      const headers = full.data.payload?.headers || [];
+      const getHeader = (name: string) => headers.find(h => h.name?.toLowerCase() === name)?.value || "";
+
+      const messageId = getHeader("message-id").replace(/[<>]/g, "").trim();
+      if (!messageId) continue;
+      const from = getHeader("from");
+      if (!from.toLowerCase().includes(account.email.toLowerCase())) continue;
+
+      let body = "";
+      const payload = full.data.payload;
+      if (payload?.parts) {
+        const textPart = payload.parts.find(p => p.mimeType === "text/plain")
+          || payload.parts.find(p => p.mimeType === "text/html");
+        if (textPart?.body?.data) body = Buffer.from(textPart.body.data, "base64url").toString("utf-8");
+      } else if (payload?.body?.data) {
+        body = Buffer.from(payload.body.data, "base64url").toString("utf-8");
+      }
+      if (!body) body = full.data.snippet || "";
+
+      const date = full.data.internalDate ? new Date(parseInt(full.data.internalDate, 10)) : new Date();
+
+      candidates.push({
+        messageId,
+        threadId: full.data.threadId || null,
+        inReplyTo: getHeader("in-reply-to"),
+        references: getHeader("references"),
+        subject: getHeader("subject"),
+        to: getHeader("to"),
+        body: cleanReplyBody(body.slice(0, 2000)),
+        date,
+      });
+    } catch (err: any) {
+      console.error(`[sent] Gmail message fetch failed for ${account.email} (${m.id}):`, err?.message || err);
+    }
+  }
+
+  return recordSentMessages(account, candidates);
+}
+
+// IMAP accounts (Yahoo, Outlook, custom servers): scan the Sent folder with
+// the same matching/insert core.
+async function recordImapSentActivity(account: any): Promise<number> {
+  const client = new ImapFlow({
+    host: account.imapHost,
+    port: account.imapPort || 993,
+    secure: (account.imapPort || 993) === 993,
+    auth: { user: account.imapUser, pass: account.imapPass },
+    logger: false,
+  });
+
+  try {
+    await client.connect();
+    const mailboxes = await client.list();
+    let sentPath = "";
+    for (const mb of mailboxes) {
+      if (mb.specialUse === "\\Sent") { sentPath = mb.path; break; }
+    }
+    if (!sentPath) {
+      const commonSentNames = ["sent", "sent items", "sent mail", "[gmail]/sent mail"];
+      for (const mb of mailboxes) {
+        const name = (mb.name || mb.path || "").toLowerCase();
+        if (commonSentNames.includes(name) || commonSentNames.includes(mb.path.toLowerCase())) {
+          sentPath = mb.path;
+          break;
+        }
+      }
+    }
+    if (!sentPath) {
+      console.log(`[sent] IMAP no Sent folder found for ${account.email}`);
+      return 0;
+    }
+
+    const lock = await client.getMailboxLock(sentPath);
+    const candidates: SentCandidate[] = [];
+    try {
+      const allUids = (await client.search({})) || [];
+      const uids = allUids.slice(-1000);
+      for await (const msg of client.fetch(uids, { uid: true, source: true })) {
+        if (!msg.source) continue;
+        let parsed;
+        try {
+          parsed = await simpleParser(msg.source);
+        } catch {
+          continue;
+        }
+        const from = parsed.from?.text || "";
+        if (!from.toLowerCase().includes(account.email.toLowerCase())) continue;
+        const messageId = (parsed.messageId || "").replace(/[<>]/g, "").trim();
+        if (!messageId) continue;
+        const references = Array.isArray(parsed.references)
+          ? parsed.references.join(" ")
+          : (parsed.references || "");
+        const toText = Array.isArray(parsed.to)
+          ? parsed.to.map(t => t.text).join(", ")
+          : (parsed.to?.text || "");
+        candidates.push({
+          messageId,
+          inReplyTo: parsed.inReplyTo || "",
+          references,
+          subject: parsed.subject || "",
+          to: toText,
+          body: cleanReplyBody((parsed.text || (parsed.html ? parsed.html.replace(/<[^>]*>/g, " ") : "") || "").slice(0, 2000)),
+          date: parsed.date || new Date(),
+        });
+      }
+    } finally {
+      lock.release();
+    }
+
+    return recordSentMessages(account, candidates);
+  } catch (err: any) {
+    console.error(`[sent] IMAP sent-scan failed for ${account.email}:`, err?.message || err);
+    return 0;
+  } finally {
+    try { await client.logout(); } catch {}
+  }
 }
 
 // Yahoo (and several other providers) accept a message at SMTP time with a
