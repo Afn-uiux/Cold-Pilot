@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
+import { assertLeadCapacity, PlanLimitError } from "@/lib/credits";
 
 const KNOWN_FIELDS = [
   "email", "e-mail", "email address", "mail", "emails", "email addresses", "e mail", "e_mail",
@@ -341,6 +342,15 @@ export async function POST(req: Request) {
 
     if (!Array.isArray(leads) || leads.length === 0) return NextResponse.json({ error: "No leads provided" }, { status: 400 });
 
+    try {
+      await assertLeadCapacity(userId, leads.length);
+    } catch (err) {
+      if (err instanceof PlanLimitError) {
+        return NextResponse.json({ error: err.message, code: err.code }, { status: 402 });
+      }
+      throw err;
+    }
+
     const seenEmails = new Set<string>();
     let imported = 0, errors = 0, skipped = 0, firstError = "";
     const duplicateEmails: string[] = [];
@@ -406,6 +416,7 @@ export async function POST(req: Request) {
   const csvSeenEmails = new Set<string>();
   let imported = 0, errors = 0, skipped = 0, firstError = "";
   const duplicateEmails: string[] = [];
+  const csvRows: { email: string; leadRow: ReturnType<typeof mapRowToLead> }[] = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i], delim);
     const email = emailIdx >= 0 ? cols[emailIdx] : "";
@@ -413,9 +424,19 @@ export async function POST(req: Request) {
     const normalized = email.trim().toLowerCase();
     if (csvSeenEmails.has(normalized)) { duplicateEmails.push(normalized); continue; }
     csvSeenEmails.add(normalized);
+    csvRows.push({ email: normalized, leadRow: mapRowToLead(headers, cols, originalHeaders3, emailIdx) });
+  }
 
-    const leadRow = mapRowToLead(headers, cols, originalHeaders3, emailIdx);
+  try {
+    await assertLeadCapacity(userId, csvRows.length);
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 402 });
+    }
+    throw err;
+  }
 
+  for (const { email: normalized, leadRow } of csvRows) {
     try {
       await prisma.lead.create({
         data: {

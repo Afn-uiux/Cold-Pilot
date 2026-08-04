@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { getPlan, CREDIT_COSTS } from "@/lib/plans";
+import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
 const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -34,7 +37,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { plan: true },
+  });
+  const plan = getPlan(user?.plan);
+
+  if (!plan.aiEnabled) {
+    return NextResponse.json(
+      {
+        error: "AI writing is included on paid plans. Upgrade to unlock it.",
+        code: "PLAN_REQUIRED",
+      },
+      { status: 402 }
+    );
+  }
+
   const { action, text, context } = await req.json();
+
+  try {
+    await spendCredits(session.user.id, CREDIT_COSTS.ai, "ai", action);
+  } catch (err) {
+    if (err instanceof InsufficientCreditsError) {
+      return NextResponse.json(
+        {
+          error: `Insufficient credits. Each AI generation costs ${CREDIT_COSTS.ai} credits and you have ${err.balance}. Top up credits or upgrade your plan.`,
+          code: "INSUFFICIENT_CREDITS",
+          balance: err.balance,
+          required: CREDIT_COSTS.ai,
+        },
+        { status: 402 }
+      );
+    }
+    throw err;
+  }
 
   if (DEEPSEEK_API_KEY) {
     try {

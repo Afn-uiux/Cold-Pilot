@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
 import { encryptAccount, encrypt } from "@/lib/crypto";
+import { assertInboxCapacity, PlanLimitError } from "@/lib/credits";
 
 const IMAP_DEFAULTS: Record<string, { host: string; port: number }> = {
   gmail: { host: "imap.gmail.com", port: 993 },
@@ -162,6 +163,15 @@ export async function POST(req: Request) {
   const { email, provider, smtpHost, smtpPort, smtpUser, smtpPass, imapHost, imapPort, imapUser, imapPass, gmailToken, dailySendLimit, displayName } = body;
 
   if (!email || !provider) return NextResponse.json({ error: "Email and provider are required" }, { status: 400 });
+
+  try {
+    await assertInboxCapacity(session.user.id);
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 402 });
+    }
+    throw err;
+  }
 
   const existing = await prisma.emailAccount.findFirst({
     where: { email, userId: session.user.id },

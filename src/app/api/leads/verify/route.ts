@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { verifyEmail, type SmtpConfig } from "@/lib/verify";
 import { decryptAccount } from "@/lib/crypto";
+import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
+import { CREDIT_COSTS } from "@/lib/plans";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -30,6 +32,24 @@ export async function POST(req: Request) {
   }
 
   if (leads.length === 0) return NextResponse.json({ error: "No leads found" }, { status: 404 });
+
+  const creditCost = leads.length * CREDIT_COSTS.verification;
+  try {
+    await spendCredits(userId, creditCost, "verification", campaignId || leadIds?.[0]);
+  } catch (err) {
+    if (err instanceof InsufficientCreditsError) {
+      return NextResponse.json(
+        {
+          error: `Insufficient credits. Verifying ${leads.length} leads costs ${creditCost} credits and you have ${err.balance}. Top up credits or upgrade your plan.`,
+          code: "INSUFFICIENT_CREDITS",
+          balance: err.balance,
+          required: creditCost,
+        },
+        { status: 402 }
+      );
+    }
+    throw err;
+  }
 
   let smtpConfig: SmtpConfig | undefined;
   const targetCampaignId = campaignId || leads[0]?.campaignId;

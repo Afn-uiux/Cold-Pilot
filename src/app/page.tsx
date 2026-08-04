@@ -143,7 +143,7 @@ export default async function Home() {
           <div className="nav-links">
             <a href="#product">Product</a>
             <a href="#how">How it works</a>
-            <a href="#pricing">Pricing</a>
+            <Link href="/pricing">Pricing</Link>
             <a href="#compare">Compare</a>
           </div>
           <div className="nav-actions">
@@ -163,7 +163,7 @@ export default async function Home() {
           </button>
           <a href="#product" className="mobile-link">Product</a>
           <a href="#how" className="mobile-link">How it works</a>
-          <a href="#pricing" className="mobile-link">Pricing</a>
+          <Link href="/pricing" className="mobile-link">Pricing</Link>
           <a href="#compare" className="mobile-link">Compare</a>
           <Link href="/auth/login" className="mobile-link">Log in</Link>
           <Link href="/auth/signup" className="btn">Start free</Link>
@@ -176,7 +176,7 @@ export default async function Home() {
           <h1>Reach more inboxes.<br /><em style={{fontStyle:"italic"}}>Skip the spam folder.</em></h1>
           <p className="hero-desc">Coldpilot warms your inbox, rotates sends, and stops when someone replies — so your outreach lands where it should.</p>
           <div className="hero-cta">
-            <Link href="/auth/signup" className="btn">Start for free</Link>
+            <Link href="/auth/signup" className="btn">Start free</Link>
             <a href="#how" className="text-link">See how it works</a>
           </div>
           <div className="hero-facts">
@@ -379,9 +379,9 @@ export default async function Home() {
             <h2>Built for one person running outreach</h2>
           </div>
           <div className="why-grid">
-            <div className="why-item"><h3>One flat price</h3><p>Free to start, unlimited volume. No credits, no per-lead charges.</p></div>
-            <div className="why-item"><h3>No contracts</h3><p>Month to month. Pause anytime, nothing to negotiate.</p></div>
-            <div className="why-item"><h3>Built for one person</h3><p>No seats, no roles, no admin console.</p></div>
+            <div className="why-item"><h3>Half the price</h3><p>Roughly half of what comparable tools charge for the same feature set.</p></div>
+            <div className="why-item"><h3>No add-on tax</h3><p>AI and email verification included on every paid plan — not upsold as separate products.</p></div>
+            <div className="why-item"><h3>Unlimited inboxes</h3><p>Every paid plan connects as many inboxes as you want. No per-mailbox fees.</p></div>
             <div className="why-item"><h3>Deliverability first</h3><p>Warm-up and rotation included by default, not an upgrade tier.</p></div>
             <div className="why-item"><h3>Gmail &amp; Outlook</h3><p>Connect your real inbox in minutes. No forwarding tricks.</p></div>
             <div className="why-item"><h3>A person replies</h3><p>Support from someone who built the product, not a ticket queue.</p></div>
@@ -428,30 +428,32 @@ export default async function Home() {
         <div className="wrap">
           <div className="sec-head center">
             <span className="label">Pricing</span>
-            <h2>One plan. Everything included.</h2>
+            <h2>Pro features. Half the price.</h2>
+            <p>Unlimited inboxes on every paid plan. AI and verification included — not sold as add-ons.</p>
           </div>
-          <div className="pricing-layout">
+          <div className="pricing-layout" id="compare">
             <div className="price-main">
               <span className="label">Coldpilot</span>
-              <div className="amount" style={{fontFamily:"'Geist',system-ui,sans-serif",fontSize:"clamp(56px,10vw,80px)",lineHeight:1,marginTop:16}}>Free</div>
-              <p className="desc">Unlimited inboxes, sequences, and leads. No usage tiers to outgrow.</p>
+              <div className="amount" style={{fontFamily:"'Geist',system-ui,sans-serif",fontSize:"clamp(56px,10vw,80px)",lineHeight:1,marginTop:16}}>$19<span style={{fontSize:"clamp(16px,2vw,20px)",fontFamily:"'JetBrains Mono',monospace",color:"var(--muted-2)"}}> /mo</span></div>
+              <p className="desc">Starter — 5,000 leads, unlimited inboxes, and 1,000 verifications a month. For one person running outreach.</p>
               <ul className="price-includes">
                 <li>Unlimited connected inboxes</li>
                 <li>Automatic warm-up on every account</li>
-                <li>Unlimited leads and sequences</li>
+                <li>AI email generation</li>
                 <li>Reply detection and auto-stop</li>
                 <li>Deliverability checks before every send</li>
               </ul>
-              <Link href="/auth/signup" className="btn" style={{marginTop:36,display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",fontSize:14,fontWeight:500,padding:"13px 26px",borderRadius:6,border:"none",cursor:"pointer",background:"var(--blue)",color:"#fff",textDecoration:"none"}}>Start sending</Link>
+              <Link href="/auth/signup" className="btn" style={{marginTop:36,display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",fontSize:14,fontWeight:500,padding:"13px 26px",borderRadius:6,border:"none",cursor:"pointer",background:"var(--blue)",color:"#fff",textDecoration:"none"}}>Start free</Link>
             </div>
-            <div id="compare">
-              <span className="label">How it compares</span>
+            <div>
+              <span className="label">Every tier</span>
               <ul className="compare-list" style={{marginTop:16}}>
-                <li className="compare-row highlight"><div><div className="name">Coldpilot</div><div className="desc">One plan, unlimited everything</div></div><div className="cost">Free</div></li>
-                <li className="compare-row"><div><div className="name">Instantly</div><div className="desc">Entry plan caps contacts; leads and CRM billed separately</div></div><div className="cost">~$37/mo</div></li>
-                <li className="compare-row"><div><div className="name">Smartlead</div><div className="desc">Entry tier limited to 2,000 active leads</div></div><div className="cost">~$39/mo</div></li>
+                <li className="compare-row"><div><div className="name">Free</div><div className="desc">2 inboxes · 300 leads · 300 verifications / mo</div></div><div className="cost">$0</div></li>
+                <li className="compare-row highlight"><div><div className="name">Starter</div><div className="desc">Unlimited inboxes · 5,000 leads · 1,000 verifications / mo</div></div><div className="cost">$19</div></li>
+                <li className="compare-row"><div><div className="name">Pro</div><div className="desc">Unlimited inboxes · 30,000 leads · 5,000 verifications / mo</div></div><div className="cost">$49</div></li>
+                <li className="compare-row"><div><div className="name">Agency</div><div className="desc">Unlimited inboxes · 150,000 leads · white-label &amp; API</div></div><div className="cost">$99</div></li>
               </ul>
-              <p className="compare-note">Competitor pricing is publicly listed entry pricing as of 2026. Most setups need a higher tier or add-ons. Coldpilot is free to start.</p>
+              <p className="compare-note">AI and verification included in every paid plan — no separate add-on costs. See the full <Link href="/pricing" className="feat-link" style={{display:"inline-flex",alignItems:"center",gap:4}}>pricing<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:13,height:13}}><path d="M9 6l6 6-6 6"/></svg></Link>.</p>
             </div>
           </div>
         </div>
@@ -470,7 +472,7 @@ export default async function Home() {
           <h2>Connect an inbox.<br />Send your first sequence today.</h2>
           <p>Free to start, cancel anytime. No credit card needed.</p>
           <div className="cta-actions">
-            <Link href="/auth/signup" className="btn">Start for free</Link>
+            <Link href="/auth/signup" className="btn">Start free</Link>
             <a href="#how" className="text-link">See how it works</a>
           </div>
         </div>
@@ -481,8 +483,8 @@ export default async function Home() {
           <div className="foot-top">
             <div className="foot-brand"><div className="logo">Coldpilot</div><p>Cold email for solo founders. One flat price, nothing bolted on.</p></div>
             <div className="foot-links">
-              <div className="foot-col"><h4>Product</h4><ul><li><a href="#product">Features</a></li><li><a href="#how">How it works</a></li><li><a href="#pricing">Pricing</a></li></ul></div>
-              <div className="foot-col"><h4>Company</h4><ul><li><Link href="/about">About</Link></li><li><a href="mailto:hello@coldpilot.io">Contact</a></li></ul></div>
+              <div className="foot-col"><h4>Product</h4><ul><li><a href="#product">Features</a></li><li><a href="#how">How it works</a></li><li><Link href="/pricing">Pricing</Link></li></ul></div>
+              <div className="foot-col"><h4>Company</h4><ul><li><Link href="/about">About</Link></li><li><Link href="/contact">Contact</Link></li></ul></div>
               <div className="foot-col"><h4>Legal</h4><ul><li><Link href="/legal/privacy">Privacy</Link></li><li><Link href="/legal/terms">Terms</Link></li></ul></div>
             </div>
           </div>

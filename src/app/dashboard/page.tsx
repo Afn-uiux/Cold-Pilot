@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CampaignRow } from "@/components/campaign-row";
+import CreditBadge from "@/components/credit-badge";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -38,7 +39,10 @@ export default async function DashboardPage() {
           <h1 className="font-medium text-[clamp(28px,3.5vw,36px)] font-normal tracking-tight leading-tight">Overview</h1>
           <p className="text-sm text-muted mt-1.5">Your outreach at a glance.</p>
         </div>
-        <Link href="/dashboard/campaigns" className="btn btn-primary">New campaign</Link>
+        <div className="flex items-center gap-4">
+          <CreditBadge />
+          <Link href="/dashboard/campaigns" className="btn btn-primary">New campaign</Link>
+        </div>
       </header>
 
       <div className="px-6 lg:px-10 pt-7 pb-16">

@@ -17,6 +17,9 @@ model User {
   role                String   @default("user")
   completedOnboarding Boolean  @default(false)
   totpSecret          String?
+  plan                String   @default("free")
+  creditBalance       Float    @default(0)
+  creditCycleStart    DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -34,6 +37,7 @@ model User {
   suppressions  Suppression[]
   accounts      Account[]
   sessions      Session[]
+  creditTransactions CreditTransaction[]
 }
 
 model Account {
@@ -462,4 +466,20 @@ model SchedulerLock {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Credit ledger. Every action that costs credits writes a row here so users
+// can see exactly where their balance went. amount is positive for credits
+// granted/purchased and negative for spending.
+model CreditTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Float
+  reason    String
+  refId     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

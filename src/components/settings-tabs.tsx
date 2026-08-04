@@ -1,14 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import ApiKeysSection from "@/components/api-keys-section";
 import WebhooksSection from "@/components/webhooks-section";
 import IntegrationsSection from "@/components/integrations-section";
+import BillingSection from "@/components/billing-section";
 
 const TABS = ["Profile", "Team", "Billing", "Integrations", "API Keys"];
 
 export default function SettingsTabs({ user }: { user: { name: string | null; email: string | null; image: string | null; createdAt: Date } }) {
-  const [activeTab, setActiveTab] = useState("Profile");
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "Profile");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -114,10 +117,7 @@ export default function SettingsTabs({ user }: { user: { name: string | null; em
             )}
 
             {activeTab === "Billing" && (
-              <div className="card">
-                <div className="card-header"><h3>Billing</h3></div>
-                <p className="text-sm text-muted">No billing information yet. To set up billing, sign up at lemonsqueezy.com and I'll help you configure it.</p>
-              </div>
+              <BillingSection />
             )}
 
             {activeTab === "Integrations" && (
