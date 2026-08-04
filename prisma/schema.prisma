@@ -19,7 +19,7 @@ model User {
   totpSecret          String?
   plan                String   @default("free")
   creditBalance       Float    @default(0)
-  creditCycleStart    DateTime?
+  signupCreditsGranted Boolean @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

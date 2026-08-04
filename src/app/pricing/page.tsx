@@ -1,20 +1,23 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 
 const tiers = [
   {
     name: "Free",
-    price: "$0",
+    monthly: 0,
     period: "forever",
     tagline: "Try the full engine before you pay.",
     leads: "300 active leads",
     inboxes: "2 connected inboxes",
-    verification: "300 verifications / mo",
+    verification: "1,000 free credits",
     cta: "Start free",
     highlight: false,
     features: [
       "2 connected inboxes",
       "300 active leads",
-      "300 verifications / month",
+      "1,000 free credits on signup",
       "Warm-up on your account",
       "Multi-step sequences",
       "Reply detection & auto-stop",
@@ -22,37 +25,35 @@ const tiers = [
   },
   {
     name: "Starter",
-    price: "$19",
-    period: "/ month",
+    monthly: 19,
+    period: "/month",
     tagline: "Unlimited inboxes. The real upgrade over the free tier.",
     leads: "5,000 active leads",
     inboxes: "Unlimited inboxes",
-    verification: "1,000 verifications / mo",
+    verification: "1,000 free credits",
     cta: "Start with Starter",
     highlight: false,
     features: [
       "Unlimited connected inboxes",
       "5,000 active leads",
-      "1,000 verifications / month",
-      "AI email generation",
+      "AI email writing",
       "Multi-inbox rotation",
       "Deliverability checks on every send",
     ],
   },
   {
     name: "Pro",
-    price: "$49",
-    period: "/ month",
+    monthly: 49,
+    period: "/month",
     tagline: "For teams sending real volume. Half the price of the equivalent.",
     leads: "30,000 active leads",
     inboxes: "Unlimited inboxes",
-    verification: "5,000 verifications / mo",
+    verification: "1,000 free credits",
     cta: "Go Pro",
     highlight: true,
     features: [
       "Everything in Starter",
       "30,000 active leads",
-      "5,000 verifications / month",
       "AI personalization at scale",
       "Smart scheduling & pacing",
       "Priority support",
@@ -60,18 +61,17 @@ const tiers = [
   },
   {
     name: "Agency",
-    price: "$99",
-    period: "/ month",
+    monthly: 99,
+    period: "/month",
     tagline: "White-label, API access, and room for every client you'll take on.",
     leads: "150,000 active leads",
     inboxes: "Unlimited inboxes",
-    verification: "20,000 verifications / mo",
+    verification: "1,000 free credits",
     cta: "Go Agency",
     highlight: false,
     features: [
       "Everything in Pro",
       "150,000 active leads",
-      "20,000 verifications / month",
       "White-label branding",
       "API & webhooks",
       "Workspace seats & roles",
@@ -86,7 +86,40 @@ const creditPacks = [
   { credits: "10,000 credits", price: "$100", per: "$0.010 / credit" },
 ];
 
+const faqs = [
+  {
+    q: 'What does "unlimited inboxes" mean?',
+    a: "Connect as many Gmail, Outlook, or SMTP accounts as you want on every paid plan. Sends rotate across all of them automatically.",
+  },
+  {
+    q: "What happens when I run out of credits?",
+    a: "Campaigns keep running — only new verification and AI generation pause until you buy a credit pack. Verification costs 0.25 credits per check and credits never expire.",
+  },
+  {
+    q: "What is a credit worth?",
+    a: "One credit is one unit of usage. Verifying an email costs 0.25 credits, an AI email generation costs 2 credits. Every account gets 1,000 credits free on signup; after that, credit packs start at 100 credits for $5.",
+  },
+  {
+    q: "Is there a free trial?",
+    a: "The Free plan is a permanent trial: 2 inboxes and 300 leads forever, plus 1,000 free credits on signup. Upgrade only when you need more.",
+  },
+  {
+    q: "Can I switch plans or cancel?",
+    a: "Yes, any time. Downgrade or cancel in one click — no contracts, no retention flow. Yearly billing saves you two months.",
+  },
+];
+
+const Check = () => (
+  <svg fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24" className="check">
+    <path d="M20 6L9 17l-5-5" />
+  </svg>
+);
+
 export default function PricingPage() {
+  const [view, setView] = useState<"plans" | "credits">("plans");
+  const [yearly, setYearly] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
+
   return (
     <div className="pricing-root">
       <style>{`
@@ -109,66 +142,89 @@ export default function PricingPage() {
         .hero{padding:clamp(48px,8vw,88px) 0 0;text-align:center}
         .hero h1{font-family:"Instrument Serif",Georgia,serif;font-size:clamp(40px,6vw,60px);font-weight:400;line-height:1.08;letter-spacing:-.02em;margin-top:20px}
         .hero-desc{margin:24px auto 0;font-size:17px;max-width:560px;color:var(--muted);line-height:1.7}
-        .hero-note{margin-top:32px;font-size:13px;color:var(--muted-2);line-height:1.8}
-        .tiers{padding:clamp(48px,8vw,72px) 0 0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:stretch}
+        .hero-note{margin-top:24px;font-size:13px;color:var(--muted-2);line-height:1.8}
+
+        .pricing-toggle{display:flex;justify-content:center;gap:4px;margin:44px auto 0;max-width:420px;background:var(--cream-2);border:1px solid var(--border);border-radius:12px;padding:4px}
+        .pricing-toggle button{flex:1;padding:11px 0;border:none;background:transparent;border-radius:9px;font-family:inherit;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;transition:.2s}
+        .pricing-toggle button:hover{color:var(--ink)}
+        .pricing-toggle button.active{background:#fff;color:var(--ink);box-shadow:0 2px 10px rgba(15,13,20,0.09)}
+        .billing-toggle{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:24px;font-size:13px;color:var(--muted)}
+        .switch{position:relative;display:inline-block;width:44px;height:24px;vertical-align:middle}
+        .switch input{opacity:0;width:0;height:0}
+        .slider{position:absolute;cursor:pointer;inset:0;background:#d3d1d9;transition:.3s;border-radius:24px}
+        .slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;bottom:3px;background:#fff;transition:.3s;border-radius:50%}
+        input:checked + .slider{background:var(--blue)}
+        input:checked + .slider:before{transform:translateX(20px)}
+        .saving{color:var(--blue);font-weight:500}
+        .billing-label{font-weight:500}
+        .billing-label.active{color:var(--ink);font-weight:600}
+
+        .tiers{padding:clamp(40px,6vw,56px) 0 0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:stretch}
         @media(max-width:960px){.tiers{grid-template-columns:1fr 1fr}}
         @media(max-width:600px){.tiers{grid-template-columns:1fr}}
-        .tier{border:1px solid var(--border);border-radius:14px;padding:28px 24px;display:flex;flex-direction:column;gap:18px;background:#fff}
-        .tier.highlight{border-color:var(--blue);box-shadow:0 8px 30px rgba(37,99,235,0.10);position:relative}
-        .tier-badge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--blue);color:#fff;font-size:11px;font-weight:500;letter-spacing:.06em;padding:5px 14px;border-radius:999px}
+        .tier{border:1px solid var(--border);border-radius:14px;padding:28px 24px;display:flex;flex-direction:column;gap:18px;background:#fff;transition:transform .25s,box-shadow .25s}
+        .tier:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(15,13,20,0.08)}
+        .tier.highlight{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 12px 36px rgba(37,99,235,0.22)}
+        .tier.highlight:hover{transform:translateY(-4px);box-shadow:0 18px 44px rgba(37,99,235,0.30)}
         .tier .name{font-family:"Instrument Serif",serif;font-size:20px}
+        .tier.highlight .name{color:#fff}
         .tier .tagline{font-size:13px;color:var(--muted);line-height:1.6;min-height:42px}
+        .tier.highlight .tagline{color:rgba(255,255,255,0.85)}
         .tier .amount{font-family:"Instrument Serif",serif;font-size:44px;line-height:1}
+        .tier.highlight .amount{color:#fff}
         .tier .period{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted-2)}
+        .tier.highlight .period{color:rgba(255,255,255,0.8)}
         .tier .limits{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--ink)}
+        .tier.highlight .limits{color:#fff}
         .tier .limits b{font-weight:500}
         .tier ul{list-style:none;display:flex;flex-direction:column;gap:9px;border-top:1px solid var(--border);padding-top:16px}
-        .tier li{font-size:13px;color:var(--muted);padding-left:20px;position:relative;line-height:1.5}
-        .tier li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:var(--blue)}
+        .tier.highlight ul{border-color:rgba(255,255,255,0.25)}
+        .tier li{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--muted);line-height:1.5}
+        .tier.highlight li{color:rgba(255,255,255,0.9)}
+        .tier .check{width:14px;height:14px;flex-shrink:0;margin-top:3px;color:var(--blue)}
+        .tier.highlight .check{color:#fff}
         .tier .btn{margin-top:auto;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:14px;font-weight:500;padding:13px 18px;border-radius:8px;border:none;cursor:pointer;background:var(--cream-2);color:var(--ink);transition:background .2s}
         .tier .btn:hover{background:var(--border)}
-        .tier.highlight .btn{background:var(--blue);color:#fff}
-        .tier.highlight .btn:hover{background:var(--blue-hover)}
+        .tier.highlight .btn{background:#fff;color:var(--blue)}
+        .tier.highlight .btn:hover{background:#eef2ff}
+
         .section{padding:clamp(80px,10vw,120px) 0;border-bottom:1px solid var(--border)}
         .sec-head{max-width:520px;margin-bottom:clamp(40px,6vw,56px)}
         .sec-head.center{text-align:center;margin-left:auto;margin-right:auto}
         .sec-head h2{font-family:"Instrument Serif",Georgia,serif;font-size:clamp(30px,4.5vw,44px);font-weight:400;line-height:1.08;letter-spacing:-.02em;margin-top:16px}
         .sec-head p{margin-top:14px;font-size:16px;color:var(--muted);line-height:1.7}
-        .compare-wrap{overflow-x:auto}
-        table{width:100%;border-collapse:collapse;min-width:640px}
-        th{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-2);text-align:left;padding:14px 16px;border-bottom:1px solid var(--border)}
-        td{padding:18px 16px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:top}
-        tr:last-child td{border-bottom:none}
-        td.feature{font-weight:500;color:var(--ink)}
-        td .plan-name{font-weight:500}
-        td .plan-price{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted)}
-        td .plan-note{font-size:12px;color:var(--muted-2);margin-top:3px;line-height:1.5}
-        .coldpilot-col{background:rgba(37,99,235,0.04)}
-        .coldpilot-col .plan-name{color:var(--blue)}
-        .compare-note{font-size:12px;color:var(--muted-2);margin-top:20px;line-height:1.6}
-        .faq{max-width:640px;margin:0 auto}
-        .faq-item{padding:24px 0;border-top:1px solid var(--border)}
-        .faq-item:last-child{border-bottom:1px solid var(--border)}
-        .faq-item h3{font-size:16px;font-weight:500;margin-bottom:8px}
-        .faq-item p{font-size:14px;color:var(--muted);line-height:1.7}
         .packs{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
         @media(max-width:960px){.packs{grid-template-columns:1fr 1fr}}
         @media(max-width:600px){.packs{grid-template-columns:1fr}}
-        .pack{border:1px solid var(--border);border-radius:14px;padding:24px;background:#fff;display:flex;flex-direction:column;gap:8px}
+        .pack{border:1px solid var(--border);border-radius:14px;padding:24px;background:#fff;display:flex;flex-direction:column;gap:8px;transition:transform .25s,box-shadow .25s}
+        .pack:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(15,13,20,0.08)}
         .pack .pack-credits{font-family:"Instrument Serif",serif;font-size:22px}
         .pack .pack-price{font-family:"Instrument Serif",serif;font-size:30px}
         .pack .pack-per{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted-2)}
         .credit-costs{display:flex;gap:14px;flex-wrap:wrap;margin-top:28px}
         .credit-cost{border:1px solid var(--border);border-radius:10px;padding:14px 18px;font-size:13px;color:var(--muted);background:#fff}
         .credit-cost b{color:var(--ink);font-weight:500}
-        .cta{padding:clamp(80px,10vw,120px) 0;text-align:center}
-        .cta-inner{max-width:520px;margin:0 auto}
-        .cta h2{font-family:"Instrument Serif",Georgia,serif;font-size:clamp(30px,4.5vw,44px);font-weight:400;line-height:1.08;letter-spacing:-.02em;margin-top:16px}
-        .cta p{margin-top:16px;font-size:16px;color:var(--muted);line-height:1.7}
-        .cta-actions{display:flex;align-items:center;justify-content:center;gap:24px;margin-top:36px;flex-wrap:wrap}
-        .cta .btn{display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:14px;font-weight:500;padding:13px 26px;border-radius:6px;border:none;cursor:pointer;background:var(--blue);color:#fff;transition:background .2s}
-        .cta .btn:hover{background:var(--blue-hover)}
-        .text-link{font-size:15px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:2px}
+
+        .faq{max-width:640px;margin:0 auto}
+        .faq-item{border-top:1px solid var(--border)}
+        .faq-item:last-child{border-bottom:1px solid var(--border)}
+        .faq-question{width:100%;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:22px 0;background:none;border:none;cursor:pointer;text-align:left;font-family:inherit;font-size:16px;font-weight:500;color:var(--ink);transition:color .2s}
+        .faq-question:hover{color:var(--blue)}
+        .faq-chevron{width:16px;height:16px;flex-shrink:0;color:var(--muted-2);transition:transform .25s}
+        .faq-item.open .faq-chevron{transform:rotate(180deg);color:var(--blue)}
+        .faq-answer{max-height:0;overflow:hidden;transition:max-height .3s ease}
+        .faq-answer p{padding-bottom:22px;font-size:14px;color:var(--muted);line-height:1.7}
+
+        .cta{margin:0 clamp(20px,4vw,40px) clamp(80px,10vw,120px)}
+        .cta-inner{border-radius:24px;background:linear-gradient(135deg,var(--blue),#3B82F6);padding:clamp(56px,8vw,80px) 24px;text-align:center}
+        .cta h2{font-family:"Instrument Serif",Georgia,serif;font-size:clamp(30px,4.5vw,44px);font-weight:400;line-height:1.08;letter-spacing:-.02em;color:#fff}
+        .cta p{margin-top:16px;font-size:16px;color:rgba(255,255,255,0.9);line-height:1.7}
+        .cta .label{color:rgba(255,255,255,0.7)}
+        .cta-actions{display:flex;align-items:center;justify-content:center;gap:20px;margin-top:36px;flex-wrap:wrap}
+        .cta .btn{display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:14px;font-weight:600;padding:14px 28px;border-radius:8px;border:none;cursor:pointer;background:#fff;color:var(--blue);transition:background .2s}
+        .cta .btn:hover{background:#eef2ff}
+        .text-link{font-size:15px;color:rgba(255,255,255,0.85);border-bottom:1px solid rgba(255,255,255,0.4);padding-bottom:2px}
+        .text-link:hover{color:#fff}
         footer{padding:48px 0 32px}
         .foot-top{display:flex;justify-content:space-between;align-items:flex-start;gap:40px;flex-wrap:wrap;margin-bottom:48px}
         .foot-brand .logo{font-size:20px;margin-bottom:10px}
@@ -190,7 +246,6 @@ export default function PricingPage() {
             <a href="/#product">Product</a>
             <a href="/#how">How it works</a>
             <a href="/pricing" className="active">Pricing</a>
-            <a href="/#how">How it works</a>
           </div>
           <div className="nav-actions">
             <Link href="/auth/login" className="link-muted">Log in</Link>
@@ -203,66 +258,87 @@ export default function PricingPage() {
         <div className="wrap">
           <span className="label" style={{marginBottom:0}}>Pricing</span>
           <h1>Pro features.<br />Half the price.</h1>
-          <p className="hero-desc">Unlimited inboxes on every paid plan. AI and email verification included — not sold as add-ons. No seat fees, no contracts.</p>
-          <p className="hero-note">Billed monthly. Cancel anytime. Free tier works forever, no credit card required.</p>
+          <p className="hero-desc">Unlimited inboxes on every paid plan. AI email writing included — not sold as an add-on. No seat fees, no contracts.</p>
         </div>
+
+        <div className="pricing-toggle">
+          <button type="button" className={view === "plans" ? "active" : ""} onClick={() => setView("plans")}>Plans</button>
+          <button type="button" className={view === "credits" ? "active" : ""} onClick={() => setView("credits")}>Credits</button>
+        </div>
+
+        {view === "plans" && (
+          <div className="billing-toggle">
+            <span className={"billing-label" + (!yearly ? " active" : "")}>Monthly</span>
+            <label className="switch">
+              <input type="checkbox" checked={yearly} onChange={(e) => setYearly(e.target.checked)} />
+              <span className="slider"></span>
+            </label>
+            <span className={"billing-label" + (yearly ? " active" : "")}>Yearly</span>
+            <span className="saving">save 2 months</span>
+          </div>
+        )}
       </header>
 
-      <section className="tiers wrap">
-        {tiers.map((tier) => (
-          <div key={tier.name} className={"tier" + (tier.highlight ? " highlight" : "")}>
-            {tier.highlight && <span className="tier-badge">Most popular</span>}
-            <div>
-              <div className="name">{tier.name}</div>
-              <div className="tagline">{tier.tagline}</div>
+      {view === "plans" ? (
+        <section className="tiers wrap">
+          {tiers.map((tier) => {
+            const price = tier.monthly === 0 ? "$0" : yearly ? `$${tier.monthly * 10}` : `$${tier.monthly}`;
+            const period = tier.monthly === 0 ? "forever" : yearly ? "/year" : tier.period;
+            return (
+              <div key={tier.name} className={"tier" + (tier.highlight ? " highlight" : "")}>
+                <div>
+                  <div className="name">{tier.name}</div>
+                  <div className="tagline">{tier.tagline}</div>
+                </div>
+                <div>
+                  <span className="amount">{price}</span>
+                  <span className="period"> {period}</span>
+                </div>
+                <div className="limits">
+                  <span><b>{tier.leads}</b></span>
+                  <span><b>{tier.inboxes}</b></span>
+                  <span><b>{tier.verification}</b></span>
+                </div>
+                <ul>
+                  {tier.features.map((f) => <li key={f}><Check />{f}</li>)}
+                </ul>
+                <Link href="/auth/signup" className="btn">{tier.cta}</Link>
+              </div>
+            );
+          })}
+        </section>
+      ) : (
+        <section className="section" id="credits">
+          <div className="wrap">
+            <div className="sec-head center" style={{marginBottom:32}}>
+              <span className="label">Credits</span>
+              <h2 style={{marginTop:8}}>Verification and AI run on one credit balance</h2>
+              <p>Every new account starts with 1,000 free credits — one time. After that, top up when you need more. Credits never expire.</p>
             </div>
-            <div>
-              <span className="amount">{tier.price}</span>
-              <span className="period"> {tier.period}</span>
+            <div className="credit-costs" style={{justifyContent:"center"}}>
+              <div className="credit-cost"><b>Email verification</b> — 0.25 credits / check</div>
+              <div className="credit-cost"><b>AI email writing</b> — 2 credits / generation</div>
+              <div className="credit-cost"><b>Sending, warm-up, inbox</b> — 0 credits, always free</div>
             </div>
-            <div className="limits">
-              <span><b>{tier.leads}</b></span>
-              <span><b>{tier.inboxes}</b></span>
-              <span><b>{tier.verification}</b></span>
+            <div className="packs" style={{ marginTop: 32 }}>
+              {creditPacks.map((pack) => (
+                <div key={pack.credits} className="pack">
+                  <div className="pack-credits">{pack.credits}</div>
+                  <div className="pack-price">{pack.price}</div>
+                  <div className="pack-per">{pack.per}</div>
+                </div>
+              ))}
             </div>
-            <ul>
-              {tier.features.map((f) => <li key={f}>{f}</li>)}
-            </ul>
-            <Link href="/auth/signup" className="btn">{tier.cta}</Link>
           </div>
-        ))}
-      </section>
+        </section>
+      )}
 
       <section className="section">
         <div className="wrap">
           <div className="sec-head center">
             <span className="label">No hidden costs</span>
             <h2>Everything is included in every paid plan.</h2>
-            <p>AI email generation and email verification are included in every paid plan — not sold as add-ons. No seat fees, no per-inbox charges.</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="section" id="credits">
-        <div className="wrap">
-          <div className="sec-head center">
-            <span className="label">Credits</span>
-            <h2>Verification and AI run on one credit balance</h2>
-            <p>Every paid plan includes a monthly credit allowance. Run out? Top up in seconds — credits never expire, and they're drawn from the same balance as your included allowance.</p>
-          </div>
-          <div className="credit-costs">
-            <div className="credit-cost"><b>Email verification</b> — 0.25 credits / check</div>
-            <div className="credit-cost"><b>AI email writing</b> — 2 credits / generation</div>
-            <div className="credit-cost"><b>Sending, warm-up, inbox</b> — 0 credits, always free</div>
-          </div>
-          <div className="packs" style={{ marginTop: 32 }}>
-            {creditPacks.map((pack) => (
-              <div key={pack.credits} className="pack">
-                <div className="pack-credits">{pack.credits}</div>
-                <div className="pack-price">{pack.price}</div>
-                <div className="pack-per">{pack.per}</div>
-              </div>
-            ))}
+            <p>AI email writing is included in every paid plan — not sold as an add-on. No seat fees, no per-inbox charges. Verification runs on credits, and every account starts with 1,000 free.</p>
           </div>
         </div>
       </section>
@@ -274,32 +350,23 @@ export default function PricingPage() {
             <h2>Good questions</h2>
           </div>
           <div className="faq">
-            <div className="faq-item">
-              <h3>What does "unlimited inboxes" mean?</h3>
-              <p>Connect as many Gmail, Outlook, or SMTP accounts as you want on every paid plan. Sends rotate across all of them automatically.</p>
-            </div>
-            <div className="faq-item">
-              <h3>What happens when I hit my verification limit?</h3>
-              <p>Campaigns keep running — only new verification pauses until your next monthly credit cycle or you buy a credit pack. Verification costs 0.25 credits per check and credits never expire.</p>
-            </div>
-            <div className="faq-item">
-              <h3>What is a credit worth?</h3>
-              <p>One credit is one unit of usage. Verifying an email costs 0.25 credits, an AI email generation costs 2 credits. Credits packs start at 100 credits for $5, and your monthly allowance tops the same balance up every cycle.</p>
-            </div>
-            <div className="faq-item">
-              <h3>Is there a free trial?</h3>
-              <p>The Free plan is a permanent trial: 2 inboxes, 300 leads, and 300 verifications a month forever. Upgrade only when you need more.</p>
-            </div>
-            <div className="faq-item">
-              <h3>Can I switch plans or cancel?</h3>
-              <p>Yes, any time, month to month. Downgrade or cancel in one click — no contracts, no retention flow.</p>
-            </div>
+            {faqs.map((item, i) => (
+              <div key={item.q} className={"faq-item" + (openFaq === i ? " open" : "")}>
+                <button type="button" className="faq-question" onClick={() => setOpenFaq(openFaq === i ? null : i)}>
+                  {item.q}
+                  <svg className="faq-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                <div className="faq-answer" style={{ maxHeight: openFaq === i ? 240 : 0 }}>
+                  <p>{item.a}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       <section className="cta">
-        <div className="wrap cta-inner">
+        <div className="cta-inner">
           <span className="label" style={{marginBottom:0}}>Ready when you are</span>
           <h2>Connect an inbox.<br />Send your first sequence today.</h2>
           <p>Free to start, cancel anytime. No credit card needed.</p>

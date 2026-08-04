@@ -1,7 +1,5 @@
 import { prisma } from "./prisma";
-import { getPlan } from "./plans";
-
-const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+import { getPlan, SIGNUP_CREDITS } from "./plans";
 
 export class InsufficientCreditsError extends Error {
   balance: number;
@@ -24,37 +22,28 @@ export class PlanLimitError extends Error {
   }
 }
 
-// Grants the user's monthly included credits once per billing cycle. Called
-// before any spend so the balance is always current.
-export async function ensureMonthlyCredits(userId: string): Promise<void> {
+// Grants the one-time signup bonus (SIGNUP_CREDITS) the first time the user's
+// balance is touched. Credits are only ever obtained again by purchasing packs.
+export async function ensureSignupCredits(userId: string): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, creditCycleStart: true },
+    select: { signupCreditsGranted: true },
   });
-  if (!user) return;
-
-  const plan = getPlan(user.plan);
-  const now = new Date();
-  const needsGrant =
-    !user.creditCycleStart ||
-    now.getTime() - user.creditCycleStart.getTime() >= MONTH_MS;
-
-  if (!needsGrant) return;
+  if (!user || user.signupCreditsGranted) return;
 
   await prisma.$transaction([
     prisma.user.update({
       where: { id: userId },
       data: {
-        creditBalance: { increment: plan.creditsPerMonth },
-        creditCycleStart: now,
+        creditBalance: { increment: SIGNUP_CREDITS },
+        signupCreditsGranted: true,
       },
     }),
     prisma.creditTransaction.create({
       data: {
         userId,
-        amount: plan.creditsPerMonth,
-        reason: "monthly_included",
-        refId: plan.id,
+        amount: SIGNUP_CREDITS,
+        reason: "signup_bonus",
       },
     }),
   ]);
@@ -64,14 +53,13 @@ export interface CreditState {
   plan: string;
   planName: string;
   balance: number;
-  creditsPerMonth: number;
   leadLimit: number;
   inboxLimit: number;
   aiEnabled: boolean;
 }
 
 export async function getCreditState(userId: string): Promise<CreditState | null> {
-  await ensureMonthlyCredits(userId);
+  await ensureSignupCredits(userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { plan: true, creditBalance: true },
@@ -82,7 +70,6 @@ export async function getCreditState(userId: string): Promise<CreditState | null
     plan: plan.id,
     planName: plan.name,
     balance: user.creditBalance,
-    creditsPerMonth: plan.creditsPerMonth,
     leadLimit: plan.leadLimit,
     inboxLimit: plan.inboxLimit,
     aiEnabled: plan.aiEnabled,
@@ -97,7 +84,7 @@ export async function spendCredits(
   reason: string,
   refId?: string
 ): Promise<void> {
-  await ensureMonthlyCredits(userId);
+  await ensureSignupCredits(userId);
 
   const result = await prisma.user.updateMany({
     where: { id: userId, creditBalance: { gte: amount } },

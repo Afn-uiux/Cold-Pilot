@@ -24,7 +24,6 @@ export async function GET() {
     email: user.email,
     plan: user.plan,
     creditBalance: credits?.balance ?? 0,
-    creditsPerMonth: credits?.creditsPerMonth ?? 0,
     aiEnabled: credits?.aiEnabled ?? false,
   });
 }

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { PLANS, CREDIT_PACKS, type PlanId } from "@/lib/plans";
 
 export default function BillingSection() {
-  const [state, setState] = useState<{ plan: PlanId; creditBalance: number; creditsPerMonth: number; aiEnabled: boolean } | null>(null);
+  const [state, setState] = useState<{ plan: PlanId; creditBalance: number; aiEnabled: boolean } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -15,7 +15,6 @@ export default function BillingSection() {
         setState({
           plan: data.plan || "free",
           creditBalance: typeof data.creditBalance === "number" ? data.creditBalance : 0,
-          creditsPerMonth: typeof data.creditsPerMonth === "number" ? data.creditsPerMonth : 0,
           aiEnabled: !!data.aiEnabled,
         });
       })
@@ -38,7 +37,7 @@ export default function BillingSection() {
     <div className="space-y-8">
       <div className="card">
         <div className="card-header"><h3>Current plan</h3></div>
-        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-3">
           <div>
             <p className="text-xs text-muted">Plan</p>
             <p className="text-lg font-medium mt-1">{currentPlan.name}</p>
@@ -50,10 +49,6 @@ export default function BillingSection() {
           <div>
             <p className="text-xs text-muted">Credit balance</p>
             <p className="text-lg font-medium mt-1">{Math.floor(state.creditBalance).toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted">Credits / month</p>
-            <p className="text-lg font-medium mt-1">{state.creditsPerMonth.toLocaleString()}</p>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted">
@@ -77,9 +72,9 @@ export default function BillingSection() {
                   {isCurrent && <span className="badge active">Current</span>}
                 </div>
                 <p className="text-2xl font-medium mt-2">${p.price}<span className="text-xs text-muted font-normal">/mo</span></p>
-                <p className="text-xs text-muted mt-2">{p.verificationAllowance.toLocaleString()} verifications / mo</p>
-                <p className="text-xs text-muted mt-1">{p.leadLimit === Infinity ? "Unlimited" : p.leadLimit.toLocaleString()} leads</p>
+                <p className="text-xs text-muted mt-2">{p.leadLimit === Infinity ? "Unlimited" : p.leadLimit.toLocaleString()} leads</p>
                 <p className="text-xs text-muted mt-1">{p.inboxLimit === Infinity ? "Unlimited" : `${p.inboxLimit} inboxes`}</p>
+                <p className="text-xs text-muted mt-1">AI {p.aiEnabled ? "included" : "not included"}</p>
                 <button disabled className="btn btn-ghost btn-sm mt-4 w-full" title="Coming soon">
                   {isCurrent ? "Current plan" : "Upgrade"}
                 </button>

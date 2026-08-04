@@ -6,14 +6,9 @@ export interface Plan {
   price: number;
   leadLimit: number;
   inboxLimit: number;
-  creditsPerMonth: number;
   aiEnabled: boolean;
-  verificationAllowance: number;
 }
 
-// Included credits are derived from the published verification allowance
-// (1 verification = 0.25 credits). Starter's "1,000 verifications / month"
-// is 250 credits, and so on.
 export const PLANS: Record<PlanId, Plan> = {
   free: {
     id: "free",
@@ -21,9 +16,7 @@ export const PLANS: Record<PlanId, Plan> = {
     price: 0,
     leadLimit: 300,
     inboxLimit: 2,
-    creditsPerMonth: 75,
     aiEnabled: false,
-    verificationAllowance: 300,
   },
   starter: {
     id: "starter",
@@ -31,9 +24,7 @@ export const PLANS: Record<PlanId, Plan> = {
     price: 19,
     leadLimit: 5000,
     inboxLimit: Infinity,
-    creditsPerMonth: 250,
     aiEnabled: true,
-    verificationAllowance: 1000,
   },
   pro: {
     id: "pro",
@@ -41,9 +32,7 @@ export const PLANS: Record<PlanId, Plan> = {
     price: 49,
     leadLimit: 30000,
     inboxLimit: Infinity,
-    creditsPerMonth: 1250,
     aiEnabled: true,
-    verificationAllowance: 5000,
   },
   agency: {
     id: "agency",
@@ -51,11 +40,12 @@ export const PLANS: Record<PlanId, Plan> = {
     price: 99,
     leadLimit: 150000,
     inboxLimit: Infinity,
-    creditsPerMonth: 5000,
     aiEnabled: true,
-    verificationAllowance: 20000,
   },
 };
+
+// One-time credits granted to every account on signup.
+export const SIGNUP_CREDITS = 1000;
 
 export const CREDIT_COSTS = {
   verification: 0.25,

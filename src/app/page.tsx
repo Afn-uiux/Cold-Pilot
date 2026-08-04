@@ -429,13 +429,13 @@ export default async function Home() {
           <div className="sec-head center">
             <span className="label">Pricing</span>
             <h2>Pro features. Half the price.</h2>
-            <p>Unlimited inboxes on every paid plan. AI and verification included — not sold as add-ons.</p>
+            <p>AI and verification included — not sold as add-ons.</p>
           </div>
           <div className="pricing-layout" id="compare">
             <div className="price-main">
               <span className="label">Coldpilot</span>
               <div className="amount" style={{fontFamily:"'Geist',system-ui,sans-serif",fontSize:"clamp(56px,10vw,80px)",lineHeight:1,marginTop:16}}>$19<span style={{fontSize:"clamp(16px,2vw,20px)",fontFamily:"'JetBrains Mono',monospace",color:"var(--muted-2)"}}> /mo</span></div>
-              <p className="desc">Starter — 5,000 leads, unlimited inboxes, and 1,000 verifications a month. For one person running outreach.</p>
+              <p className="desc">Starter — 5,000 leads, unlimited inboxes, and AI email generation. For one person running outreach.</p>
               <ul className="price-includes">
                 <li>Unlimited connected inboxes</li>
                 <li>Automatic warm-up on every account</li>
@@ -448,12 +448,12 @@ export default async function Home() {
             <div>
               <span className="label">Every tier</span>
               <ul className="compare-list" style={{marginTop:16}}>
-                <li className="compare-row"><div><div className="name">Free</div><div className="desc">2 inboxes · 300 leads · 300 verifications / mo</div></div><div className="cost">$0</div></li>
-                <li className="compare-row highlight"><div><div className="name">Starter</div><div className="desc">Unlimited inboxes · 5,000 leads · 1,000 verifications / mo</div></div><div className="cost">$19</div></li>
-                <li className="compare-row"><div><div className="name">Pro</div><div className="desc">Unlimited inboxes · 30,000 leads · 5,000 verifications / mo</div></div><div className="cost">$49</div></li>
+                <li className="compare-row"><div><div className="name">Free</div><div className="desc">2 inboxes · 300 leads · 1,000 free credits</div></div><div className="cost">$0</div></li>
+                <li className="compare-row highlight"><div><div className="name">Starter</div><div className="desc">Unlimited inboxes · 5,000 leads · AI included</div></div><div className="cost">$19</div></li>
+                <li className="compare-row"><div><div className="name">Pro</div><div className="desc">Unlimited inboxes · 30,000 leads · AI included</div></div><div className="cost">$49</div></li>
                 <li className="compare-row"><div><div className="name">Agency</div><div className="desc">Unlimited inboxes · 150,000 leads · white-label &amp; API</div></div><div className="cost">$99</div></li>
               </ul>
-              <p className="compare-note">AI and verification included in every paid plan — no separate add-on costs. See the full <Link href="/pricing" className="feat-link" style={{display:"inline-flex",alignItems:"center",gap:4}}>pricing<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:13,height:13}}><path d="M9 6l6 6-6 6"/></svg></Link>.</p>
+              <p className="compare-note">AI included in every paid plan, and every account starts with 1,000 free credits. See the full <Link href="/pricing" className="feat-link" style={{display:"inline-flex",alignItems:"center",gap:4}}>pricing<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:13,height:13}}><path d="M9 6l6 6-6 6"/></svg></Link>.</p>
             </div>
           </div>
         </div>
