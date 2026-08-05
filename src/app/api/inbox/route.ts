@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { auth } from "@/lib/auth";
+import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -133,6 +134,10 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
 
   const { leadId } = await req.json();
   if (!leadId) return NextResponse.json({ error: "leadId required" }, { status: 400 });
@@ -147,6 +152,10 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
 
   const url = new URL(req.url);
   const leadId = url.searchParams.get("leadId");

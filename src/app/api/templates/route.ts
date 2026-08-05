@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { auth } from "@/lib/auth";
+import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -20,6 +21,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await auth();
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -38,6 +43,10 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   const session = await auth();
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

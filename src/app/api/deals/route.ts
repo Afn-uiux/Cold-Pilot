@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { auth } from "@/lib/auth";
+import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -21,6 +22,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { pipelineId, name, value, stage, leadId } = await req.json();
   if (!pipelineId || !name) return NextResponse.json({ error: "Pipeline and name required" }, { status: 400 });
@@ -36,6 +41,10 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const session = await auth();
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id, stage, value, status, notes } = await req.json();
   const deal = await prisma.deal.findFirst({ where: { id, userId: session.user.id } });
@@ -46,6 +55,10 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const session = await auth();
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");

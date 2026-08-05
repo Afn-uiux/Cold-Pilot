@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getCreditState } from "@/lib/credits";
+import { getTrialStatus } from "@/lib/trial";
 
 export async function GET() {
   const session = await auth();
@@ -13,11 +14,12 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { name: true, email: true, plan: true },
+    select: { name: true, email: true, plan: true, trialEndsAt: true },
   });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const credits = await getCreditState(session.user.id);
+  const trial = getTrialStatus(user.plan, user.trialEndsAt);
 
   return NextResponse.json({
     name: user.name,
@@ -25,6 +27,7 @@ export async function GET() {
     plan: user.plan,
     creditBalance: credits?.balance ?? 0,
     aiEnabled: credits?.aiEnabled ?? false,
+    trial,
   });
 }
 

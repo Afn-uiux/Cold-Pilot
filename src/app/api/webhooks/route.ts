@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { auth } from "@/lib/auth";
+import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
@@ -20,6 +21,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
 
   const { url, events } = await req.json();
   if (!url) return NextResponse.json({ error: "URL required" }, { status: 400 });
@@ -41,6 +46,10 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
 
   const { id, url, events, active } = await req.json();
   const wh = await prisma.webhook.findFirst({ where: { id, userId: session.user.id } });
@@ -57,6 +66,10 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");

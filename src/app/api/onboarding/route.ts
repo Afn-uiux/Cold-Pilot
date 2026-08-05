@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { auth } from "@/lib/auth";
+import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -15,6 +16,10 @@ export async function GET() {
 
 export async function POST() {
   const session = await auth();
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   await prisma.user.update({ where: { id: session.user.id }, data: { completedOnboarding: true } });

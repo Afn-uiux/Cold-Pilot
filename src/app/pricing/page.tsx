@@ -7,14 +7,15 @@ const tiers = [
   {
     name: "Free",
     monthly: 0,
-    period: "forever",
-    tagline: "Try the full engine before you pay.",
+    period: "14 days",
+    tagline: "Try the full engine free for 14 days, no credit card.",
     leads: "300 active leads",
     inboxes: "2 connected inboxes",
     verification: "1,000 free credits",
     cta: "Start free",
     highlight: false,
     features: [
+      "14-day free trial, no credit card",
       "2 connected inboxes",
       "300 active leads",
       "1,000 free credits on signup",
@@ -101,7 +102,7 @@ const faqs = [
   },
   {
     q: "Is there a free trial?",
-    a: "The Free plan is a permanent trial: 2 inboxes and 300 leads forever, plus 1,000 free credits on signup. Upgrade only when you need more.",
+    a: "Every new account gets 14 days free with no credit card: 2 inboxes, 300 leads, and 1,000 one-time credits to test verification. After day 14 you can still log in and see everything — you just can't send, import, verify, or use AI until you upgrade. Upgrade anytime, and it costs less than the tools you're replacing.",
   },
   {
     q: "Can I switch plans or cancel?",
@@ -283,7 +284,7 @@ export default function PricingPage() {
         <section className="tiers wrap">
           {tiers.map((tier) => {
             const price = tier.monthly === 0 ? "$0" : yearly ? `$${tier.monthly * 10}` : `$${tier.monthly}`;
-            const period = tier.monthly === 0 ? "forever" : yearly ? "/year" : tier.period;
+            const period = tier.monthly === 0 ? tier.period : yearly ? "/year" : tier.period;
             return (
               <div key={tier.name} className={"tier" + (tier.highlight ? " highlight" : "")}>
                 <div>

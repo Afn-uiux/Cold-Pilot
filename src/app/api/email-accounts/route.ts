@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { auth } from "@/lib/auth";
+import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
@@ -157,6 +158,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: Request) {
   const session = await auth();
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
@@ -212,6 +217,10 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: NextRequest) {
   const session = await auth();
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -255,6 +264,10 @@ export async function DELETE(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (session?.user?.id) {
+      const blocked = await trialGuard(session.user.id);
+      if (blocked) return blocked;
+    }
 
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "Account ID required" }, { status: 400 });

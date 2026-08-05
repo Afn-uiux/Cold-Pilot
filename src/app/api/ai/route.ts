@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { trialGuard } from "@/lib/trial";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPlan, CREDIT_COSTS } from "@/lib/plans";
@@ -33,6 +34,10 @@ async function callDeepSeek(prompt: string): Promise<string> {
 
 export async function POST(req: Request) {
   const session = await auth();
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

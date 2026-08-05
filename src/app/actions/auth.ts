@@ -2,6 +2,7 @@
 
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { TRIAL_MS } from "@/lib/trial";
 import { signIn } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendEmailSafe } from "@/lib/email/send";
@@ -31,6 +32,7 @@ export async function signup(formData: FormData) {
       name: name || null,
       email,
       password: hashedPassword,
+      trialEndsAt: new Date(Date.now() + TRIAL_MS),
     },
   });
 

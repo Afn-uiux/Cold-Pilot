@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
+import { trialGuard } from "@/lib/trial";
 import nodemailer from "nodemailer";
 import { ImapFlow } from "imapflow";
 import { prisma } from "@/lib/prisma";
@@ -37,6 +38,10 @@ async function refreshMicrosoftToken(refreshToken: string): Promise<{ accessToke
 
 export async function POST(req: Request) {
   const session = await auth();
+  if (session?.user?.id) {
+    const blocked = await trialGuard(session.user.id);
+    if (blocked) return blocked;
+  }
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

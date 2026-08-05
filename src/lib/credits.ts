@@ -132,13 +132,15 @@ export async function assertLeadCapacity(
   });
   const plan = getPlan(user?.plan);
 
+  // Counts every lead ever created, including deleted ones. Deleting leads is
+  // data cleanup, not a limit reset — capacity is consumed permanently.
   const current = await prisma.lead.count({
-    where: { userId, deletedAt: null },
+    where: { userId },
   });
 
   if (current + incomingCount > plan.leadLimit) {
     throw new PlanLimitError(
-      `Lead limit reached. ${plan.name} allows ${plan.leadLimit} active leads; you have ${current}. Delete leads or upgrade to add ${incomingCount} more.`,
+      `Lead limit reached. ${plan.name} allows ${plan.leadLimit} total leads; you've used ${current} (deleted leads still count). Upgrade to add ${incomingCount} more.`,
       "LEAD_LIMIT"
     );
   }
