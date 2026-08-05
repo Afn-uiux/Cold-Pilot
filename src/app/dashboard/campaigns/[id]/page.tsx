@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -8,6 +8,7 @@ import { VARIABLE_LIST, processSpintax, getPersonalizedPreview } from "@/engine/
 
 import Select from "@/components/select";
 import ConfirmModal from "@/components/confirm-modal";
+import RichTextEditor, { type RichTextEditorHandle } from "@/components/rich-text-editor";
 
 type CampaignState = "draft" | "active" | "paused" | "completed";
 type Step = { id?: string; type: string; subject: string; bodyHtml: string; delayDays: number; delayUnit: string; order: number };
@@ -41,6 +42,7 @@ export default function CampaignDetailPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const editorRefs = useRef<(RichTextEditorHandle | null)[]>([]);
 
   async function loadTemplates() {
     try {
@@ -54,6 +56,13 @@ export default function CampaignDetailPage() {
     updateStep(i, "subject", t.subject || "");
     updateStep(i, "bodyHtml", t.bodyHtml || "");
     setShowTemplates(false);
+  }
+
+  function appendAiText(i: number, text: string) {
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const html = esc(text).replace(/\r?\n/g, "<br>");
+    const current = steps[i].bodyHtml || "";
+    updateStep(i, "bodyHtml", current + (current ? "<br><br>" : "") + html);
   }
 
   async function runAi(action: string, stepIndex: number) {
@@ -70,7 +79,7 @@ export default function CampaignDetailPage() {
       const data = await res.json();
       if (data.result) {
         if (action === "spin" || action === "write") {
-          updateStep(stepIndex, "bodyHtml", steps[stepIndex].bodyHtml + "\n\n" + data.result);
+          appendAiText(stepIndex, data.result);
         } else if (action === "check") {
           alert(data.result);
         }
@@ -214,33 +223,14 @@ export default function CampaignDetailPage() {
     });
   }
 
-  function wrapFormat(stepIdx: number, prefix: string, suffix: string) {
-    const el = document.querySelector(`[data-step-textarea="${stepIdx}"]`) as HTMLTextAreaElement;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const text = steps[stepIdx]?.bodyHtml || "";
-    const selected = text.substring(start, end);
-    const newText = text.slice(0, start) + prefix + selected + suffix + text.slice(end);
-    updateStep(stepIdx, "bodyHtml", newText);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
-    });
+  function formatStep(stepIdx: number, cmd: string) {
+    editorRefs.current[stepIdx]?.exec(cmd);
   }
 
   function handleLink(stepIdx: number) {
     const url = prompt("Enter URL:", "https://");
     if (!url) return;
-    const el = document.querySelector(`[data-step-textarea="${stepIdx}"]`) as HTMLTextAreaElement;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const text = steps[stepIdx]?.bodyHtml || "";
-    const selected = text.substring(start, end) || "link";
-    const linkHtml = `<a href="${url}">${selected}</a>`;
-    const newText = text.slice(0, start) + linkHtml + text.slice(end);
-    updateStep(stepIdx, "bodyHtml", newText);
+    editorRefs.current[stepIdx]?.exec("createLink", url);
   }
 
   function fillVariables(text: string): string {
@@ -433,10 +423,13 @@ export default function CampaignDetailPage() {
 
                           {/* Body area */}
                           <div className="flex min-h-[260px] relative">
-                            <textarea value={step.bodyHtml} onChange={e => updateStep(i, "bodyHtml", e.target.value)}
-                              data-step-textarea={i}
-                              className="flex-1 border-0 outline-none resize-y text-sm text-ink leading-relaxed px-5 py-[18px] placeholder:text-muted-2/35 bg-transparent"
-                              placeholder="Start typing here…" />
+                            <RichTextEditor
+                              ref={(el) => { editorRefs.current[i] = el; }}
+                              value={step.bodyHtml}
+                              onChange={html => updateStep(i, "bodyHtml", html)}
+                              placeholder="Start typing here…"
+                              className="flex-1 border-0 outline-none text-sm text-ink leading-relaxed px-5 py-[18px] placeholder:text-muted-2/35 bg-transparent"
+                            />
                             {countSpintax(step.bodyHtml) > 0 && (
                               <div className="absolute bottom-2 right-3 text-[10px] font-mono text-blue-accent/60 bg-blue-light/30 px-2 py-0.5 rounded-full pointer-events-none">
                                 {countSpintax(step.bodyHtml)} spintax
@@ -509,16 +502,16 @@ export default function CampaignDetailPage() {
                             <div className="flex-1"></div>
 
                             <div className="flex items-center gap-0.5">
-                              <button onClick={() => wrapFormat(i, "<strong>", "</strong>")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Bold">
+                              <button onMouseDown={e => e.preventDefault()} onClick={() => formatStep(i, "bold")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Bold">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 010 8H6z"/></svg>
                               </button>
-                              <button onClick={() => wrapFormat(i, "<em>", "</em>")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Italic">
+                              <button onMouseDown={e => e.preventDefault()} onClick={() => formatStep(i, "italic")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Italic">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
                               </button>
-                              <button onClick={() => wrapFormat(i, "<u>", "</u>")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Underline">
+                              <button onMouseDown={e => e.preventDefault()} onClick={() => formatStep(i, "underline")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Underline">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 3v7a6 6 0 006 6 6 6 0 006-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
                               </button>
-                              <button onClick={() => wrapFormat(i, "<s>", "</s>")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Strikethrough">
+                              <button onMouseDown={e => e.preventDefault()} onClick={() => formatStep(i, "strikeThrough")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Strikethrough">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><path d="M16.5 7.5C16.5 5.5 14 4 12 4c-2.5 0-4 1.5-4 3.5"/><path d="M7.5 16.5C7.5 18.5 10 20 12 20c2.5 0 4-1.5 4-3.5"/></svg>
                               </button>
                             </div>
@@ -526,7 +519,7 @@ export default function CampaignDetailPage() {
                             <div className="w-px h-5 bg-border/40 shrink-0 mx-0.5"></div>
 
                             <div className="flex items-center gap-0.5">
-                              <button onClick={() => handleLink(i)} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Link">
+                              <button onMouseDown={e => e.preventDefault()} onClick={() => handleLink(i)} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Link">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
                               </button>
                               <button onClick={() => insertVariable(i, "bodyHtml", "accountSignature")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Signature">
@@ -644,7 +637,7 @@ export default function CampaignDetailPage() {
                             <div className="text-sm font-semibold text-[#222] mb-4 pb-3 border-b border-gray-200">
                               {fillVariables(steps[previewStep]?.subject || "") || "(no subject)"}
                             </div>
-                            <div className="text-sm whitespace-pre-wrap leading-relaxed">{getPreviewContent(previewStep)}</div>
+                            <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: getPreviewContent(previewStep) }} />
                           </>
                         ) : (
                           <div className="text-sm text-gray-400">No content to preview</div>
