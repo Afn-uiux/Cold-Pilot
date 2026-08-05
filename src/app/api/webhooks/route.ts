@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     data: {
       userId: session.user.id,
       url,
-      events: events || '["open","click","reply","bounce"]',
+      events: events || '["open","click","reply","bounce","unsubscribe"]',
       secret,
     },
   });

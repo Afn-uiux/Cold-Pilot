@@ -1,6 +1,9 @@
 export const runtime = "nodejs";
 
 import { prisma } from "@/lib/prisma";
+import { createNotification } from "@/lib/notify";
+import { dispatchWebhookEvent } from "@/lib/webhook";
+import { dispatchIntegrationEvent } from "@/integrations";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -31,6 +34,15 @@ export async function GET(req: NextRequest) {
     create: { userId: lead.userId, email: lead.email.toLowerCase().trim(), reason: "unsubscribed", type: "unsubscribe" },
     update: { reason: "unsubscribed", type: "unsubscribe" },
   });
+
+  createNotification({
+    userId: lead.userId,
+    type: "unsubscribe",
+    title: "Lead unsubscribed",
+    message: `${lead.email} opted out`,
+  }).catch(() => {});
+  dispatchWebhookEvent({ event: "unsubscribe", userId: lead.userId, data: { leadId: lead.id, email: lead.email, reason: "unsubscribed" } }).catch(() => {});
+  dispatchIntegrationEvent(lead.userId, "unsubscribe", { leadId: lead.id, email: lead.email }).catch(() => {});
 
   return new NextResponse(
     `<html><body style="font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc">

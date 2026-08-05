@@ -61,7 +61,7 @@ export default function WebhooksSection() {
         </button>
       </div>
 
-      <p className="text-xs text-muted mb-4">Send HTTP POST requests when events happen (opens, clicks, replies, bounces)</p>
+      <p className="text-xs text-muted mb-4">Send HTTP POST requests when events happen (opens, clicks, replies, bounces, unsubscribes)</p>
 
       {loading ? (
         <p className="text-xs text-muted">Loading...</p>
@@ -103,7 +103,7 @@ export default function WebhooksSection() {
               className="w-full border border-border rounded-lg px-3 py-2 text-sm mb-4 outline-none focus:border-blue-accent"
               onKeyDown={e => e.key === "Enter" && createWebhook()}
             />
-            <p className="text-xs text-muted mb-4">Will receive POST requests for open, click, reply, and bounce events.</p>
+            <p className="text-xs text-muted mb-4">Will receive POST requests for open, click, reply, bounce, and unsubscribe events.</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm text-muted hover:text-ink transition-colors">Cancel</button>
               <button onClick={createWebhook} className="bg-blue-accent text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">Add</button>

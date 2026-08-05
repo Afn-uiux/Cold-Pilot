@@ -19,6 +19,9 @@ export async function dispatchIntegrationEvent(userId: string, event: string, da
             case "bounce":
               await sendSlackNotification(config.webhookUrl, `:no_entry: *Bounced* ${data.email} — ${data.reason || "unknown"}`);
               break;
+            case "unsubscribe":
+              await sendSlackNotification(config.webhookUrl, `:wave: *Unsubscribed* ${data.email}`);
+              break;
             case "campaign_completed":
               await sendSlackNotification(config.webhookUrl, `:white_check_mark: Campaign *${data.name || "Untitled"}* completed — ${data.sent || 0} sent, ${data.replies || 0} replies`);
               break;

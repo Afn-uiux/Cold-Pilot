@@ -14,7 +14,7 @@ export async function dispatchWebhookEvent(event: WebhookEvent) {
 
   for (const wh of webhooks) {
     let events: string[];
-    try { events = JSON.parse(wh.events); } catch { events = ["open", "click", "reply", "bounce"]; }
+    try { events = JSON.parse(wh.events); } catch { events = ["open", "click", "reply", "bounce", "unsubscribe"]; }
 
     if (!events.includes(event.event)) continue;
 
