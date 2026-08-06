@@ -110,7 +110,8 @@ export async function GET(req: NextRequest) {
 
     return htmlPage({ success: true });
   } catch (err: any) {
-    return htmlPage({ success: false, error: err.message || "An unexpected error occurred." });
+    console.error("Microsoft account connection failed:", err);
+    return htmlPage({ success: false, error: "Failed to connect your Microsoft account. Please try again." });
   }
 }
 

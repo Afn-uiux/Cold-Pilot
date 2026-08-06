@@ -341,7 +341,8 @@ export async function POST(req: Request) {
           leads = allRows.filter(l => l.email && l.email.includes("@"));
         }
       } catch (err: any) {
-        return NextResponse.json({ error: `Failed to fetch: ${err.message}` }, { status: 400 });
+        console.error("Failed to fetch import file:", err);
+        return NextResponse.json({ error: "Failed to fetch the file. Make sure the URL is publicly accessible." }, { status: 400 });
       }
     }
 

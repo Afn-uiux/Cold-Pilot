@@ -65,6 +65,6 @@ export async function POST(req: Request) {
     return NextResponse.json(results);
   } catch (err: any) {
     console.error("Cron error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: "Cron run failed" }, { status: 500 });
   }
 }

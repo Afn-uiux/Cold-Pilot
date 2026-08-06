@@ -45,7 +45,8 @@ export async function POST() {
       backups: Math.min(files.length, MAX_BACKUPS),
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Backup failed" }, { status: 500 });
+    console.error("Backup failed:", err);
+    return NextResponse.json({ error: "Backup failed. Check the server logs." }, { status: 500 });
   }
 }
 

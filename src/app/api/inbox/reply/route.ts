@@ -129,6 +129,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, messageId });
   } catch (err: any) {
     console.error("Reply send failed:", err);
-    return NextResponse.json({ error: err.message || "Failed to send reply" }, { status: 500 });
+    const msg = typeof err?.message === "string" ? err.message : "";
+    if (msg.includes("invalid_grant") || msg.includes("invalid_token")) {
+      return NextResponse.json({ error: "This email account is no longer connected. Reconnect it." }, { status: 401 });
+    }
+    return NextResponse.json({ error: "Failed to send reply. Please try again." }, { status: 500 });
   }
 }

@@ -28,6 +28,16 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(result);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("Email send failed:", err);
+    const msg = typeof err?.message === "string" ? err.message : "";
+    if (msg.includes("is suppressed")) return NextResponse.json({ error: msg }, { status: 400 });
+    if (msg.includes("blocked: verification status")) return NextResponse.json({ error: msg }, { status: 400 });
+    if (msg.includes("invalid_grant") || msg.includes("invalid_token")) {
+      return NextResponse.json({ error: "This email account is no longer connected. Reconnect it." }, { status: 401 });
+    }
+    if (msg.includes("EAUTH") || msg.includes("EACCESS")) {
+      return NextResponse.json({ error: "SMTP login failed. Check your password." }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Failed to send email. Please try again." }, { status: 500 });
   }
 }

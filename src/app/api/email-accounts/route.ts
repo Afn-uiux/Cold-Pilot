@@ -279,6 +279,7 @@ export async function DELETE(req: NextRequest) {
     await prisma.emailAccount.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to delete" }, { status: 500 });
+    console.error("Failed to delete email account:", err);
+    return NextResponse.json({ error: "Failed to delete the account. Please try again." }, { status: 500 });
   }
 }
