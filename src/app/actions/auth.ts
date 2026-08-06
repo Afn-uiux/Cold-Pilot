@@ -20,6 +20,16 @@ export async function signup(formData: FormData) {
     return { error: "Password must be at least 6 characters" };
   }
 
+  const { headers } = await import("next/headers");
+  const h = await headers();
+  const ip = h.get("x-forwarded-for") || h.get("x-real-ip") || "unknown";
+
+  const { allowed, retryAfterMs } = checkRateLimit(`signup:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 });
+  if (!allowed) {
+    const minutes = Math.ceil(retryAfterMs / 60000);
+    return { error: `Too many signups from this network. Try again in ${minutes} minute${minutes > 1 ? "s" : ""}.` };
+  }
+
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     return { error: "An account with this email already exists" };

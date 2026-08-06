@@ -88,6 +88,7 @@ export async function GET(req: NextRequest) {
         data: encryptAccount({
           microsoftToken: accessToken,
           microsoftRefreshToken: refreshToken,
+          status: "active",
         }),
       });
     } else {

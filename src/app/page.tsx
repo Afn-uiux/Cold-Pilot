@@ -2,6 +2,7 @@ import Link from "next/link";
 import Script from "next/script";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import SiteHeader from "@/components/site-header";
 
 export default async function Home() {
   const session = await auth();
@@ -17,15 +18,7 @@ export default async function Home() {
         .wrap{max-width:1080px;margin:0 auto;padding:0 clamp(20px,4vw,40px)}
         .nav{position:sticky;top:0;z-index:100;background:rgba(250,250,248,0.92);backdrop-filter:blur(12px);border-bottom:1px solid transparent;transition:border-color .2s}
         .nav.scrolled{border-bottom-color:var(--border)}
-        .nav-inner{max-width:1080px;margin:0 auto;padding:20px clamp(20px,4vw,40px);display:flex;align-items:center;justify-content:space-between;gap:20px}
         .logo{font-family:"Instrument Serif",serif;font-size:20px}
-        .nav-links{display:flex;gap:28px;font-size:14px;color:var(--muted)}
-        .nav-links a:hover{color:var(--ink)}
-        .nav-actions{display:flex;gap:20px;align-items:center}
-        .nav-actions .link-muted{font-size:14px;color:var(--muted)}
-        .nav-actions .link-muted:hover{color:var(--ink)}
-        .nav-toggle{display:none;background:none;border:none;color:var(--ink);cursor:pointer;padding:4px;z-index:110}
-        @media(max-width:860px){.nav-links{display:none}.nav-actions{display:none}.nav-toggle{display:flex!important}}
         .hero{padding:clamp(48px,10vw,100px) 0;border-bottom:1px solid var(--border);background-image:linear-gradient(to right,rgba(15,13,20,0.03) 1px,transparent 1px),linear-gradient(to bottom,rgba(15,13,20,0.03) 1px,transparent 1px);background-size:32px 32px}
         .hero-inner{max-width:640px;margin:0 auto;text-align:center}
         .hero h1{font-family:"Instrument Serif",Georgia,serif;font-size:clamp(40px,7vw,64px);font-weight:400;line-height:1.08;letter-spacing:-.02em;margin-top:24px}
@@ -122,53 +115,14 @@ export default async function Home() {
         .foot-col a{font-size:14px;color:var(--muted)}
         .foot-col a:hover{color:var(--ink)}
         .foot-bottom{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-top:24px;border-top:1px solid var(--border);font-size:13px;color:var(--muted-2)}
-        .mobile-menu{display:none;position:fixed;inset:0;z-index:200;background:rgba(15,13,20,0.4);opacity:0;pointer-events:none;transition:opacity .35s}
-        .mobile-menu.open{display:block!important;opacity:1;pointer-events:auto}
-        .mobile-panel{position:absolute;top:0;right:0;width:min(300px,85vw);height:100%;background:var(--cream);border-left:1px solid var(--border);padding:24px;transform:translateX(100%);transition:transform .35s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;gap:4px}
-        .mobile-menu.open .mobile-panel{transform:translateX(0)}
-        .mobile-panel a{font-size:16px;font-weight:500;padding:14px 0;border-bottom:1px solid var(--border)}
-        .mobile-panel .btn{margin-top:20px;width:100%;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:15px;font-weight:500;padding:14px 26px;border-radius:6px;border:none;cursor:pointer;background:var(--blue);color:#fff;text-decoration:none}
-        .mobile-close{align-self:flex-end;background:none;border:1px solid var(--border);border-radius:6px;padding:8px;cursor:pointer;color:var(--ink)}
         p,h1,h2,h3,.label{color:var(--ink);line-height:1.7}
         .label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2);display:block;margin-bottom:16px}
         h1{text-wrap:balance}
         ::selection{background:var(--blue);color:#fff}
-        .btn-mobile-menu{display:none!important}@media(max-width:860px){.btn-mobile-menu{display:flex!important}}
         @media(max-width:640px){.hero{padding:60px 0 50px}.hero h1{font-size:32px;margin-top:16px}.hero-desc{font-size:15px;margin-top:16px}.hero-cta{flex-direction:column;gap:14px;width:100%}.hero-cta .btn{width:100%;text-align:center}.section{padding:50px 0}.sec-head{margin-bottom:32px}.sec-head h2{font-size:26px}.feat-row{padding:32px 0}.step{grid-template-columns:1fr;gap:12px;padding:24px 0}.step-illust{width:40px;height:40px}.step-num{display:none}.how-aside{flex-direction:column;align-items:flex-start}.pricing-layout{gap:40px}.price-main .btn{width:100%}.cta{padding:50px 0}.cta-actions{flex-direction:column;gap:14px;width:100%}.cta-actions .btn{width:100%}.foot-top{flex-direction:column;gap:24px}}
       `}</style>
 
-      <nav className="nav" id="nav">
-        <div className="nav-inner">
-          <a href="/" className="logo">Coldpilot</a>
-          <div className="nav-links">
-            <a href="#product">Product</a>
-            <a href="#how">How it works</a>
-            <Link href="/pricing">Pricing</Link>
-            <a href="#compare">Compare</a>
-          </div>
-          <div className="nav-actions">
-            <Link href="/auth/login" className="link-muted">Log in</Link>
-            <Link href="/auth/signup" className="btn btn-sm" style={{background:"var(--blue)",color:"#fff",padding:"9px 18px",fontSize:13,borderRadius:6,textDecoration:"none"}}>Start free</Link>
-          </div>
-          <button className="nav-toggle" id="navToggle" aria-label="Menu">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
-          </button>
-        </div>
-      </nav>
-
-      <div className="mobile-menu" id="mobileMenu">
-        <div className="mobile-panel">
-          <button className="mobile-close" id="mobileClose" aria-label="Close">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
-          </button>
-          <a href="#product" className="mobile-link">Product</a>
-          <a href="#how" className="mobile-link">How it works</a>
-          <Link href="/pricing" className="mobile-link">Pricing</Link>
-          <a href="#compare" className="mobile-link">Compare</a>
-          <Link href="/auth/login" className="mobile-link">Log in</Link>
-          <Link href="/auth/signup" className="btn">Start free</Link>
-        </div>
-      </div>
+      <SiteHeader />
 
       <header className="hero">
         <div className="wrap hero-inner">
@@ -494,17 +448,6 @@ export default async function Home() {
 
       <Script id="landing-js">{`
         (function(){
-          var n=document.getElementById("nav");
-          if(n)window.addEventListener("scroll",function(){n.classList.toggle("scrolled",scrollY>40)},{passive:true});
-          var m=document.getElementById("mobileMenu"),t=document.getElementById("navToggle"),c=document.getElementById("mobileClose");
-          if(!m||!t||!c)return;
-          function open(){m.className="mobile-menu open";t.style.display="none";document.body.style.overflow="hidden"}
-          function shut(){m.className="mobile-menu";t.style.display="";document.body.style.overflow=""}
-          t.addEventListener("click",open);
-          c.addEventListener("click",shut);
-          m.addEventListener("click",function(e){if(e.target===m)shut()});
-          var as=m.querySelectorAll("a");for(var i=0;i<as.length;i++)as[i].addEventListener("click",shut);
-          document.addEventListener("keydown",function(e){if(e.key==="Escape")shut()});
           if(!matchMedia("(prefers-reduced-motion:reduce)").matches){
             var ro=new IntersectionObserver(function(e){e.forEach(function(ee){if(ee.isIntersecting){ee.target.classList.add("in");ro.unobserve(ee.target)}})},{threshold:0.08,rootMargin:"0px 0px -40px 0px"});
             document.querySelectorAll(".reveal").forEach(function(el){ro.observe(el)});

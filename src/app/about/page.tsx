@@ -1,14 +1,9 @@
-import Link from "next/link";
+import SiteHeader from "@/components/site-header";
 
 export default function AboutPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#F8FAFC", fontFamily: "'Geist', system-ui, sans-serif" }}>
-      <header style={{ padding: "24px clamp(20px,4vw,40px)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Link href="/" style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 20, letterSpacing: "-0.01em", color: "#0F1929", textDecoration: "none" }}>
-          Coldpilot
-        </Link>
-        <Link href="/" style={{ fontSize: 14, color: "#5A6B87", textDecoration: "none" }}>Back to home</Link>
-      </header>
+      <SiteHeader />
       <main style={{ maxWidth: 680, margin: "0 auto", padding: "40px clamp(20px,4vw,40px) 80px" }}>
         <h1 style={{ fontSize: "clamp(28px,4vw,36px)", fontWeight: 400, letterSpacing: "-0.02em", marginBottom: 8 }}>About Coldpilot</h1>
         <p style={{ fontSize: 13, color: "#8A9BB5", marginBottom: 40 }}>The team behind Coldpilot</p>

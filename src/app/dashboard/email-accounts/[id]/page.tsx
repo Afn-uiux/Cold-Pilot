@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import ReconnectModal from "@/components/reconnect-modal";
 
 const DAY_LABELS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -36,6 +37,7 @@ export default function EmailAccountDetailPage() {
   const [saveMsg, setSaveMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [settings, setSettings] = useState<any>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showReconnect, setShowReconnect] = useState(false);
   const sigRef = useRef<HTMLDivElement>(null);
 
   const fetchDetail = useCallback(async () => {
@@ -170,6 +172,16 @@ export default function EmailAccountDetailPage() {
           </button>
         </div>
       </div>
+
+      {account.status === "error" && (
+        <div className="flex items-center justify-between gap-4 bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex-wrap">
+          <div className="text-sm text-red-700">
+            <p className="font-medium">This account needs to be reconnected</p>
+            <p className="text-xs text-red-600 mt-0.5">Sending and reply detection are paused until you reconnect with the new password.</p>
+          </div>
+          <button onClick={() => setShowReconnect(true)} className="btn btn-primary shrink-0">Reconnect</button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-border mb-7">
@@ -478,6 +490,13 @@ export default function EmailAccountDetailPage() {
         </div>
       )}
 
+      {showReconnect && (
+        <ReconnectModal
+          account={account}
+          onClose={() => setShowReconnect(false)}
+          onReconnected={fetchDetail}
+        />
+      )}
 
     </div>
   );

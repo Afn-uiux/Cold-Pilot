@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import Select from "@/components/select";
 import ConfirmModal from "@/components/confirm-modal";
 import { useToast } from "@/components/toast";
+import ReconnectModal from "@/components/reconnect-modal";
 
-type Account = { id: string; email: string; provider: string; sent: number; dailySendLimit: number; warmupEnabled: boolean; warmupSent?: number; health?: number; healthScore?: number; status: string; };
+type Account = { id: string; email: string; provider: string; sent: number; dailySendLimit: number; warmupEnabled: boolean; warmupSent?: number; health?: number; healthScore?: number; status: string; smtpUser?: string | null; smtpHost?: string | null; smtpPort?: number | null; imapHost?: string | null; imapPort?: number | null; imapUser?: string | null; };
 type ModalScreen =
   | "select"
   | "google" | "google-app-password"
@@ -24,6 +25,7 @@ export default function EmailAccountsPage() {
   const [showModal, setShowModal] = useState(false);
   const [screen, setScreen] = useState<ModalScreen>("select");
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [reconnectAccount, setReconnectAccount] = useState<Account | null>(null);
 
   const [msName, setMsName] = useState("");
   const [msEmail, setMsEmail] = useState("");
@@ -274,7 +276,14 @@ export default function EmailAccountsPage() {
               <tbody>
                 {accounts.map(a => (
                   <tr key={a.id} className="cursor-pointer" onClick={() => router.push(`/dashboard/email-accounts/${encodeURIComponent(a.email)}`)}>
-                    <td className="font-medium">{a.email}</td>
+                    <td className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span>{a.email}</span>
+                        {a.status === "error" && (
+                          <span className="text-[11px] font-medium text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full whitespace-nowrap">Needs reconnection</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="text-muted">{a.sent ?? 0}</td>
                     <td className="text-muted">{a.dailySendLimit}</td>
                     <td>
@@ -285,6 +294,9 @@ export default function EmailAccountsPage() {
                     </td>
                     <td className="text-muted">{a.healthScore ?? "—"}</td>
                     <td>
+                      {a.status === "error" && (
+                        <button onClick={e => { e.stopPropagation(); setReconnectAccount(a); }} className="text-xs text-red-600 hover:text-red-700 hover:underline mr-3">Reconnect</button>
+                      )}
                       <button onClick={e => { e.stopPropagation(); handleRemove(a.id); }} className="text-xs text-muted-2 hover:text-red-600 transition-colors">Remove</button>
                     </td>
                   </tr>
@@ -543,6 +555,13 @@ export default function EmailAccountsPage() {
         onCancel={() => setConfirmRemove(null)}
         variant="danger"
       />
+      {reconnectAccount && (
+        <ReconnectModal
+          account={reconnectAccount}
+          onClose={() => setReconnectAccount(null)}
+          onReconnected={refreshAccounts}
+        />
+      )}
     </div>
   );
 }

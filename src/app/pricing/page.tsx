@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import SiteHeader from "@/components/site-header";
 
 const tiers = [
   {
@@ -240,20 +241,7 @@ export default function PricingPage() {
         @media(max-width:640px){.hero h1{font-size:32px}.nav-links{display:none}.tier .tagline{min-height:0}}
       `}</style>
 
-      <nav className="nav">
-        <div className="nav-inner">
-          <a href="/" className="logo">Coldpilot</a>
-          <div className="nav-links">
-            <a href="/#product">Product</a>
-            <a href="/#how">How it works</a>
-            <a href="/pricing" className="active">Pricing</a>
-          </div>
-          <div className="nav-actions">
-            <Link href="/auth/login" className="link-muted">Log in</Link>
-            <Link href="/auth/signup" className="link-muted" style={{fontWeight:500,color:"var(--blue)"}}>Start free</Link>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader />
 
       <header className="hero">
         <div className="wrap">

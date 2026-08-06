@@ -77,6 +77,10 @@ export default function CampaignDetailPage() {
         body: JSON.stringify({ action, text, context: "outreach" }),
       });
       const data = await res.json();
+      if (!res.ok || data.error) {
+        alert(data.error || "AI request failed. Please try again.");
+        return;
+      }
       if (data.result) {
         if (action === "spin" || action === "write") {
           appendAiText(stepIndex, data.result);
@@ -84,8 +88,11 @@ export default function CampaignDetailPage() {
           alert(data.result);
         }
       }
-    } catch {}
-    setAiLoading(false);
+    } catch {
+      alert("AI request failed. Please try again.");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   useEffect(() => {
