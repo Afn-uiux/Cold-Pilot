@@ -24,8 +24,12 @@ export interface TrialStatus {
 
 // Free accounts with a trialEndsAt are on the 14-day clock. Legacy free
 // accounts (trialEndsAt null, created before the trial shipped) are exempt and
-// stay free forever. Paid accounts are never locked.
-export function getTrialStatus(plan: string, trialEndsAt: Date | null): TrialStatus {
+// stay free forever. Paid accounts are never locked. A voided trial (trial
+// abuse detection) is always expired, regardless of plan/date.
+export function getTrialStatus(plan: string, trialEndsAt: Date | null, trialVoided = false): TrialStatus {
+  if (trialVoided) {
+    return { active: false, expired: true, daysLeft: 0, endsAt: trialEndsAt };
+  }
   if (plan !== "free" || !trialEndsAt) {
     return { active: true, expired: false, daysLeft: Infinity, endsAt: trialEndsAt };
   }
@@ -45,10 +49,10 @@ export function getTrialStatus(plan: string, trialEndsAt: Date | null): TrialSta
 export async function assertTrialActive(userId: string): Promise<TrialStatus> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, trialEndsAt: true },
+    select: { plan: true, trialEndsAt: true, trialVoided: true },
   });
 
-  const status = getTrialStatus(user?.plan ?? "free", user?.trialEndsAt ?? null);
+  const status = getTrialStatus(user?.plan ?? "free", user?.trialEndsAt ?? null, user?.trialVoided ?? false);
   if (status.expired) {
     throw new TrialExpiredError(status.daysLeft);
   }

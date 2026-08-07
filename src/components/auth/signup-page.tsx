@@ -1,9 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { signup } from "@/app/actions/auth";
 import Link from "next/link";
+
+function simpleHash(str: string): string {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  return (h1 >>> 0).toString(16).padStart(8, "0") + (h2 >>> 0).toString(16).padStart(8, "0");
+}
+
+async function computeFingerprint(): Promise<string> {
+  const signals: string[] = [
+    navigator.userAgent,
+    navigator.language,
+    `${screen.width}x${screen.height}x${screen.colorDepth}`,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    String(navigator.hardwareConcurrency || ""),
+    String(navigator.platform || ""),
+    String((navigator as Navigator & { deviceMemory?: number }).deviceMemory || ""),
+  ];
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 240;
+    canvas.height = 60;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.textBaseline = "top";
+      ctx.font = "14px 'Arial'";
+      ctx.fillStyle = "#f60";
+      ctx.fillRect(100, 1, 62, 20);
+      ctx.fillStyle = "#069";
+      ctx.fillText("coldpilot-fp", 2, 15);
+      ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
+      ctx.fillText("coldpilot-fp", 4, 17);
+      signals.push(canvas.toDataURL());
+    }
+  } catch {}
+  const data = signals.join("|");
+  if (typeof crypto !== "undefined" && crypto.subtle) {
+    try {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(data));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    } catch {}
+  }
+  return simpleHash(data);
+}
 
 export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
@@ -11,6 +58,15 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordStrength, setPasswordStrength] = useState(0);
+  const [fingerprint, setFingerprint] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    computeFingerprint().then(fp => {
+      if (!cancelled) setFingerprint(fp);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   function getPasswordStrength(pw: string) {
     let score = 0;
@@ -59,6 +115,7 @@ export default function SignupPage() {
           <p style={{ marginTop: 12, fontSize: 15, color: "#5A6B87", lineHeight: 1.6 }}>$29/mo flat. No credit card to start.</p>
 
           <form onSubmit={handleSubmit} style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 24 }}>
+            <input type="hidden" name="fingerprint" value={fingerprint} />
             {error && (
               <div style={{ fontSize: 13, color: "#C62828", background: "rgba(198,40,40,0.06)", padding: "10px 14px", borderRadius: 6 }}>{error}</div>
             )}

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signOut } from "next-auth/react";
 import ApiKeysSection from "@/components/api-keys-section";
 import WebhooksSection from "@/components/webhooks-section";
 import IntegrationsSection from "@/components/integrations-section";
@@ -10,12 +11,37 @@ import BillingSection from "@/components/billing-section";
 const TABS = ["Profile", "Team", "Billing", "Integrations", "API Keys"];
 
 export default function SettingsTabs({ user }: { user: { name: string | null; email: string | null; image: string | null; createdAt: Date } }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "Profile");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  async function deleteAccount() {
+    if (deleteConfirm !== user.email) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const res = await fetch("/api/account", { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data.error || "Failed to delete account. Please try again.");
+        setDeleting(false);
+        return;
+      }
+      await signOut({ redirect: false });
+      router.push("/");
+    } catch {
+      setDeleteError("Failed to delete account. Please try again.");
+      setDeleting(false);
+    }
+  }
 
   async function saveProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -89,6 +115,14 @@ export default function SettingsTabs({ user }: { user: { name: string | null; em
               </form>
             )}
 
+            {activeTab === "Profile" && (
+              <div className="card border border-red-200">
+                <div className="card-header"><h3>Danger zone</h3></div>
+                <p className="text-sm text-muted mb-4">Permanently deletes your account and signs you out. Campaigns pause immediately and all data is removed from your access. This cannot be undone.</p>
+                <button onClick={() => { setDeleteConfirm(""); setDeleteError(""); setShowDelete(true); }} className="btn btn-sm bg-red-600 hover:bg-red-700 text-white">Delete account</button>
+              </div>
+            )}
+
             {activeTab === "Team" && (
               <div className="card">
                 <div className="card-header"><h3>Team</h3></div>
@@ -142,6 +176,32 @@ export default function SettingsTabs({ user }: { user: { name: string | null; em
           </div>
         </div>
       </div>
+
+      {showDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: "rgba(15,13,20,0.4)", backdropFilter: "blur(4px)" }} onClick={() => setShowDelete(false)}>
+          <div className="bg-cream border border-border rounded-lg w-[90%] max-w-[420px] p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-medium mb-2">Delete account?</h3>
+            <p className="text-sm text-muted mb-4 leading-relaxed">This permanently deletes your account and all your data. It cannot be undone. Type <span className="font-medium text-ink">{user.email}</span> to confirm.</p>
+            <input
+              value={deleteConfirm}
+              onChange={e => setDeleteConfirm(e.target.value)}
+              placeholder={user.email || ""}
+              className="w-full bg-transparent border-b border-border pb-2.5 text-sm outline-none focus:border-ink transition-colors"
+            />
+            {deleteError && <p className="text-xs text-red-600 mt-2">{deleteError}</p>}
+            <div className="flex gap-3 justify-end mt-6">
+              <button onClick={() => setShowDelete(false)} className="btn btn-ghost btn-sm">Cancel</button>
+              <button
+                onClick={deleteAccount}
+                disabled={deleting || deleteConfirm !== user.email}
+                className="btn btn-sm bg-red-600 hover:bg-red-700 text-white disabled:opacity-40"
+              >
+                {deleting ? "Deleting..." : "Delete account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

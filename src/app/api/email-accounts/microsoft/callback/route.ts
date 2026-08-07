@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptAccount } from "@/lib/crypto";
+import { recordMailboxConnect } from "@/lib/fraud";
 
 export async function GET(req: NextRequest) {
   try {
@@ -72,6 +73,8 @@ export async function GET(req: NextRequest) {
     const graphData = await graphRes.json();
     const email = graphData.mail || graphData.userPrincipalName;
     const displayName = graphData.displayName || "";
+    // Immutable Microsoft object id — stable across reconnects and renames.
+    const providerAccountId = String(graphData.id || email);
 
     if (!email) {
       return htmlPage({ success: false, error: "Could not retrieve email from Microsoft account." });
@@ -108,6 +111,14 @@ export async function GET(req: NextRequest) {
         }),
       });
     }
+
+    // Permanent mailbox fingerprinting (keyed on the immutable Graph id).
+    await recordMailboxConnect({
+      userId: session.user.id,
+      provider: "microsoft-oauth",
+      providerAccountId,
+      email,
+    });
 
     return htmlPage({ success: true });
   } catch (err: any) {

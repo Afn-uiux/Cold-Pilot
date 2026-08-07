@@ -14,12 +14,12 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { name: true, email: true, plan: true, trialEndsAt: true },
+    select: { name: true, email: true, plan: true, trialEndsAt: true, trialVoided: true },
   });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const credits = await getCreditState(session.user.id);
-  const trial = getTrialStatus(user.plan, user.trialEndsAt);
+  const trial = getTrialStatus(user.plan, user.trialEndsAt, user.trialVoided);
 
   return NextResponse.json({
     name: user.name,

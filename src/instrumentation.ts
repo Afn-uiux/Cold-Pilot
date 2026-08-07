@@ -127,6 +127,7 @@ export async function register() {
         lastWeeklyDigestDate = todayDate;
         try {
           const users = await prisma.user.findMany({
+            where: { deletedAt: null },
             select: { id: true, email: true },
           });
           for (const user of users) {
@@ -144,6 +145,7 @@ export async function register() {
         lastMonthlyDigestDate = todayDate;
         try {
           const users = await prisma.user.findMany({
+            where: { deletedAt: null },
             select: { id: true, email: true },
           });
           for (const user of users) {
@@ -162,6 +164,7 @@ export async function register() {
           const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
           const inactiveUsers = await prisma.user.findMany({
             where: {
+              deletedAt: null,
               updatedAt: { lt: fourteenDaysAgo },
               campaigns: { none: { status: "active", deletedAt: null } },
             },

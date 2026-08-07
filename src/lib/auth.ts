@@ -24,6 +24,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         });
 
         if (!user || !user.password) return null;
+        if (user.deletedAt) return null;
 
         const isValid = await bcrypt.compare(
           credentials.password as string,
@@ -42,10 +43,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
+    async signIn({ user }) {
+      if (!user.email) return false;
+      const existing = await prisma.user.findUnique({
+        where: { email: user.email },
+        select: { deletedAt: true },
+      });
+      if (existing?.deletedAt) return false;
+      return true;
+    },
     async session({ session, token }) {
       if (token.sub && session.user) {
+        const user = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: { role: true, deletedAt: true },
+        });
+        if (!user || user.deletedAt) {
+          session.user = undefined as unknown as typeof session.user;
+          return session;
+        }
         session.user.id = token.sub;
-        session.user.role = token.role as string || "user";
+        session.user.role = user.role || "user";
       }
       session.sid = token.sid as string | undefined;
       return session;

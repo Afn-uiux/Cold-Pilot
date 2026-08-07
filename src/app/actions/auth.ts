@@ -6,11 +6,13 @@ import { TRIAL_MS } from "@/lib/trial";
 import { signIn } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendEmailSafe } from "@/lib/email/send";
+import { computeSignupRisk } from "@/lib/fraud";
 
 export async function signup(formData: FormData) {
   const name = formData.get("name") as string;
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
+  const fingerprint = (formData.get("fingerprint") as string) || null;
 
   if (!email || !password) {
     return { error: "Email and password are required" };
@@ -22,7 +24,8 @@ export async function signup(formData: FormData) {
 
   const { headers } = await import("next/headers");
   const h = await headers();
-  const ip = h.get("x-forwarded-for") || h.get("x-real-ip") || "unknown";
+  const rawIp = h.get("x-forwarded-for") || h.get("x-real-ip") || "unknown";
+  const ip = rawIp.split(",")[0].trim();
 
   const { allowed, retryAfterMs } = checkRateLimit(`signup:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 });
   if (!allowed) {
@@ -37,12 +40,31 @@ export async function signup(formData: FormData) {
 
   const hashedPassword = await bcrypt.hash(password, 12);
 
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       name: name || null,
       email,
       password: hashedPassword,
       trialEndsAt: new Date(Date.now() + TRIAL_MS),
+      deviceFingerprint: fingerprint,
+      signupIp: ip !== "unknown" ? ip : null,
+    },
+  });
+
+  // Risk gate: never blocks, only flags for admin review. The pattern rule
+  // (mailbox-reuse void + fresh sibling from the same device) lands here.
+  const risk = await computeSignupRisk({ userId: user.id, email, fingerprint, ip });
+  if (risk.score > 0 || risk.status === "flagged") {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { riskScore: risk.score, riskFlags: JSON.stringify(risk.flags), riskStatus: risk.status },
+    });
+  }
+  await prisma.signupSignal.create({
+    data: {
+      userId: user.id,
+      deviceFingerprint: fingerprint,
+      ip: ip !== "unknown" ? ip : null,
     },
   });
 

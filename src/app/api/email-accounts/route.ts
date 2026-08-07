@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
 import { encryptAccount, encrypt } from "@/lib/crypto";
 import { assertInboxCapacity, PlanLimitError } from "@/lib/credits";
+import { mailboxIdentityKey, recordMailboxConnect, markMailboxDisconnected } from "@/lib/fraud";
 
 const IMAP_DEFAULTS: Record<string, { host: string; port: number }> = {
   gmail: { host: "imap.gmail.com", port: 993 },
@@ -206,6 +207,16 @@ export async function POST(req: Request) {
     }),
   });
 
+  // Permanent mailbox fingerprinting: the first profile to claim this mailbox
+  // owns it. Reuse on another profile voids that account's trial.
+  const mailboxKey = mailboxIdentityKey(email);
+  await recordMailboxConnect({
+    userId: session.user.id,
+    provider: mailboxKey.provider,
+    providerAccountId: mailboxKey.providerAccountId,
+    email,
+  });
+
   // Send onboarding email if this is the user's first account
   const accountCount = await prisma.emailAccount.count({ where: { userId: session.user.id } });
   if (accountCount === 1) {
@@ -276,6 +287,12 @@ export async function DELETE(req: NextRequest) {
     if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     await prisma.warmupLog.deleteMany({ where: { senderMailboxId: id } });
+
+    // Identity history survives the disconnect so the same mailbox can never
+    // be recycled onto a fresh account for a new trial.
+    const mailboxKey = mailboxIdentityKey(account.email);
+    await markMailboxDisconnected(mailboxKey.provider, mailboxKey.providerAccountId);
+
     await prisma.emailAccount.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (err: any) {
