@@ -54,6 +54,7 @@ model User {
   creditTransactions CreditTransaction[]
   mailboxIdentities MailboxIdentity[]
   signupSignals      SignupSignal[]
+  userSessions      UserSession[]
 }
 
 // Permanent history of every connected mailbox. Keyed on the immutable
@@ -139,6 +140,22 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// Authoritative, server-side record of an issued login session. The JWT's
+// `sid` claim must match a non-expired row here or the session is treated as
+// signed out — this is what makes logout (and future "log out all devices")
+// actually revoke access, since a bare JWT can't be invalidated on its own.
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  sid       String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model EmailAccount {

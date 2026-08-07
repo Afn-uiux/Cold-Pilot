@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { categorizeBounce } from "@/lib/bounce";
 import { decryptAccount } from "@/lib/crypto";
 import { canSendFromAccount } from "@/lib/send-gate";
+import { signRedirect } from "@/lib/track-sign";
 
 interface SendOptions {
   to: string;
@@ -59,7 +60,8 @@ function rewriteLinks(html: string, baseUrl: string, leadId: string, campaignSte
     (match, attrs, url) => {
       if (url.includes(baseUrl.replace(/https?:\/\//, ""))) return match;
       const stepParam = campaignStepId ? `&stepId=${campaignStepId}` : "";
-      const tracked = `${baseUrl}/api/track?id=${leadId}&type=click&redirect=${encodeURIComponent(url)}${stepParam}`;
+      const sig = signRedirect(leadId, campaignStepId, url);
+      const tracked = `${baseUrl}/api/track?id=${leadId}&type=click&redirect=${encodeURIComponent(url)}${stepParam}&sig=${sig}`;
       return `<a ${attrs}href="${tracked}"`;
     }
   );

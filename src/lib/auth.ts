@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
+import { createSession, revokeSession, SESSION_TTL_MS } from "./session";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -69,7 +70,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
     async jwt({ token, user }) {
-      if (user) {
+      // `user` is only present on an actual sign-in, never on token refresh —
+      // so this is exactly where a new session should be minted, once.
+      if (user?.id) {
         token.sub = user.id;
         token.sid = crypto.randomUUID();
         const dbUser = await prisma.user.findUnique({
@@ -77,8 +80,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           select: { role: true },
         });
         token.role = dbUser?.role || "user";
+        await createSession(user.id, token.sid as string);
       }
       return token;
+    },
+  },
+  events: {
+    // Fires on both explicit signOut() calls and NextAuth's own session
+    // teardown. Revoking the DB row here is what actually invalidates the
+    // session server-side — clearing cookies alone only affects this browser.
+    async signOut(message) {
+      const sid = "token" in message ? (message.token?.sid as string | undefined) : undefined;
+      await revokeSession(sid);
     },
   },
   pages: {
@@ -86,6 +99,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt",
+    maxAge: SESSION_TTL_MS / 1000,
   },
   trustHost: true,
 });

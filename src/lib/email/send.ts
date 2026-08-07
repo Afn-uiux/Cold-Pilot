@@ -8,19 +8,28 @@ interface SendEmailOptions {
   data?: Record<string, any>;
 }
 
-export function renderEmail(templateId: EmailTemplateId) {
+export function renderEmail(templateId: EmailTemplateId, data?: Record<string, unknown>) {
   const template = getTemplateById(templateId);
   if (!template) throw new Error(`Unknown email template: ${templateId}`);
   const filePath = join(process.cwd(), "src", "lib", "email", "templates-html", template.filename);
-  const html = readFileSync(filePath, "utf-8");
+  let html = readFileSync(filePath, "utf-8");
+
+  // Substitute {{key}} placeholders (e.g. {{verifyUrl}}, {{resetUrl}}) with
+  // the caller-provided data. Any placeholder left without a matching value
+  // is stripped rather than sent to a recipient literally as "{{...}}".
+  html = html.replace(/\{\{(\w+)\}\}/g, (_match, key) => {
+    const value = data?.[key];
+    return value !== undefined && value !== null ? String(value) : "";
+  });
+
   return {
     subject: template.subject,
     html,
   };
 }
 
-export async function sendTransactionalEmail({ to, template }: SendEmailOptions) {
-  const { subject, html } = renderEmail(template);
+export async function sendTransactionalEmail({ to, template, data }: SendEmailOptions) {
+  const { subject, html } = renderEmail(template, data);
 
   const { default: nodemailer } = await import("nodemailer");
 

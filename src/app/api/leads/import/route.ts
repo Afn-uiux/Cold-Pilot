@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
 import { assertLeadCapacity, PlanLimitError } from "@/lib/credits";
+import { assertPublicHttpsUrl } from "@/lib/ssrf-guard";
 
 const KNOWN_FIELDS = [
   "email", "e-mail", "email address", "mail", "emails", "email addresses", "e mail", "e_mail",
@@ -297,22 +298,10 @@ export async function POST(req: Request) {
           leads = allRows.filter(l => l.email && l.email.includes("@"));
         } else {
           let parsed: URL;
-          try { parsed = new URL(url); } catch {
-            return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
-          }
-          // SSRF guard: only https, and never allow private/internal hosts
-          // (localhost, RFC1918, link-local, metadata endpoint).
-          if (parsed.protocol !== "https:") {
-            return NextResponse.json({ error: "Only https URLs are allowed" }, { status: 400 });
-          }
-          const hostname = parsed.hostname.toLowerCase();
-          const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(":");
-          if (isIp || hostname === "localhost" || hostname.endsWith(".local") || hostname.endsWith(".internal")) {
-            return NextResponse.json({ error: "URL host is not allowed" }, { status: 400 });
-          }
-          const blockedHosts = ["169.254.169.254", "metadata.google.internal", "metadata"];
-          if (blockedHosts.includes(hostname)) {
-            return NextResponse.json({ error: "URL host is not allowed" }, { status: 400 });
+          try {
+            parsed = await assertPublicHttpsUrl(url);
+          } catch (err) {
+            return NextResponse.json({ error: err instanceof Error ? err.message : "Invalid URL" }, { status: 400 });
           }
           const res = await fetch(parsed, {
             redirect: "follow",

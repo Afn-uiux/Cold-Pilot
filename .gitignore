@@ -51,6 +51,8 @@ logs/
 # database
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 
 # OS files
 .DS_Store

@@ -106,22 +106,11 @@ export async function login(formData: FormData) {
   }
 }
 
-export async function resetPassword(email: string, newPassword: string) {
-  if (!email || !newPassword) {
-    return { error: "Email and new password are required" };
-  }
-  if (newPassword.length < 6) {
-    return { error: "Password must be at least 6 characters" };
-  }
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    return { error: "No account found with this email" };
-  }
-  const hashedPassword = await bcrypt.hash(newPassword, 12);
-  await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
-  sendEmailSafe(email, "password-changed");
-  return { success: true };
-}
+// NOTE: password resets now go through a token-based flow — see
+// /api/auth/reset-password/request and /api/auth/reset-password/confirm.
+// (Previously this action reset a password given only an email address with
+// no proof of ownership, which let anyone take over any account. Don't
+// reintroduce a variant that skips the emailed token.)
 
 export async function demoLogin() {
   const email = "demo@coldpilot.io";

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { decode } from "next-auth/jwt";
 import { rateLimit } from "@/lib/rate-limit";
+import { isSessionValid } from "@/lib/session";
 
 const protectedPaths = ["/dashboard"];
 const authPaths = ["/auth/login", "/auth/signup"];
@@ -12,6 +13,13 @@ const cookieName =
     ? "__Secure-authjs.session-token"
     : "authjs.session-token";
 
+function clearSessionCookies(res: NextResponse) {
+  res.cookies.delete(cookieName);
+  // Legacy cookie from the old client-side binding scheme — harmless to
+  // clear if a returning browser still has it.
+  res.cookies.delete("session-binding");
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = request.cookies.get(cookieName)?.value;
@@ -19,39 +27,23 @@ export async function proxy(request: NextRequest) {
   if (sessionCookie) {
     try {
       const token = await decode({ token: sessionCookie, secret, salt: cookieName });
-      if (token?.sid) {
-        const bindingCookie = request.cookies.get("session-binding")?.value;
 
-        if (!bindingCookie) {
-          const res = NextResponse.next();
-          res.cookies.set("session-binding", token.sid as string, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 60 * 60 * 24 * 30,
-            path: "/",
-          });
-          return res;
-        }
+      // A token without a sid predates this scheme, or is malformed — treat
+      // it as signed out rather than trusting it implicitly.
+      const valid = token?.sid ? await isSessionValid(token.sid as string) : false;
 
-        if (bindingCookie !== token.sid) {
-          const loginUrl = new URL("/auth/login", request.url);
-          const res = NextResponse.redirect(loginUrl);
-          res.cookies.delete(cookieName);
-          res.cookies.delete("session-binding");
-          return res;
-        }
+      if (!valid) {
+        const loginUrl = new URL("/auth/login", request.url);
+        const res = NextResponse.redirect(loginUrl);
+        clearSessionCookies(res);
+        return res;
       }
     } catch {
-      // Invalid token — will be caught by normal auth flow
+      const loginUrl = new URL("/auth/login", request.url);
+      const res = NextResponse.redirect(loginUrl);
+      clearSessionCookies(res);
+      return res;
     }
-  }
-
-  // Clean up orphaned binding cookie (e.g. after sign-out)
-  if (!sessionCookie && request.cookies.get("session-binding")?.value) {
-    const res = NextResponse.next();
-    res.cookies.delete("session-binding");
-    return res;
   }
 
   // Rate limit auth pages (login/signup)

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { signIn } from "next-auth/react";
-import { login, demoLogin, resetPassword } from "@/app/actions/auth";
+import { login, demoLogin } from "@/app/actions/auth";
 import Link from "next/link";
 
 export default function LoginPage() {
@@ -15,6 +15,7 @@ export default function LoginPage() {
       window.history.replaceState({}, "", window.location.pathname);
       if (err === "invalid") setError("Invalid email or password");
       else if (err === "missing") setError("Email and password are required");
+      else if (err === "rate_limited") setError("Too many attempts. Try again in a few minutes.");
       else setError("Login failed");
     }
   }, []);
@@ -22,10 +23,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
-  const [resetPass, setResetPass] = useState("");
   const [resetMsg, setResetMsg] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const [showResetPassword, setShowResetPassword] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -46,13 +46,19 @@ export default function LoginPage() {
     e.preventDefault();
     setResetMsg(null);
     setResetLoading(true);
-    const result = await resetPassword(resetEmail, resetPass);
-    setResetLoading(false);
-    if (result?.error) {
-      setResetMsg(result.error);
-    } else {
-      setResetMsg("Password reset! You can now log in.");
-      setResetOpen(false);
+    try {
+      const res = await fetch("/api/auth/reset-password/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setResetSent(true);
+      setResetMsg(data.message || "If an account exists for that email, a password reset link was sent.");
+    } catch {
+      setResetMsg("Something went wrong. Please try again.");
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -150,7 +156,7 @@ export default function LoginPage() {
           </form>
 
           <div style={{ marginTop: 12, textAlign: "right" }}>
-            <button onClick={() => { setResetOpen(true); setResetMsg(null); setResetEmail(""); setResetPass(""); }}
+            <button onClick={() => { setResetOpen(true); setResetMsg(null); setResetEmail(""); setResetSent(false); }}
               style={{ fontSize: 13, color: "#5A6B87", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}
               onMouseEnter={e => (e.target as HTMLElement).style.color = "#0F1929"}
               onMouseLeave={e => (e.target as HTMLElement).style.color = "#5A6B87"}>
@@ -186,42 +192,31 @@ export default function LoginPage() {
 
       {resetOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
-          onClick={() => setResetOpen(false)}>
+          onClick={() => { setResetOpen(false); setResetSent(false); setResetMsg(null); }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: 32, width: "100%", maxWidth: 380 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 18, fontWeight: 500, color: "#0F1929", marginBottom: 4 }}>Reset password</h3>
-            <p style={{ fontSize: 13, color: "#5A6B87", marginBottom: 20 }}>Enter your email and a new password.</p>
+            <p style={{ fontSize: 13, color: "#5A6B87", marginBottom: 20 }}>Enter your email and we&apos;ll send you a link to reset your password.</p>
             {resetMsg && (
-              <div style={{ fontSize: 13, color: resetMsg.includes("!") ? "#2E7D32" : "#C62828", background: resetMsg.includes("!") ? "rgba(46,125,50,0.06)" : "rgba(198,40,40,0.06)", padding: "10px 14px", borderRadius: 6, marginBottom: 16 }}>{resetMsg}</div>
+              <div style={{ fontSize: 13, color: resetSent ? "#2E7D32" : "#C62828", background: resetSent ? "rgba(46,125,50,0.06)" : "rgba(198,40,40,0.06)", padding: "10px 14px", borderRadius: 6, marginBottom: 16 }}>{resetMsg}</div>
             )}
-            <form onSubmit={handleReset} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <input value={resetEmail} onChange={e => setResetEmail(e.target.value)} type="email" required placeholder="Email"
-                style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 0", outline: "none" }} />
-              <div style={{ position: "relative" }}>
-                <input value={resetPass} onChange={e => setResetPass(e.target.value)} type={showResetPassword ? "text" : "password"} required placeholder="New password (min 6 chars)"
-                  style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 36px 10px 0", outline: "none" }} />
-                <button type="button" onClick={() => setShowResetPassword(v => !v)}
-                  style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8A9BB5", display: "flex" }}
-                  tabIndex={-1} aria-label={showResetPassword ? "Hide password" : "Show password"}>
-                  {showResetPassword ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </svg>
-                  ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  )}
-                </button>
+            {!resetSent && (
+              <form onSubmit={handleReset} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <input value={resetEmail} onChange={e => setResetEmail(e.target.value)} type="email" required placeholder="Email"
+                  style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 0", outline: "none" }} />
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+                  <button type="button" onClick={() => setResetOpen(false)}
+                    style={{ padding: "8px 16px", fontSize: 13, color: "#5A6B87", background: "none", border: "1px solid rgba(15,25,41,0.08)", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
+                  <button type="submit" disabled={resetLoading}
+                    style={{ padding: "8px 16px", fontSize: 13, color: "#fff", background: "#0F1929", border: "none", borderRadius: 6, cursor: "pointer" }}>{resetLoading ? "Sending..." : "Send reset link"}</button>
+                </div>
+              </form>
+            )}
+            {resetSent && (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button type="button" onClick={() => { setResetOpen(false); setResetSent(false); setResetMsg(null); }}
+                  style={{ padding: "8px 16px", fontSize: 13, color: "#fff", background: "#0F1929", border: "none", borderRadius: 6, cursor: "pointer" }}>Done</button>
               </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-                <button type="button" onClick={() => setResetOpen(false)}
-                  style={{ padding: "8px 16px", fontSize: 13, color: "#5A6B87", background: "none", border: "1px solid rgba(15,25,41,0.08)", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
-                <button type="submit" disabled={resetLoading}
-                  style={{ padding: "8px 16px", fontSize: 13, color: "#fff", background: "#0F1929", border: "none", borderRadius: 6, cursor: "pointer" }}>{resetLoading ? "Resetting..." : "Reset"}</button>
-              </div>
-            </form>
+            )}
           </div>
         </div>
       )}
