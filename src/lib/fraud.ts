@@ -5,22 +5,23 @@ import type { Prisma } from "@prisma/client";
 // Mailbox identity
 // ---------------------------------------------------------------------------
 
-// Normalizes an email to the immutable identity that survives alias games
-// (Gmail's "+alias" AND dot-insensitivity are both stripped, since Gmail
-// treats "john.doe@gmail.com" and "johndoe@gmail.com" as the exact same
-// inbox — leaving either trick unhandled would defeat the whole point of
-// this function) and casing differences. All plain IMAP/app password
-// connects share the "imap" identity space so gmail-via-app-password and
-// gmail-via-custom-imap are the same mailbox.
+// Normalizes an email to the immutable identity that survives alias games and
+// casing differences. Plus-addressing is stripped for every provider (Gmail,
+// Yahoo, Outlook, iCloud, Fastmail, ProtonMail, ... all treat the "+tag" part
+// as routing, not a distinct inbox); Gmail's dot-insensitivity is also
+// handled, since "john.doe@gmail.com" and "johndoe@gmail.com" are the exact
+// same inbox. All plain IMAP/app password connects share the "imap" identity
+// space so gmail-via-app-password and gmail-via-custom-imap are the same
+// mailbox.
 export function mailboxIdentityKey(email: string): { provider: string; providerAccountId: string } {
   let e = email.trim().toLowerCase();
   const at = e.indexOf("@");
   if (at >= 0) {
     let local = e.slice(0, at);
     let domain = e.slice(at);
+    if (local.includes("+")) local = local.slice(0, local.indexOf("+"));
     if (domain === "@googlemail.com") domain = "@gmail.com";
     if (domain === "@gmail.com") {
-      if (local.includes("+")) local = local.slice(0, local.indexOf("+"));
       local = local.replace(/\./g, "");
     }
     e = local + domain;
