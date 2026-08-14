@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Select from "@/components/select";
+import { Settings01Icon } from "@/components/icons/settings-01";
+import { Cancel01Icon } from "@/components/icons/cancel-01";
 
 interface PipelineData { id: string; name: string; stages: string; _count: { deals: number } }
 interface LeadData { id: string; firstName: string | null; lastName: string | null; email: string; company: string | null }
@@ -192,9 +194,7 @@ export default function CrmPage() {
           {selectedPipelineId && (
             <button onClick={() => { setSettingsName(selectedPipeline?.name || ""); setSettingsStages(stages.join("\n")); setShowPipelineSettings(true); }}
               className="p-2 text-muted hover:text-ink border border-border rounded-lg hover:bg-cream transition-colors" title="Pipeline settings">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-              </svg>
+              <Settings01Icon size={16} />
             </button>
           )}
           <button onClick={() => setShowNewPipeline(true)} className="btn btn-primary btn-sm">+ Pipeline</button>
@@ -242,7 +242,9 @@ export default function CrmPage() {
             <div className="p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-semibold text-ink">{editDeal.name}</h2>
-                <button onClick={() => setEditDeal(null)} className="text-muted-2 hover:text-blue-accent text-lg leading-none">&times;</button>
+                <button onClick={() => setEditDeal(null)} className="text-muted-2 hover:text-blue-accent flex items-center justify-center">
+                  <Cancel01Icon size={20} />
+                </button>
               </div>
               <div className="space-y-4">
                 <div>

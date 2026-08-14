@@ -4,6 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import ConfirmModal from "@/components/confirm-modal";
 import Select from "@/components/select";
+import { PauseIcon } from "@/components/icons/pause";
+import { PlayIcon } from "@/components/icons/play";
+import { Search01Icon } from "@/components/icons/search-01";
+import { Mail01Icon } from "@/components/icons/mail-01";
+import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
+import { ArrowRight02Icon } from "@/components/icons/arrow-right-02";
 
 type CampaignMetrics = {
   sentCount: number;
@@ -143,10 +149,7 @@ export default function CampaignsPage() {
           className="p-1 text-muted-2 hover:text-ink transition-colors"
           title="Pause campaign"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="6" y="4" width="4" height="16" />
-            <rect x="14" y="4" width="4" height="16" />
-          </svg>
+          <PauseIcon size={14} />
         </button>
       );
     }
@@ -157,9 +160,7 @@ export default function CampaignsPage() {
           className="p-1 text-muted-2 hover:text-green-600 transition-colors"
           title="Resume campaign"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="6,4 20,12 6,20" />
-          </svg>
+          <PlayIcon size={14} />
         </button>
       );
     }
@@ -170,9 +171,7 @@ export default function CampaignsPage() {
           className="p-1 text-muted-2 hover:text-green-600 transition-colors"
           title="Launch campaign"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="6,4 20,12 6,20" />
-          </svg>
+          <PlayIcon size={14} />
         </button>
       );
     }
@@ -193,7 +192,7 @@ export default function CampaignsPage() {
         <div className="toolbar">
           <div className="toolbar-left">
             <div className="search">
-              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <Search01Icon size={14} className="pointer-events-none" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#7A9AB5" }} />
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search campaigns..." />
             </div>
             <div className="w-40">
@@ -209,10 +208,7 @@ export default function CampaignsPage() {
         ) : campaigns.length === 0 ? (
           <div className="empty-state">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cream-2 flex items-center justify-center">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-2">
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <path d="M22 7l-10 7L2 7" />
-              </svg>
+              <Mail01Icon size={28} className="text-muted-2" />
             </div>
             <h3>No campaigns yet</h3>
             <p>Create your first campaign to get started.</p>
@@ -284,7 +280,7 @@ export default function CampaignsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(15,13,20,0.4)", backdropFilter: "blur(4px)" }} onClick={() => setShowCreate(false)}>
           <div className="bg-cream border border-border rounded-lg w-[90%] max-w-[480px] p-8 shadow-xl" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowCreate(false)} className="text-sm text-muted hover:text-blue-accent mb-6 flex items-center gap-1.5">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+              <ArrowLeft02Icon size={14} />
               Back
             </button>
             <h2 className="font-medium text-2xl font-normal mb-6">Let's create a new campaign</h2>
@@ -295,7 +291,7 @@ export default function CampaignsPage() {
             </div>
             <div className="flex gap-3 mt-8">
               <button onClick={() => setShowCreate(false)} className="btn btn-ghost flex-1">Cancel</button>
-              <button onClick={handleCreate} className="btn btn-primary flex-1">Continue →</button>
+              <button onClick={handleCreate} className="btn btn-primary flex-1">Continue <ArrowRight02Icon size={14} /></button>
             </div>
           </div>
         </div>

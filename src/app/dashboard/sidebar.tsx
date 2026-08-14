@@ -4,6 +4,16 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { Home01Icon } from "@/components/icons/home-01";
+import { Mail01Icon } from "@/components/icons/mail-01";
+import { SentIcon } from "@/components/icons/sent";
+import { InboxIcon } from "@/components/icons/inbox";
+import { UserGroupIcon } from "@/components/icons/user-group";
+import { Settings01Icon } from "@/components/icons/settings-01";
+import { Shield02Icon } from "@/components/icons/shield-02";
+import { Logout01Icon } from "@/components/icons/logout-01";
+import { Menu01Icon } from "@/components/icons/menu-01";
+import { Cancel01Icon } from "@/components/icons/cancel-01";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: "home" },
@@ -44,11 +54,7 @@ export default function Sidebar({ user }: { user: any }) {
         className="fixed top-4 left-4 z-50 lg:hidden bg-cream border border-border rounded-lg p-2.5 shadow-sm"
         aria-label="Open menu"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-          <line x1="4" y1="6" x2="20" y2="6" />
-          <line x1="4" y1="12" x2="20" y2="12" />
-          <line x1="4" y1="18" x2="20" y2="18" />
-        </svg>
+        <Menu01Icon size={18} />
       </button>
 
       {/* Overlay for mobile */}
@@ -69,9 +75,7 @@ export default function Sidebar({ user }: { user: any }) {
         <div className="font-medium text-lg tracking-tight px-6 mb-9 flex items-center justify-between">
           <Link href="/dashboard" onClick={() => setMobileOpen(false)}>Coldpilot</Link>
           <button onClick={() => setMobileOpen(false)} className="lg:hidden text-muted hover:text-blue-accent">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <line x1="6" y1="6" x2="18" y2="18" /><line x1="6" y1="18" x2="18" y2="6" />
-            </svg>
+            <Cancel01Icon size={16} />
           </button>
         </div>
 
@@ -129,11 +133,7 @@ export default function Sidebar({ user }: { user: any }) {
             href="/api/auth/signout"
             className="flex items-center gap-3 py-2.5 text-sm text-muted hover:text-blue-accent transition-colors w-full text-left"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
+            <Logout01Icon size={16} />
             Sign out
           </a>
         </div>
@@ -143,17 +143,14 @@ export default function Sidebar({ user }: { user: any }) {
 }
 
 function NavIcon({ name }: { name: string }) {
-  const props = { width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const size = 16;
   switch (name) {
-    case "home": return <svg {...props} viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
-    case "mail": return <svg {...props} viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>;
-    case "chart": return <svg {...props} viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>;
-    case "users": return <svg {...props} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
-    case "inbox": return <svg {...props} viewBox="0 0 24 24"><path d="M22 12h-5l-2 3H9l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>;
-    case "trend": return <svg {...props} viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>;
-    case "file": return <svg {...props} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
-    case "gear": return <svg {...props} viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
-    case "folder": return <svg {...props} viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>;
-    case "shield": return <svg {...props} viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
+    case "home": return <Home01Icon size={size} />;
+    case "mail": return <Mail01Icon size={size} />;
+    case "chart": return <SentIcon size={size} />;
+    case "users": return <UserGroupIcon size={size} />;
+    case "inbox": return <InboxIcon size={size} />;
+    case "gear": return <Settings01Icon size={size} />;
+    case "shield": return <Shield02Icon size={size} />;
   }
 }

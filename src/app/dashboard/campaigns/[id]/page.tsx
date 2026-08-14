@@ -9,6 +9,36 @@ import { VARIABLE_LIST, processSpintax, getPersonalizedPreview } from "@/engine/
 import Select from "@/components/select";
 import ConfirmModal from "@/components/confirm-modal";
 import RichTextEditor, { type RichTextEditorHandle } from "@/components/rich-text-editor";
+import AiWriterWizard, { type GeneratedStep } from "@/components/ai-writer-wizard";
+import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
+import { ChevronUpIcon } from "@/components/icons/chevron-up";
+import { ChevronDownIcon } from "@/components/icons/chevron-down";
+import { Cancel01Icon } from "@/components/icons/cancel-01";
+import { EyeIcon } from "@/components/icons/eye";
+import { FlashIcon } from "@/components/icons/flash";
+import { SaveIcon } from "@/components/icons/save";
+import { RefreshIcon } from "@/components/icons/refresh";
+import { CircleCheckIcon } from "@/components/icons/circle-check";
+import { MagicWand01Icon } from "@/components/icons/magic-wand-01";
+import { GridViewIcon } from "@/components/icons/grid-view";
+import { CodeXmlIcon } from "@/components/icons/code-xml";
+import { Link01Icon } from "@/components/icons/link-01";
+import { Edit02Icon } from "@/components/icons/edit-02";
+import { Clock01Icon } from "@/components/icons/clock-01";
+import { PlusSignIcon } from "@/components/icons/plus-sign";
+import { Search01Icon } from "@/components/icons/search-01";
+import { FilterIcon } from "@/components/icons/filter";
+import { Download01Icon } from "@/components/icons/download-01";
+import { Mail01Icon } from "@/components/icons/mail-01";
+import { SentIcon } from "@/components/icons/sent";
+import { MailOpenIcon } from "@/components/icons/mail-open";
+import { CursorPointer01Icon } from "@/components/icons/cursor-pointer-01";
+import { ArrowUpLeft01Icon } from "@/components/icons/arrow-up-left-01";
+import { CircleXIcon } from "@/components/icons/circle-x";
+import { BoldIcon } from "@/components/icons/text-bold";
+import { ItalicIcon } from "@/components/icons/text-italic";
+import { UnderlineIcon } from "@/components/icons/text-underline";
+import { StrikethroughIcon } from "@/components/icons/text-strike";
 
 type CampaignState = "draft" | "active" | "paused" | "completed";
 type Step = { id?: string; type: string; subject: string; bodyHtml: string; delayDays: number; delayUnit: string; order: number };
@@ -28,6 +58,7 @@ export default function CampaignDetailPage() {
   const [saveMsg, setSaveMsg] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiStepIdx, setAiStepIdx] = useState(0);
+  const [aiWriterOpen, setAiWriterOpen] = useState(false);
   const [aiDropdownStep, setAiDropdownStep] = useState<number | null>(null);
   const [variablesPanelStep, setVariablesPanelStep] = useState<number | null>(null);
   const [previewStep, setPreviewStep] = useState<number | null>(null);
@@ -63,6 +94,20 @@ export default function CampaignDetailPage() {
     const html = esc(text).replace(/\r?\n/g, "<br>");
     const current = steps[i].bodyHtml || "";
     updateStep(i, "bodyHtml", current + (current ? "<br><br>" : "") + html);
+  }
+
+  function applyGeneratedSequence(genSteps: GeneratedStep[]) {
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const newSteps: Step[] = genSteps.map((s, i) => ({
+      type: "email",
+      subject: s.subject || "",
+      bodyHtml: esc(s.body).replace(/\r?\n/g, "<br>"),
+      delayDays: i === 0 ? 0 : 2,
+      delayUnit: "days",
+      order: i,
+    }));
+    setSteps(newSteps);
+    setAiStepIdx(0);
   }
 
   async function runAi(action: string, stepIndex: number) {
@@ -314,7 +359,7 @@ export default function CampaignDetailPage() {
       )}
       <header className="px-6 lg:px-10 pt-6 pb-0">
         <Link href="/dashboard/campaigns" className="text-sm text-muted hover:text-blue-accent flex items-center gap-1.5 mb-4">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          <ArrowLeft02Icon size={14} />
           Campaigns
         </Link>
         <div className="flex items-center justify-between gap-5 flex-wrap">
@@ -378,8 +423,8 @@ export default function CampaignDetailPage() {
                     <div className="px-6 py-3.5 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="flex flex-col gap-0.5 md:hidden">
-                          <button onClick={() => moveStep(i, -1)} disabled={i === 0} className="text-[10px] text-muted-2 hover:text-blue-accent disabled:opacity-20">▲</button>
-                          <button onClick={() => moveStep(i, 1)} disabled={i === steps.length - 1} className="text-[10px] text-muted-2 hover:text-blue-accent disabled:opacity-20">▼</button>
+                          <button onClick={() => moveStep(i, -1)} disabled={i === 0} className="text-muted-2 hover:text-blue-accent disabled:opacity-20"><ChevronUpIcon size={10} /></button>
+                          <button onClick={() => moveStep(i, 1)} disabled={i === steps.length - 1} className="text-muted-2 hover:text-blue-accent disabled:opacity-20"><ChevronDownIcon size={10} /></button>
                         </div>
                         <span className={`text-xs font-semibold tracking-wide ${i === 0 ? "text-blue-accent" : "text-muted-2"}`}>
                           {i === 0 ? "Step 1 — Initial Email" : `Step ${i + 1} — Follow-up`}
@@ -393,15 +438,15 @@ export default function CampaignDetailPage() {
                       <div className="flex items-center gap-1 shrink-0">
                         <button onClick={() => moveStep(i, -1)} disabled={i === 0}
                           className="text-muted-2 hover:text-blue-accent disabled:opacity-20 p-1.5 rounded-lg hover:bg-cream-2/60 transition-all" title="Move up">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15"/></svg>
+                          <ChevronUpIcon size={14} />
                         </button>
                         <button onClick={() => moveStep(i, 1)} disabled={i === steps.length - 1}
                           className="text-muted-2 hover:text-blue-accent disabled:opacity-20 p-1.5 rounded-lg hover:bg-cream-2/60 transition-all" title="Move down">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                          <ChevronDownIcon size={14} />
                         </button>
                         <div className="w-px h-4 bg-border/40 mx-1"></div>
                         <button onClick={() => removeStep(i)} className="text-muted-2 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-all" title="Remove step">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          <Cancel01Icon size={14} />
                         </button>
                       </div>
                     </div>
@@ -419,12 +464,12 @@ export default function CampaignDetailPage() {
                             <div className="w-px h-5 bg-border/40 shrink-0"></div>
                             <button onClick={() => setPreviewStep(i)}
                               className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-blue-accent px-2.5 py-1.5 rounded-lg hover:bg-blue-light/40 transition-all shrink-0">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                              <EyeIcon size={14} />
                               Preview
                             </button>
                             <button onClick={() => { setAiStepIdx(i); setShowTemplates(true); loadTemplates(); }}
                               className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-blue-light/40 transition-all shrink-0">
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                              <FlashIcon size={15} />
                             </button>
                           </div>
 
@@ -462,7 +507,7 @@ export default function CampaignDetailPage() {
                           <div className="flex items-center gap-0.5 px-3 py-2 border-t border-border/30 bg-cream-2/30">
                             <button onClick={saveSteps} disabled={saving}
                               className="flex items-center gap-1.5 bg-blue-accent hover:bg-blue-700 text-white text-xs font-medium px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50 shadow-[0_1px_2px_0_rgba(0,0,0,0.06)] whitespace-nowrap">
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                              <SaveIcon size={13} />
                               {saving ? "Saving…" : "Save"}
                             </button>
 
@@ -471,24 +516,24 @@ export default function CampaignDetailPage() {
                             <div className="relative">
                               <button onClick={e => { e.stopPropagation(); setAiDropdownStep(aiDropdownStep === i ? null : i); }}
                                 className="flex items-center gap-1.5 text-xs text-muted hover:text-blue-accent px-2.5 py-1.5 rounded-lg hover:bg-white/70 transition-all">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                                <FlashIcon size={14} />
                                 AI Tools
                               </button>
                               {aiDropdownStep === i && (
                                 <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-border/50 rounded-xl shadow-lg z-20 py-1.5 overflow-hidden">
                                   <button onClick={() => { setAiDropdownStep(null); setAiStepIdx(i); runAi("spin", i); }}
                                     disabled={aiLoading} className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-muted hover:text-blue-accent hover:bg-cream-2/60 transition-all disabled:opacity-30">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v12M9 12l3 3 3-3"/><path d="M6 18h12"/></svg>
+                                    <RefreshIcon size={14} />
                                     AI Spin Tax
                                   </button>
                                   <button onClick={() => { setAiDropdownStep(null); setAiStepIdx(i); runAi("check", i); }}
                                     disabled={aiLoading} className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-muted hover:text-blue-accent hover:bg-cream-2/60 transition-all disabled:opacity-30">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                                    <CircleCheckIcon size={14} />
                                     Word Checker
                                   </button>
-                                  <button onClick={() => { setAiDropdownStep(null); setAiStepIdx(i); runAi("write", i); }}
+                                  <button onClick={() => { setAiDropdownStep(null); setAiStepIdx(i); setAiWriterOpen(true); }}
                                     disabled={aiLoading} className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-muted hover:text-blue-accent hover:bg-cream-2/60 transition-all disabled:opacity-30">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                                    <MagicWand01Icon size={14} />
                                     AI Writer
                                   </button>
                                 </div>
@@ -496,13 +541,13 @@ export default function CampaignDetailPage() {
                             </div>
                             <button onClick={() => { setAiStepIdx(i); setShowTemplates(true); loadTemplates(); }}
                               className="flex items-center gap-1.5 text-xs text-muted hover:text-blue-accent px-2.5 py-1.5 rounded-lg hover:bg-white/70 transition-all">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                              <GridViewIcon size={14} />
                               Templates
                             </button>
 
                             <button onClick={e => { e.stopPropagation(); setVariablesPanelStep(variablesPanelStep === i ? null : i); }}
                               className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-all ${variablesPanelStep === i ? "text-blue-accent bg-blue-light/40" : "text-muted hover:text-blue-accent hover:bg-white/70"}`}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+                              <CodeXmlIcon size={14} />
                               Variables
                             </button>
 
@@ -510,16 +555,16 @@ export default function CampaignDetailPage() {
 
                             <div className="flex items-center gap-0.5">
                               <button onMouseDown={e => e.preventDefault()} onClick={() => formatStep(i, "bold")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Bold">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 010 8H6z"/></svg>
+                                <BoldIcon size={14} />
                               </button>
                               <button onMouseDown={e => e.preventDefault()} onClick={() => formatStep(i, "italic")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Italic">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+                                <ItalicIcon size={14} />
                               </button>
                               <button onMouseDown={e => e.preventDefault()} onClick={() => formatStep(i, "underline")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Underline">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 3v7a6 6 0 006 6 6 6 0 006-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
+                                <UnderlineIcon size={14} />
                               </button>
                               <button onMouseDown={e => e.preventDefault()} onClick={() => formatStep(i, "strikeThrough")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Strikethrough">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><path d="M16.5 7.5C16.5 5.5 14 4 12 4c-2.5 0-4 1.5-4 3.5"/><path d="M7.5 16.5C7.5 18.5 10 20 12 20c2.5 0 4-1.5 4-3.5"/></svg>
+                                <StrikethroughIcon size={14} />
                               </button>
                             </div>
 
@@ -527,17 +572,17 @@ export default function CampaignDetailPage() {
 
                             <div className="flex items-center gap-0.5">
                               <button onMouseDown={e => e.preventDefault()} onClick={() => handleLink(i)} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Link">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                                <Link01Icon size={14} />
                               </button>
                               <button onClick={() => insertVariable(i, "bodyHtml", "accountSignature")} className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Signature">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                <Edit02Icon size={14} />
                               </button>
                             </div>
 
                             <div className="w-px h-5 bg-border/40 shrink-0 mx-0.5"></div>
 
                             <button className="text-muted-3 hover:text-blue-accent p-1.5 rounded-lg hover:bg-white/70 transition-all" title="Source">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                              <CodeXmlIcon size={14} />
                             </button>
                           </div>
                         </div>
@@ -545,7 +590,7 @@ export default function CampaignDetailPage() {
                         {/* Delay — only for follow-ups */}
                         {i > 0 && (
                           <div className="flex items-center gap-2.5 flex-wrap bg-cream-2/40 border border-border/30 rounded-xl px-5 py-3.5 mt-3">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-2 shrink-0"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            <Clock01Icon size={15} className="text-muted-2 shrink-0" />
                             <span className="text-xs text-muted">Send this follow-up</span>
                             <input type="number" min={0} value={step.delayDays} onChange={e => updateStep(i, "delayDays", parseInt(e.target.value) || 0)}
                               className="w-14 bg-white border border-border/50 rounded-lg px-2 py-1.5 text-sm text-center outline-none focus:border-blue-accent transition-all" />
@@ -567,7 +612,7 @@ export default function CampaignDetailPage() {
             {/* Add step button */}
             <button onClick={addStep}
               className="w-full border-2 border-dashed border-border rounded-xl py-4 text-sm text-muted hover:border-blue-accent hover:text-blue-accent hover:bg-blue-light/20 transition-all flex items-center justify-center gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <PlusSignIcon size={16} />
               {steps.length === 0 ? "Add a step" : "Add Follow-up Step"}
             </button>
           </div>
@@ -580,7 +625,9 @@ export default function CampaignDetailPage() {
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
                 <h2 className="text-xl font-bold text-[#1a1a1a]">Test Email</h2>
-                <button onClick={() => setPreviewStep(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+                <button onClick={() => setPreviewStep(null)} className="text-gray-400 hover:text-gray-600 flex items-center justify-center">
+                  <Cancel01Icon size={18} />
+                </button>
               </div>
 
               {/* Body - two columns */}
@@ -709,7 +756,9 @@ export default function CampaignDetailPage() {
             <div className="bg-cream rounded-xl border border-border shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col m-4" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 border-b border-border">
                 <h3 className="font-medium text-sm">Select Template</h3>
-                <button onClick={() => setShowTemplates(false)} className="text-muted-2 hover:text-blue-accent text-lg leading-none">✕</button>
+                <button onClick={() => setShowTemplates(false)} className="text-muted-2 hover:text-blue-accent flex items-center justify-center">
+                  <Cancel01Icon size={18} />
+                </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {templates.length === 0 && <p className="text-sm text-muted py-8 text-center">No templates saved yet. <Link href="/dashboard/templates" className="text-blue-accent hover:underline">Create one</Link></p>}
@@ -728,6 +777,13 @@ export default function CampaignDetailPage() {
         {tab === "schedule" && <ScheduleTab campaignId={id} />}
         {tab === "options" && <OptionsTab campaignId={id} />}
         
+        <AiWriterWizard
+          open={aiWriterOpen}
+          campaignId={id}
+          onClose={() => setAiWriterOpen(false)}
+          onGenerated={applyGeneratedSequence}
+        />
+
       </div>
     </div>
   );
@@ -1000,23 +1056,23 @@ function timeAgo(dateStr: string): string {
 const ACTIVITY_TYPE_META: Record<string, { label: string; color: string; bg: string; icon: ReactNode }> = {
   sent: {
     label: "Sent", color: "#2563EB", bg: "rgba(37,99,235,0.1)",
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" /></svg>,
+    icon: <SentIcon size={14} />,
   },
   opened: {
     label: "Opened", color: "#7C3AED", bg: "rgba(124,58,237,0.1)",
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 8.5 13.4 14a2 2 0 0 1-2.8 0L2 8.5" /><rect x="2" y="4" width="20" height="16" rx="2" /></svg>,
+    icon: <MailOpenIcon size={14} />,
   },
   clicked: {
     label: "Clicked", color: "#D97706", bg: "rgba(217,119,6,0.1)",
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 9l11 4-4.5 2L13 20z" /><path d="M9 9V3M4.2 6.2l1.4 1.4M3 12h2" /></svg>,
+    icon: <CursorPointer01Icon size={14} />,
   },
   replied: {
     label: "Replied", color: "#16A34A", bg: "rgba(22,163,74,0.1)",
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 17 4 12l5-5" /><path d="M4 12h11a5 5 0 0 1 5 5v2" /></svg>,
+    icon: <ArrowUpLeft01Icon size={14} />,
   },
   bounced: {
     label: "Bounce", color: "#DC2626", bg: "rgba(220,38,38,0.1)",
-    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>,
+    icon: <CircleXIcon size={14} />,
   },
 };
 
@@ -1104,7 +1160,7 @@ function ActivityFeedTab({ campaignId }: { campaignId: string }) {
       <div className="flex items-center gap-2 pt-6 pb-4">
         <div className="relative flex-1 max-w-xs">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+            <Search01Icon size={14} />
           </span>
           <input
             value={searchInput}
@@ -1116,7 +1172,7 @@ function ActivityFeedTab({ campaignId }: { campaignId: string }) {
         <div className="relative">
           <button onClick={() => setFilterOpen(v => !v)}
             className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-md border ${typeFilter !== "all" ? "border-blue-accent text-blue-accent" : "border-border text-muted"}`}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
+            <FilterIcon size={14} />
             Filter{typeFilter !== "all" ? `: ${ACTIVITY_TYPE_META[typeFilter]?.label || typeFilter}` : ""}
           </button>
           {filterOpen && (
@@ -1134,7 +1190,7 @@ function ActivityFeedTab({ campaignId }: { campaignId: string }) {
           )}
         </div>
         <button onClick={downloadCsv} title="Export CSV" className="p-2 rounded-md border border-border text-muted hover:text-blue-accent hover:border-blue-accent">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+          <Download01Icon size={14} />
         </button>
         <div className="flex-1" />
         <span className="text-xs text-muted-2">{total} event{total === 1 ? "" : "s"}</span>
@@ -1159,12 +1215,12 @@ function ActivityFeedTab({ campaignId }: { campaignId: string }) {
                 </div>
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                   <span className="text-muted-2 shrink-0">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16v16H4z" /><path d="m4 6 8 7 8-7" /></svg>
+                    <Mail01Icon size={13} />
                   </span>
                   <span className="text-sm text-ink truncate">{item.leadEmail}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-2 shrink-0 w-36">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                  <Clock01Icon size={12} />
                   {timeAgo(item.date)}
                 </div>
                 <div className="text-xs text-muted-2 shrink-0 w-14 text-right">{item.step ? `Step ${item.step}` : ""}</div>
@@ -1585,16 +1641,14 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
                         {acct.email}
                         <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); setSelected(prev => prev.filter(x => x !== id)); }}
                           className="text-muted-2 hover:text-ink ml-0.5 cursor-pointer">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          <Cancel01Icon size={12} />
                         </span>
                       </span>
                     );
                   })
                 )}
               </div>
-              <svg className={`w-4 h-4 text-[#666] transition-transform flex-shrink-0 ml-2 ${accountsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              <ChevronDownIcon size={16} className={`text-[#666] transition-transform flex-shrink-0 ml-2 ${accountsOpen ? "rotate-180" : ""}`} />
             </button>
             {accountsOpen && (
               <>
@@ -1697,9 +1751,7 @@ function OptionsTab({ campaignId }: { campaignId: string }) {
       {/* Advanced toggle */}
       <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center gap-1.5 text-sm text-blue-accent font-medium hover:underline">
         {showAdvanced ? "Hide advanced options" : "Show advanced options"}
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`}>
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <ChevronDownIcon size={12} className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
       </button>
 
       {/* Advanced options */}
@@ -1841,7 +1893,7 @@ function BouncesTab({ stats }: { stats: any }) {
 
   function SortIcon(col: string) {
     if (sortCol !== col) return null;
-    return <span className="ml-1 text-[10px]">{sortDir === "asc" ? "▲" : "▼"}</span>;
+    return <span className="ml-1 inline-flex align-middle">{sortDir === "asc" ? <ChevronUpIcon size={10} /> : <ChevronDownIcon size={10} />}</span>;
   }
 
   const cards = [
@@ -1979,7 +2031,9 @@ function BouncesTab({ stats }: { stats: any }) {
           <div className="bg-cream border border-border rounded-xl shadow-2xl max-w-lg w-full mx-4 p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-ink">Bounce Details</h3>
-              <button onClick={() => setViewLog(null)} className="text-muted-2 hover:text-blue-accent text-lg leading-none">✕</button>
+              <button onClick={() => setViewLog(null)} className="text-muted-2 hover:text-blue-accent flex items-center justify-center">
+                <Cancel01Icon size={18} />
+              </button>
             </div>
             <div className="space-y-3 text-sm">
               <div><span className="text-muted text-xs uppercase tracking-wider block mb-0.5">Lead</span><span className="text-ink">{viewLog.leadEmail}</span></div>

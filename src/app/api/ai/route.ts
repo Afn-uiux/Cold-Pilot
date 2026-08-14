@@ -32,6 +32,33 @@ async function callDeepSeek(prompt: string): Promise<string> {
   return data.choices?.[0]?.message?.content?.trim() || "";
 }
 
+type GeneratedStep = { subject: string; body: string };
+
+const MAX_SUBJECT = 80;
+
+function truncateSubject(subject: string): string {
+  const clean = subject.replace(/\s+/g, " ").trim();
+  return clean.length > MAX_SUBJECT ? clean.slice(0, MAX_SUBJECT - 1).trimEnd() + "…" : clean;
+}
+
+function extractJsonArray(raw: string): GeneratedStep[] {
+  let text = raw.trim();
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) text = fence[1].trim();
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start === -1 || end === -1 || end <= start) return [];
+  try {
+    const parsed = JSON.parse(text.slice(start, end + 1));
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((s): s is Record<string, unknown> => !!s && typeof s.subject === "string" && typeof s.body === "string")
+      .map((s) => ({ subject: truncateSubject(s.subject as string), body: s.body as string }));
+  } catch {
+    return [];
+  }
+}
+
 export async function POST(req: Request) {
   const session = await auth();
   if (session?.user?.id) {
@@ -58,7 +85,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const { action, text, context } = await req.json();
+  const body = await req.json();
+  const { action, text, context } = body;
 
   try {
     await spendCredits(session.user.id, CREDIT_COSTS.ai, "ai", action);
@@ -100,8 +128,32 @@ export async function POST(req: Request) {
         );
         return NextResponse.json({ result });
       }
-    } catch (e: any) {
-      console.error("DeepSeek error, falling back:", e.message);
+
+      if (action === "generate-sequence") {
+        const companyName = typeof body.companyName === "string" ? body.companyName.trim() : "";
+        const offerDetails = typeof body.offerDetails === "string" ? body.offerDetails.trim() : "";
+        const targetAudience = typeof body.targetAudience === "string" ? body.targetAudience.trim() : "";
+        const caseStudies = typeof body.caseStudies === "string" ? body.caseStudies.trim() : "";
+        const rawCount = Number(body.stepCount);
+        const stepCount = Math.min(Math.max(Number.isFinite(rawCount) ? Math.round(rawCount) : 3, 1), 10);
+
+        const result = await callDeepSeek(
+          `You are a cold email outreach expert for ${companyName || "a B2B company"}.\n` +
+            `Offer: ${offerDetails || "Describe the product/service being sold."}\n` +
+            `Target audience: ${targetAudience || "B2B decision makers."}\n` +
+            `Case studies / social proof: ${caseStudies || "None provided."}\n\n` +
+            `Write a ${stepCount}-email cold outreach sequence. The first email is the initial outreach; each following email is a follow-up that references the previous one and adds value.\n` +
+            `Use {{firstName}} for the recipient's first name and {{company}} for their company name.\n` +
+            `Keep every email under 150 words, professional but friendly, personalized, and specific to the offer and audience above.\n` +
+            `Return ONLY a valid JSON array of exactly ${stepCount} objects. Each object has "subject" (a subject line) and "body" (the email body with \\n line breaks). No markdown, no extra text.`
+        );
+        const steps = extractJsonArray(result);
+        if (steps.length > 0) {
+          return NextResponse.json({ steps });
+        }
+      }
+    } catch (e) {
+      console.error("DeepSeek error, falling back:", (e as Error).message);
     }
   }
 
@@ -162,6 +214,26 @@ export async function POST(req: Request) {
       default: `Hi {{firstName}},\n\nI wanted to reach out because I believe {{company}} could benefit from what we do. Would you be open to a brief conversation?\n\nBest,\n[Your Name]`,
     };
     return NextResponse.json({ result: prompts[context] || prompts.default });
+  }
+
+  if (action === "generate-sequence") {
+    const companyName = typeof body.companyName === "string" ? body.companyName.trim() : "";
+    const offerDetails = typeof body.offerDetails === "string" ? body.offerDetails.trim() : "";
+    const targetAudience = typeof body.targetAudience === "string" ? body.targetAudience.trim() : "";
+    const caseStudies = typeof body.caseStudies === "string" ? body.caseStudies.trim() : "";
+    const rawCount = Number(body.stepCount);
+    const stepCount = Math.min(Math.max(Number.isFinite(rawCount) ? Math.round(rawCount) : 3, 1), 10);
+    const steps: GeneratedStep[] = [];
+    for (let i = 0; i < stepCount; i++) {
+      const re = i > 0 ? "Re: " : "";
+      const subject = truncateSubject(`${re}${companyName || "Outreach"} — quick question about {{company}}`);
+      const bodyText =
+        i === 0
+          ? `Hi {{firstName}},\n\nI'm with ${companyName || "[Your Company]"}. ${offerDetails || "We help companies like yours grow."}\n\nTargeting ${targetAudience || "B2B decision makers"}, we've seen strong results — ${caseStudies || "here's how we can help."}\n\nWould you be open to a quick chat next week?\n\nBest,\n[Your Name]`
+          : `Hi {{firstName}},\n\nFollowing up on my last email. ${offerDetails || "We help companies like yours grow."} ${caseStudies || "Happy to share relevant examples."}\n\nIs this something worth a quick conversation?\n\nBest,\n[Your Name]`;
+      steps.push({ subject, body: bodyText });
+    }
+    return NextResponse.json({ steps });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

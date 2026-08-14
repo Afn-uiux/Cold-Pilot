@@ -16,6 +16,9 @@ model User {
   password            String?
   role                String   @default("user")
   completedOnboarding Boolean  @default(false)
+  onboardingSource    String?
+  onboardingWebsite   String?
+  onboardingGoals     String?
   totpSecret          String?
   plan                String   @default("free")
   creditBalance       Float    @default(0)

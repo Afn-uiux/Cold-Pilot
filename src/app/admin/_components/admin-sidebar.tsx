@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Home01Icon } from "@/components/icons/home-01";
+import { UserGroupIcon } from "@/components/icons/user-group";
+import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
 
 const LINKS = [
   { href: "/admin", label: "Overview", icon: "home" },
@@ -49,10 +52,7 @@ export default function AdminSidebar() {
           href="/dashboard"
           className="flex items-center gap-3 py-2.5 text-sm text-muted hover:text-blue-accent transition-colors"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12" />
-            <polyline points="12 19 5 12 12 5" />
-          </svg>
+          <ArrowLeft02Icon size={16} />
           Back to App
         </Link>
       </div>
@@ -61,10 +61,9 @@ export default function AdminSidebar() {
 }
 
 function NavIcon({ name }: { name: string }) {
-  const props = { width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   switch (name) {
-    case "home": return <svg {...props} viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
-    case "users": return <svg {...props} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+    case "home": return <Home01Icon size={16} />;
+    case "users": return <UserGroupIcon size={16} />;
     default: return null;
   }
 }

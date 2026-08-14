@@ -4,6 +4,9 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ConfirmModal from "@/components/confirm-modal";
 import Select from "@/components/select";
+import { Search01Icon } from "@/components/icons/search-01";
+import { Upload01Icon } from "@/components/icons/upload-01";
+import { Cancel01Icon } from "@/components/icons/cancel-01";
 import { useToast } from "@/components/toast";
 
 type Lead = { id: string; email: string; firstName: string | null; lastName: string | null; company: string | null; title: string | null; phone: string | null; website: string | null; location: string | null; notes: string | null; customFields: string | null; campaignId: string | null; status: string; verificationStatus: string | null; createdAt: string; campaign: { name: string } | null; };
@@ -244,7 +247,7 @@ export default function LeadsPage() {
         <div className="toolbar">
           <div className="toolbar-left">
             <div className="search">
-              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <Search01Icon size={14} className="pointer-events-none" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#7A9AB5" }} />
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search leads..." />
             </div>
           </div>
@@ -339,7 +342,9 @@ export default function LeadsPage() {
           <div className="bg-cream border border-border rounded-lg w-[90%] max-w-[520px] shadow-xl flex flex-col" onClick={e => e.stopPropagation()} style={{ maxHeight: "90vh" }}>
             <div className="flex justify-between items-center px-8 pt-7 pb-4 shrink-0">
               <h2 className="font-medium text-2xl font-normal">Import Leads</h2>
-              <button onClick={() => setShowImport(false)} className="text-muted hover:text-blue-accent text-xl">✕</button>
+              <button onClick={() => setShowImport(false)} className="text-muted hover:text-blue-accent transition-colors flex items-center justify-center">
+                <Cancel01Icon size={20} />
+              </button>
             </div>
 
             <div className="flex gap-0 border-b border-border px-8">
@@ -398,9 +403,7 @@ export default function LeadsPage() {
                       </div>
                     ) : (
                       <div>
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto mb-3 text-muted-2">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
+                        <Upload01Icon size={32} className="mx-auto mb-3 text-muted-2" />
                         <p className="text-sm text-muted mb-1">Drop your CSV here or click to browse</p>
                         <span className="text-xs text-muted-2">Auto-detects: email, firstName, lastName, company, title, phone, website, location (city/state/country), personalization, notes</span>
                       </div>

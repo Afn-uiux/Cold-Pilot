@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Cancel01Icon } from "@/components/icons/cancel-01";
 
 interface ApiKey {
   id: string;
@@ -59,7 +60,7 @@ export default function ApiKeysSection() {
 
       {newKey && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 relative">
-          <button onClick={() => setNewKey("")} className="absolute top-2 right-2 text-green-600 hover:text-green-800 text-sm leading-none">✕</button>
+          <button onClick={() => setNewKey("")} className="absolute top-2 right-2 text-green-600 hover:text-green-800"><Cancel01Icon size={14} /></button>
           <p className="text-xs font-medium text-green-800 mb-1">Key created — copy it now, you won't see it again:</p>
           <div className="flex items-center gap-2">
             <code className="text-xs bg-white px-2 py-1 rounded border border-green-200 break-all select-all">{newKey}</code>

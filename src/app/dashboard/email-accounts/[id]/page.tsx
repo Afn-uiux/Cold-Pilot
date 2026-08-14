@@ -3,6 +3,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ReconnectModal from "@/components/reconnect-modal";
+import { ChevronLeftIcon } from "@/components/icons/chevron-left";
+import { ChevronDownIcon } from "@/components/icons/chevron-down";
+import { ChevronUpIcon } from "@/components/icons/chevron-up";
+import { CircleCheckIcon } from "@/components/icons/circle-check";
+import { CircleXIcon } from "@/components/icons/circle-x";
+import { BoldIcon } from "@/components/icons/text-bold";
+import { ItalicIcon } from "@/components/icons/text-italic";
+import { UnderlineIcon } from "@/components/icons/text-underline";
+import { TextColorIcon } from "@/components/icons/text-color";
+import { CodeXmlIcon } from "@/components/icons/code-xml";
 
 const DAY_LABELS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -150,9 +160,7 @@ export default function EmailAccountDetailPage() {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <button onClick={() => router.push("/dashboard/email-accounts")} className="text-muted hover:text-blue-accent transition-colors mr-1">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
+              <ChevronLeftIcon size={18} />
             </button>
             <h1 className="text-xl font-medium">{account.email}</h1>
             <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2.5 py-0.5 rounded-full">
@@ -272,9 +280,9 @@ export default function EmailAccountDetailPage() {
           {saveMsg && (
             <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${saveMsg.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
               {saveMsg.type === "success" ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                <CircleCheckIcon size={16} />
               ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                <CircleXIcon size={16} />
               )}
               <span>{saveMsg.text}</span>
             </div>
@@ -298,19 +306,19 @@ export default function EmailAccountDetailPage() {
                 <label className="block text-xs text-[#666] mb-1.5">Signature</label>
                 <div className="border border-[#ddd] rounded-lg overflow-hidden">
                   <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-[#ddd] bg-white">
-                    <button onClick={() => execFormat("bold")} className="w-7 h-7 flex items-center justify-center text-sm text-[#666] hover:text-blue-accent rounded hover:bg-gray-100 font-bold">B</button>
-                    <button onClick={() => execFormat("italic")} className="w-7 h-7 flex items-center justify-center text-sm text-[#666] hover:text-blue-accent rounded hover:bg-gray-100 italic">i</button>
-                    <button onClick={() => execFormat("underline")} className="w-7 h-7 flex items-center justify-center text-sm text-[#666] hover:text-blue-accent rounded hover:bg-gray-100 underline">U</button>
+                    <button onClick={() => execFormat("bold")} className="w-7 h-7 flex items-center justify-center text-[#666] hover:text-blue-accent rounded hover:bg-gray-100" title="Bold"><BoldIcon size={14} /></button>
+                    <button onClick={() => execFormat("italic")} className="w-7 h-7 flex items-center justify-center text-[#666] hover:text-blue-accent rounded hover:bg-gray-100" title="Italic"><ItalicIcon size={14} /></button>
+                    <button onClick={() => execFormat("underline")} className="w-7 h-7 flex items-center justify-center text-[#666] hover:text-blue-accent rounded hover:bg-gray-100" title="Underline"><UnderlineIcon size={14} /></button>
                     <span className="w-px h-4 bg-[#ddd] mx-1" />
-                    <button onClick={() => execFormat("foreColor", "#2563EB")} className="w-7 h-7 flex items-center justify-center text-sm text-[#666] hover:text-blue-accent rounded hover:bg-gray-100">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3l4 12-4-2-4 2z"/></svg>
+                    <button onClick={() => execFormat("foreColor", "#2563EB")} className="w-7 h-7 flex items-center justify-center text-[#666] hover:text-blue-accent rounded hover:bg-gray-100" title="Text color">
+                      <TextColorIcon size={14} />
                     </button>
                     <button onClick={() => execFormat("removeFormat")} className="w-7 h-7 flex items-center justify-center text-xs text-[#666] hover:text-blue-accent rounded hover:bg-gray-100">A:</button>
                     <span className="w-px h-4 bg-[#ddd] mx-1" />
-                    <button onClick={() => execFormat("insertHTML", "<code></code>")} className="w-7 h-7 flex items-center justify-center text-sm text-[#666] hover:text-blue-accent rounded hover:bg-gray-100 font-mono">&lt; &gt;</button>
+                    <button onClick={() => execFormat("insertHTML", "<code></code>")} className="w-7 h-7 flex items-center justify-center text-[#666] hover:text-blue-accent rounded hover:bg-gray-100" title="Code"><CodeXmlIcon size={14} /></button>
                     <span className="w-px h-4 bg-[#ddd] mx-1" />
                     <div className="relative group">
-                      <button className="w-7 h-7 flex items-center justify-center text-xs text-[#666] hover:text-blue-accent rounded hover:bg-gray-100 gap-0.5">Tags <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg></button>
+                      <button className="w-7 h-7 flex items-center justify-center text-xs text-[#666] hover:text-blue-accent rounded hover:bg-gray-100 gap-0.5">Tags <ChevronDownIcon size={10} /></button>
                       <div className="absolute top-full left-0 mt-1 bg-white border border-[#ddd] rounded-lg shadow-lg min-w-[160px] hidden group-hover:block z-10">
                         {["{{first_name}}", "{{last_name}}", "{{email}}", "{{company}}", "{{title}}"].map(tag => (
                           <button key={tag} onClick={() => { execFormat("insertHTML", tag); }} className="w-full text-left px-3 py-2 text-sm text-[#666] hover:bg-gray-50 rounded-lg">{tag}</button>
@@ -377,8 +385,9 @@ export default function EmailAccountDetailPage() {
 
               {/* Show advanced settings link */}
               <button onClick={() => setShowAdvanced(!showAdvanced)}
-                className="text-sm text-blue-accent hover:underline mt-2">
-                {showAdvanced ? "Hide advanced settings ▲" : "Show advanced settings ▼"}
+                className="text-sm text-blue-accent hover:underline mt-2 flex items-center gap-1">
+                {showAdvanced ? "Hide advanced settings" : "Show advanced settings"}
+                {showAdvanced ? <ChevronUpIcon size={12} /> : <ChevronDownIcon size={12} />}
               </button>
             </div>
           </div>
@@ -389,8 +398,8 @@ export default function EmailAccountDetailPage() {
               <div className="flex items-center justify-between">
                 <h3 className="text-[15px] font-bold text-[#1a1a1a]">Warmup Settings Advanced</h3>
                 <button onClick={() => setShowAdvanced(false)}
-                  className="text-sm text-blue-accent hover:underline">
-                  Hide advanced settings ▲
+                  className="text-sm text-blue-accent hover:underline flex items-center gap-1">
+                  Hide advanced settings <ChevronUpIcon size={12} />
                 </button>
               </div>
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { ChevronDownIcon } from "@/components/icons/chevron-down";
 
 export default function CreditBadge() {
   const [balance, setBalance] = useState<number | null>(null);
@@ -52,18 +53,11 @@ export default function CreditBadge() {
           <span style={{ fontSize: 10, color: "#fff", lineHeight: 1 }}>⚡</span>
         </span>
         <span className="text-sm font-bold text-ink tabular-nums">{Math.floor(balance).toLocaleString()}</span>
-        <svg
-          className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+        <ChevronDownIcon
+          size={12}
+          className={`transition-transform ${open ? "rotate-180" : ""}`}
           style={{ color: "#4a4a4a", opacity: 0.8 }}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        />
       </button>
 
       {open && (

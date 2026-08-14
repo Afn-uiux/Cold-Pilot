@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { CircleXIcon } from "@/components/icons/circle-x";
 
 interface Suppression {
   id: string;
@@ -73,9 +74,7 @@ export default function SuppressionsPage() {
           {suppressions.map((s) => (
             <div key={s.id} className="flex items-center justify-between py-3 px-4 bg-cream border border-border rounded-lg">
               <div className="flex items-center gap-3">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-                </svg>
+                <CircleXIcon size={14} style={{ color: "#ef4444" }} />
                 <div>
                   <p className="text-sm font-medium">{s.email}</p>
                   <p className="text-xs text-muted">{s.reason} &middot; {new Date(s.createdAt).toLocaleDateString()}</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Search01Icon } from "@/components/icons/search-01";
 
 interface AdminUser {
   id: string;
@@ -111,10 +112,7 @@ export default function AdminUsersPage() {
         <form onSubmit={handleSearch} className="toolbar">
           <div className="toolbar-left">
             <div className="search">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+              <Search01Icon size={14} className="pointer-events-none" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#7A9AB5" }} />
               <input
                 type="text"
                 value={search}

@@ -2,6 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Cancel01Icon } from "@/components/icons/cancel-01";
+import { CircleCheckIcon } from "@/components/icons/circle-check";
+import { ChevronUpIcon } from "@/components/icons/chevron-up";
+import { ChevronDownIcon } from "@/components/icons/chevron-down";
+import { Message01Icon } from "@/components/icons/message-01";
+import { Clock01Icon } from "@/components/icons/clock-01";
 
 type Step = { type: "email" | "wait"; subject?: string; body?: string; delayDays?: number };
 type Status = "idle" | "saving" | "error" | "success";
@@ -106,14 +112,14 @@ export default function NewCampaignPage() {
           <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 flex items-center justify-between">
             <span>{errorMsg}</span>
             <button type="button" onClick={() => setStatus("idle")} className="text-red-400 hover:text-red-600">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3L11 11"/><path d="M11 3L3 11"/></svg>
+              <Cancel01Icon size={14} />
             </button>
           </div>
         )}
 
         {status === "success" && (
           <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700 flex items-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 4L6 12L3 9"/></svg>
+            <CircleCheckIcon size={16} />
             Campaign saved! Redirecting...
           </div>
         )}
@@ -144,9 +150,9 @@ export default function NewCampaignPage() {
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col gap-0.5">
                     <button type="button" onClick={() => moveStep(i, -1)} disabled={i === 0}
-                      className="text-[10px] text-muted-2 hover:text-blue-accent disabled:opacity-20">▲</button>
+                      className="text-muted-2 hover:text-blue-accent disabled:opacity-20"><ChevronUpIcon size={10} /></button>
                     <button type="button" onClick={() => moveStep(i, 1)} disabled={i === steps.length - 1}
-                      className="text-[10px] text-muted-2 hover:text-blue-accent disabled:opacity-20">▼</button>
+                      className="text-muted-2 hover:text-blue-accent disabled:opacity-20"><ChevronDownIcon size={10} /></button>
                   </div>
                   <span className="text-xs text-muted-2 font-medium uppercase">Step {i + 1}</span>
                   <span className={`text-xs font-medium px-2 py-0.5 rounded ${step.type === "email" ? "bg-blue-light text-blue-accent" : "bg-yellow-50 text-yellow-700"}`}>{step.type}</span>
@@ -186,14 +192,14 @@ export default function NewCampaignPage() {
                     </div>
 
                     <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      <Message01Icon size={14} />
                       <span>Reply detection active — sequence stops automatically when a lead responds</span>
                     </div>
                   </>
                 )}
                 {step.type === "wait" && (
                   <div className="flex items-center gap-3">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-2"><circle cx="8" cy="8" r="6"/><path d="M8 4V8L11 10"/></svg>
+                    <Clock01Icon size={16} className="text-muted-2" />
                     <span className="text-sm text-muted">Wait</span>
                     <input type="number" min={1} value={step.delayDays ?? 3} onChange={e => updateStep(i, "delayDays", parseInt(e.target.value) || 3)}
                       className="w-16 bg-transparent border border-border rounded px-2 py-1.5 text-sm text-center" />
@@ -210,7 +216,7 @@ export default function NewCampaignPage() {
           <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
             className="w-full flex items-center justify-between text-sm font-medium">
             <span>Advanced Options</span>
-            <svg className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <ChevronDownIcon size={14} className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
           </button>
           {showAdvanced && (
             <div className="border-t border-border mt-4 pt-5 space-y-5">

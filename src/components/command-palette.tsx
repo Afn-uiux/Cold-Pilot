@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { Search01Icon } from "@/components/icons/search-01";
 
 type Command = { label: string; shortcut?: string; action: () => void; section: string };
 
@@ -62,7 +63,7 @@ export default function CommandPalette() {
       <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", overflow: "hidden" }}
         onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderBottom: "1px solid rgba(15,25,41,0.08)" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A9BB5" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+          <Search01Icon size={16} style={{ color: "#8A9BB5" }} />
           <input ref={inputRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKeyDown}
             placeholder="Type a command..."
             style={{ flex: 1, border: "none", outline: "none", fontSize: 15, fontFamily: "'Geist', system-ui, sans-serif", color: "#0F1929", background: "transparent" }} />

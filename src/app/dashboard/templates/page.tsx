@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import ConfirmModal from "@/components/confirm-modal";
 import { useToast } from "@/components/toast";
+import { PlusSignIcon } from "@/components/icons/plus-sign";
+import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
 
 type Template = { id: string; name: string; subject: string; bodyHtml: string; updatedAt: string; };
 
@@ -93,7 +95,7 @@ export default function TemplatesPage() {
             ))}
             <div onClick={() => setShowCreate(true)} className="border-2 border-dashed border-border rounded-lg p-5 flex items-center justify-center cursor-pointer hover:border-blue-accent transition-colors">
               <div className="text-center">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto mb-2 text-muted-2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <PlusSignIcon size={24} className="mx-auto mb-2 text-muted-2" />
                 <span className="text-sm text-muted">New template</span>
               </div>
             </div>
@@ -105,7 +107,7 @@ export default function TemplatesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(15,13,20,0.4)", backdropFilter: "blur(4px)" }} onClick={() => setShowCreate(false)}>
           <div className="bg-cream border border-border rounded-lg w-[90%] max-w-[480px] p-8 shadow-xl" onClick={e => e.stopPropagation()}>
             <button onClick={() => setShowCreate(false)} className="text-sm text-muted hover:text-blue-accent mb-6 flex items-center gap-1.5">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+              <ArrowLeft02Icon size={14} />
               Back
             </button>
             <h2 className="font-medium text-2xl font-normal mb-6">Create a new template</h2>

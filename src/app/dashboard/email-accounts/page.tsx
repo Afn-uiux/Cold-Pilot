@@ -6,6 +6,13 @@ import Select from "@/components/select";
 import ConfirmModal from "@/components/confirm-modal";
 import { useToast } from "@/components/toast";
 import ReconnectModal from "@/components/reconnect-modal";
+import { ChevronLeftIcon } from "@/components/icons/chevron-left";
+import { Cancel01Icon } from "@/components/icons/cancel-01";
+import { ChevronRightIcon } from "@/components/icons/chevron-right";
+import { CircleCheckIcon } from "@/components/icons/circle-check";
+import { CircleXIcon } from "@/components/icons/circle-x";
+import { Mail01Icon } from "@/components/icons/mail-01";
+import { Upload01Icon } from "@/components/icons/upload-01";
 
 type Account = { id: string; email: string; provider: string; sent: number; dailySendLimit: number; warmupEnabled: boolean; warmupSent?: number; health?: number; healthScore?: number; status: string; smtpUser?: string | null; smtpHost?: string | null; smtpPort?: number | null; imapHost?: string | null; imapPort?: number | null; imapUser?: string | null; };
 type ModalScreen =
@@ -323,14 +330,14 @@ export default function EmailAccountsPage() {
                   else if (screen === "any-bulk-results") { setBulkResults(null); setScreen("any-bulk"); }
                   else setScreen("select");
                 }} className="text-muted hover:text-blue-accent transition-colors">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="15 18 9 12 15 6" /></svg>
+                  <ChevronLeftIcon size={18} />
                 </button>
               )}
               <div className="flex-1 min-w-0">
                 <span className="text-xs text-muted-2 block">{screen.startsWith("any-") ? (testingFrom === "gmail" ? "Gmail" : testingFrom === "microsoft" ? "Microsoft" : "IMAP / SMTP") : screen === "microsoft" ? "Microsoft" : "Select another provider"}</span>
               </div>
               <button onClick={() => setShowModal(false)} className="text-muted hover:text-blue-accent transition-colors shrink-0">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                <Cancel01Icon size={18} />
               </button>
             </div>
 
@@ -340,8 +347,7 @@ export default function EmailAccountsPage() {
                 <p className="text-sm text-muted mb-6">Choose your email provider to get started.</p>
                 <ProviderCard icon={<svg width="22" height="22" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/></svg>} name="Google" subtitle="Gmail / G-Suite" onClick={() => setScreen("google")} />
                 <ProviderCard icon={<svg width="22" height="22" viewBox="0 0 24 24"><path fill="#0078D4" d="M11.5 2H21a1 1 0 0 1 1 1v7.5l-5 3-5.5-3V2z"/><path fill="#0078D4" d="M2 11.5h9v9H3a1 1 0 0 1-1-1v-8z"/></svg>} name="Microsoft" subtitle="Office 365 / Outlook" onClick={() => setScreen("microsoft")} />
-                <ProviderCard icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 4L12 13 2 4"/></svg>} name="Any Provider" subtitle="IMAP / SMTP" onClick={() => setScreen("any-provider")} />
-              </div>
+                <ProviderCard icon={<Mail01Icon size={22} />} name="Any Provider" subtitle="IMAP / SMTP" onClick={() => setScreen("any-provider")} />              </div>
             )}
 
             {screen === "google" && (
@@ -382,8 +388,8 @@ export default function EmailAccountsPage() {
                 {msOAuthStatus !== "idle" && (
                   <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm mb-4 ${msOAuthStatus === "connecting" ? "bg-blue-50 text-blue-700 border border-blue-200" : msOAuthStatus === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
                     {msOAuthStatus === "connecting" && <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeDasharray="31.4 31.4" strokeLinecap="round" /></svg>}
-                    {msOAuthStatus === "success" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>}
-                    {msOAuthStatus === "error" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>}
+                    {msOAuthStatus === "success" && <CircleCheckIcon size={16} />}
+                    {msOAuthStatus === "error" && <CircleXIcon size={16} />}
                     <span>{msOAuthMsg}</span>
                   </div>
                 )}
@@ -423,8 +429,8 @@ export default function EmailAccountsPage() {
                 {imapStatus !== "idle" && (
                   <div className={`fixed top-4 right-4 z-[100] flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm transition-all ${imapStatus === "testing" ? "bg-blue-50 text-blue-700 border border-blue-200" : imapStatus === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
                     {imapStatus === "testing" && <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeDasharray="31.4 31.4" strokeLinecap="round" /></svg>}
-                    {imapStatus === "success" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>}
-                    {imapStatus === "error" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>}
+                    {imapStatus === "success" && <CircleCheckIcon size={16} />}
+                    {imapStatus === "error" && <CircleXIcon size={16} />}
                     <span>{imapStatusMsg}</span>
                   </div>
                 )}
@@ -449,8 +455,8 @@ export default function EmailAccountsPage() {
                 {smtpStatus !== "idle" && (
                   <div className={`fixed top-4 right-4 z-[100] flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm transition-all ${smtpStatus === "testing" ? "bg-blue-50 text-blue-700 border border-blue-200" : smtpStatus === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
                     {smtpStatus === "testing" && <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeDasharray="31.4 31.4" strokeLinecap="round" /></svg>}
-                    {smtpStatus === "success" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>}
-                    {smtpStatus === "error" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>}
+                    {smtpStatus === "success" && <CircleCheckIcon size={16} />}
+                    {smtpStatus === "error" && <CircleXIcon size={16} />}
                     <span>{smtpStatusMsg}</span>
                   </div>
                 )}
@@ -481,7 +487,7 @@ export default function EmailAccountsPage() {
                     const isDone = !isError && (testingDone || (!testingDone && !testingError && !isLast));
                     return (
                       <div key={i} className="flex items-center gap-3 text-sm">
-                        {isError ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg> : isDone ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg> : <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeDasharray="31.4 31.4" strokeLinecap="round" /></svg>}
+                        {isError ? <CircleXIcon size={16} style={{ color: "#DC2626" }} /> : isDone ? <CircleCheckIcon size={16} style={{ color: "#16A34A" }} /> : <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeDasharray="31.4 31.4" strokeLinecap="round" /></svg>}
                         <span className={isDone ? "text-ink font-medium" : isError ? "text-red-600" : "text-muted"}>{msg}</span>
                       </div>
                     );
@@ -499,7 +505,7 @@ export default function EmailAccountsPage() {
                 <div className="text-xs text-muted mb-4">Upload a CSV file with columns: First Name, Last Name, Email, IMAP Username, IMAP Password, IMAP Host, IMAP Port, SMTP Username, SMTP Password, SMTP Host, SMTP Port, Encryption</div>
                 <div className="border-2 border-dashed border-border rounded-lg p-8 text-center mb-6 cursor-pointer hover:bg-cream-2 transition-colors" onClick={() => document.getElementById("csv-upload")?.click()}>
                   <input id="csv-upload" type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setBulkFile(f); }} />
-                  {bulkFile ? <div><p className="text-sm font-medium text-ink">{bulkFile.name}</p><p className="text-xs text-muted mt-1">{(bulkFile.size / 1024).toFixed(1)} KB</p></div> : <div><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto text-muted-2 mb-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><p className="text-sm text-muted">Click to upload CSV</p></div>}
+                  {bulkFile ? <div><p className="text-sm font-medium text-ink">{bulkFile.name}</p><p className="text-xs text-muted mt-1">{(bulkFile.size / 1024).toFixed(1)} KB</p></div> : <div><Upload01Icon size={24} className="mx-auto text-muted-2 mb-2" /><p className="text-sm text-muted">Click to upload CSV</p></div>}
                 </div>
                 <button onClick={async () => {
                   if (!bulkFile) return;
@@ -571,7 +577,7 @@ function ProviderCard({ icon, name, subtitle, onClick }: { icon: React.ReactNode
     <button onClick={onClick} className="w-full flex items-center gap-4 p-4 rounded-lg border border-border bg-transparent hover:bg-cream-2 transition-colors text-left mb-3 cursor-pointer">
       <div className="w-10 h-10 rounded-full bg-cream-2 border border-border flex items-center justify-center shrink-0">{icon}</div>
       <div className="flex-1 min-w-0"><span className="text-sm font-medium">{name}</span><p className="text-xs text-muted mt-0.5">{subtitle}</p></div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-2 shrink-0"><polyline points="9 18 15 12 9 6" /></svg>
+      <ChevronRightIcon size={16} className="text-muted-2 shrink-0" />
     </button>
   );
 }
@@ -583,7 +589,7 @@ function OptionCard({ title, description, tag, onClick }: { title: string; descr
         <div className="flex items-center gap-2"><span className="text-sm font-medium">{title}</span>{tag && <span className="text-[10px] font-medium text-blue-accent bg-blue-light px-2 py-0.5 rounded-full capitalize">{tag}</span>}</div>
         <p className="text-xs text-muted mt-1 leading-relaxed">{description}</p>
       </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-2 shrink-0"><polyline points="9 18 15 12 9 6" /></svg>
+      <ChevronRightIcon size={16} className="text-muted-2 shrink-0" />
     </button>
   );
 }
