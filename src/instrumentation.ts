@@ -108,7 +108,7 @@ export async function register() {
         lastHealthCheckHour = new Date().getHours();
         try {
           const accounts = await prisma.emailAccount.findMany({
-            where: { warmupEnabled: true, status: "active" },
+            where: { warmupEnabled: true, status: "active", user: { plan: { not: "free" } } },
             select: { id: true },
           });
           for (const a of accounts) {

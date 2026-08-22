@@ -21,7 +21,7 @@ export const PLANS: Record<PlanId, Plan> = {
   starter: {
     id: "starter",
     name: "Starter",
-    price: 19,
+    price: 28500,
     leadLimit: 5000,
     inboxLimit: Infinity,
     aiEnabled: true,
@@ -29,7 +29,7 @@ export const PLANS: Record<PlanId, Plan> = {
   pro: {
     id: "pro",
     name: "Pro",
-    price: 49,
+    price: 73500,
     leadLimit: 30000,
     inboxLimit: Infinity,
     aiEnabled: true,
@@ -37,7 +37,7 @@ export const PLANS: Record<PlanId, Plan> = {
   agency: {
     id: "agency",
     name: "Agency",
-    price: 99,
+    price: 148500,
     leadLimit: 150000,
     inboxLimit: Infinity,
     aiEnabled: true,
@@ -48,8 +48,10 @@ export const PLANS: Record<PlanId, Plan> = {
 export const SIGNUP_CREDITS = 1000;
 
 export const CREDIT_COSTS = {
+  campaign: 1,
   verification: 0.25,
   ai: 2,
+  leadImport: 0.1,
 } as const;
 
 export interface CreditPack {
@@ -58,10 +60,10 @@ export interface CreditPack {
 }
 
 export const CREDIT_PACKS: CreditPack[] = [
-  { credits: 100, price: 5 },
-  { credits: 500, price: 15 },
-  { credits: 2000, price: 40 },
-  { credits: 10000, price: 100 },
+  { credits: 100, price: 7500 },
+  { credits: 500, price: 22500 },
+  { credits: 2000, price: 60000 },
+  { credits: 10000, price: 150000 },
 ];
 
 export function getPlan(planId: string | null | undefined): Plan {

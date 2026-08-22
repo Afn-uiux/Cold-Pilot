@@ -27,7 +27,7 @@ const tiers = [
   },
   {
     name: "Starter",
-    monthly: 19,
+    monthly: 28500,
     period: "/month",
     tagline: "Unlimited inboxes. The real upgrade over the free tier.",
     leads: "5,000 active leads",
@@ -45,7 +45,7 @@ const tiers = [
   },
   {
     name: "Pro",
-    monthly: 49,
+    monthly: 73500,
     period: "/month",
     tagline: "For teams sending real volume. Half the price of the equivalent.",
     leads: "30,000 active leads",
@@ -63,7 +63,7 @@ const tiers = [
   },
   {
     name: "Agency",
-    monthly: 99,
+    monthly: 148500,
     period: "/month",
     tagline: "White-label, API access, and room for every client you'll take on.",
     leads: "150,000 active leads",
@@ -82,10 +82,10 @@ const tiers = [
 ];
 
 const creditPacks = [
-  { credits: "100 credits", price: "$5", per: "$0.050 / credit" },
-  { credits: "500 credits", price: "$15", per: "$0.030 / credit" },
-  { credits: "2,000 credits", price: "$40", per: "$0.020 / credit" },
-  { credits: "10,000 credits", price: "$100", per: "$0.010 / credit" },
+  { credits: "100 credits", price: "₦7,500", per: "₦75 / credit" },
+  { credits: "500 credits", price: "₦22,500", per: "₦45 / credit" },
+  { credits: "2,000 credits", price: "₦60,000", per: "₦30 / credit" },
+  { credits: "10,000 credits", price: "₦150,000", per: "₦15 / credit" },
 ];
 
 const faqs = [
@@ -95,11 +95,11 @@ const faqs = [
   },
   {
     q: "What happens when I run out of credits?",
-    a: "Campaigns keep running — only new verification and AI generation pause until you buy a credit pack. Verification costs 0.25 credits per check and credits never expire.",
+    a: "Campaigns pause and verification/AI stop until you buy a credit pack or upgrade. Sending costs 1 credit per email, verification 0.25 credits per check, and AI writing 2 credits per generation.",
   },
   {
     q: "What is a credit worth?",
-    a: "One credit is one unit of usage. Verifying an email costs 0.25 credits, an AI email generation costs 2 credits. Every account gets 1,000 credits free on signup; after that, credit packs start at 100 credits for $5.",
+    a: "One credit is one unit of usage. Sending an email costs 1 credit, verifying an email costs 0.25 credits, and an AI email generation costs 2 credits. Every account gets 1,000 credits free on signup. Need more? Buy credit packs anytime — no subscription required. Packs start at 100 credits for ₦7,500.",
   },
   {
     q: "Is there a free trial?",
@@ -268,10 +268,10 @@ export default function PricingPage() {
         )}
       </header>
 
-      {view === "plans" ? (
+      {view === "plans" && (
         <section className="tiers wrap">
           {tiers.map((tier) => {
-            const price = tier.monthly === 0 ? "$0" : yearly ? `$${tier.monthly * 10}` : `$${tier.monthly}`;
+            const price = tier.monthly === 0 ? "₦0" : yearly ? `₦${(tier.monthly * 10).toLocaleString()}` : `₦${tier.monthly.toLocaleString()}`;
             const period = tier.monthly === 0 ? tier.period : yearly ? "/year" : tier.period;
             return (
               <div key={tier.name} className={"tier" + (tier.highlight ? " highlight" : "")}>
@@ -296,18 +296,38 @@ export default function PricingPage() {
             );
           })}
         </section>
-      ) : (
+      )}
+
+      {view === "credits" && (
         <section className="section" id="credits">
           <div className="wrap">
             <div className="sec-head center" style={{marginBottom:32}}>
               <span className="label">Credits</span>
-              <h2 style={{marginTop:8}}>Verification and AI run on one credit balance</h2>
-              <p>Every new account starts with 1,000 free credits — one time. After that, top up when you need more. Credits never expire.</p>
+              <h2 style={{marginTop:8}}>One balance. Every feature.</h2>
+              <p>Not ready to subscribe? Credits also cover lead imports and sending — no monthly commitment. Warmup requires a plan.</p>
             </div>
-            <div className="credit-costs" style={{justifyContent:"center"}}>
-              <div className="credit-cost"><b>Email verification</b> — 0.25 credits / check</div>
-              <div className="credit-cost"><b>AI email writing</b> — 2 credits / generation</div>
-              <div className="credit-cost"><b>Sending, warm-up, inbox</b> — 0 credits, always free</div>
+            <div style={{display:"flex",gap:24,justifyContent:"center",flexWrap:"wrap",marginBottom:40}}>
+              <div style={{flex:"1 1 280px",maxWidth:380,border:"1px solid var(--border)",borderRadius:12,padding:"24px 28px"}}>
+                <p style={{fontWeight:600,fontSize:15,marginBottom:12}}>With a plan</p>
+                <p style={{fontSize:13,color:"var(--muted)",marginBottom:16}}>Sending is unlimited. Credits cover:</p>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <div className="credit-cost"><b>Email verification</b> — 0.25 credits / check</div>
+                  <div className="credit-cost"><b>AI email writing</b> — 2 credits / generation</div>
+                </div>
+              </div>
+              <div style={{flex:"1 1 280px",maxWidth:380,border:"1px solid var(--border)",borderRadius:12,padding:"24px 28px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                  <p style={{fontWeight:600,fontSize:15,margin:0}}>Without a plan</p>
+                  <span style={{fontSize:11,background:"var(--border)",padding:"2px 8px",borderRadius:6}}>Pay as you go</span>
+                </div>
+                <p style={{fontSize:13,color:"var(--muted)",marginBottom:16}}>No subscription needed. Credits cover everything:</p>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <div className="credit-cost"><b>Lead import</b> — 0.1 credits / lead</div>
+                  <div className="credit-cost"><b>Sending</b> — 1 credit / email</div>
+                  <div className="credit-cost"><b>Email verification</b> — 0.25 credits / check</div>
+                  <div className="credit-cost"><b>AI email writing</b> — 2 credits / generation</div>
+                </div>
+              </div>
             </div>
             <div className="packs" style={{ marginTop: 32 }}>
               {creditPacks.map((pack) => (

@@ -274,8 +274,8 @@ export default function SiteHeader() {
 
         .sh-mobile{position:fixed;inset:0;z-index:200;background:rgba(15,13,20,0.4);opacity:0;pointer-events:none;transition:opacity .35s}
         .sh-mobile-open{opacity:1;pointer-events:auto}
-        .sh-mobile-panel{position:absolute;top:0;right:0;width:min(320px,88vw);height:100%;background:var(--cream,#FAFAF8);border-left:1px solid var(--border);padding:22px;transform:translateX(100%);transition:transform .35s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;gap:2px;overflow-y:auto}
-        .sh-mobile-open .sh-mobile-panel{transform:translateX(0)}
+        .sh-mobile-panel{position:absolute;top:0;left:0;right:0;width:100%;max-height:100%;background:var(--cream,#FAFAF8);border-bottom:1px solid var(--border);padding:22px clamp(20px,4vw,28px);transform:translateY(-100%);transition:transform .45s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;gap:2px;overflow-y:auto;box-shadow:0 30px 60px -20px rgba(15,13,20,.25);border-radius:0 0 18px 18px}
+        .sh-mobile-open .sh-mobile-panel{transform:translateY(0)}
         .sh-mobile-close{align-self:flex-end;background:none;border:1px solid var(--border);border-radius:6px;padding:8px;cursor:pointer;color:var(--ink)}
         .sh-acc-trigger{display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;border-bottom:1px solid var(--border);padding:15px 2px;font-family:inherit;font-size:16px;font-weight:500;color:var(--ink);cursor:pointer}
         .sh-acc-caret{color:var(--muted-2);transition:transform .24s ease}

@@ -19,6 +19,7 @@ export async function pickWarmupPartner(
       status: "active",
       warmupEnabled: true,
       id: { not: senderMailboxId },
+      user: { plan: { not: "free" } },
     },
     select: { id: true, email: true },
   });

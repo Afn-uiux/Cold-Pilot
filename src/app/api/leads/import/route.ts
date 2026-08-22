@@ -5,8 +5,9 @@ import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
-import { assertLeadCapacity, PlanLimitError } from "@/lib/credits";
+import { assertLeadCapacity, PlanLimitError, spendCredits, InsufficientCreditsError } from "@/lib/credits";
 import { assertPublicHttpsUrl } from "@/lib/ssrf-guard";
+import { CREDIT_COSTS } from "@/lib/plans";
 
 const KNOWN_FIELDS = [
   "email", "e-mail", "email address", "mail", "emails", "email addresses", "e mail", "e_mail",
@@ -344,6 +345,21 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: err.message, code: err.code }, { status: 402 });
       }
       throw err;
+    }
+
+    // Deduct credits for lead imports (only for free/paying users).
+    // Paid subscribers import for free.
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
+    if (user?.plan === "free") {
+      const importCost = Math.ceil(leads.length * CREDIT_COSTS.leadImport);
+      try {
+        await spendCredits(userId, importCost, "lead_import");
+      } catch (err) {
+        if (err instanceof InsufficientCreditsError) {
+          return NextResponse.json({ error: "Not enough credits to import this many leads. Buy more credits or upgrade.", code: "INSUFFICIENT_CREDITS" }, { status: 402 });
+        }
+        throw err;
+      }
     }
 
     const seenEmails = new Set<string>();

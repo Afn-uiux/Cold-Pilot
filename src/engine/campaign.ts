@@ -13,6 +13,8 @@ import { decryptAccount } from "@/lib/crypto";
 import { canSendToLead } from "@/lib/verify";
 import { canSendFromAccount } from "@/lib/send-gate";
 import { recordBounce, recordSend } from "@/lib/domain-reputation";
+import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
+import { CREDIT_COSTS } from "@/lib/plans";
 
 function isWithinSchedule(campaign: { startDate: Date | null; endDate: Date | null; noEndDate: boolean; schedules: { startTime: string; endTime: string; timezone: string; days: string }[] }): boolean {
   const now = new Date();
@@ -135,6 +137,7 @@ async function executeCampaignInner(campaignId: string) {
     include: {
       steps: { orderBy: { order: "asc" } },
       schedules: true,
+      user: { select: { plan: true } },
     },
   });
 
@@ -345,6 +348,27 @@ async function executeCampaignInner(campaignId: string) {
           .replace(/\{\{signature\}\}/gi, accountSignature)
           .replace(/\{\{accountSignature\}\}/gi, accountSignature);
 
+        // Deduct 1 credit before sending (only for free/pay-as-you-go users).
+        // Paid subscribers send for free — credits only used for verification/AI.
+        if (campaign.user?.plan === "free") {
+          try {
+            await spendCredits(campaign.userId, CREDIT_COSTS.campaign, "campaign_send", lead.id);
+          } catch (err) {
+            if (err instanceof InsufficientCreditsError) {
+              await prisma.campaign.update({ where: { id: campaignId }, data: { status: "paused" } });
+              createNotification({
+                userId: campaign.userId,
+                type: "credits",
+                title: "Out of Credits",
+                message: `Campaign "${campaign.name}" paused — you've run out of credits. Buy more to continue sending.`,
+                link: "/dashboard/settings?tab=Billing",
+              }).catch(() => {});
+              return { sent, errors, skipped, reason: "insufficient_credits" };
+            }
+            throw err;
+          }
+        }
+
         await sendEmail({
           to: lead.email,
           subject,
@@ -487,6 +511,27 @@ async function executeCampaignInner(campaignId: string) {
 
         if (lastLog && !/^re:/i.test(fupSubject.trim())) {
           fupSubject = `Re: ${fupSubject}`;
+        }
+
+        // Deduct 1 credit before follow-up send (only for free/pay-as-you-go users).
+        // Paid subscribers send for free.
+        if (campaign.user?.plan === "free") {
+          try {
+            await spendCredits(campaign.userId, CREDIT_COSTS.campaign, "campaign_send", lead.id);
+          } catch (err) {
+            if (err instanceof InsufficientCreditsError) {
+              await prisma.campaign.update({ where: { id: campaignId }, data: { status: "paused" } });
+              createNotification({
+                userId: campaign.userId,
+                type: "credits",
+                title: "Out of Credits",
+                message: `Campaign "${campaign.name}" paused — you've run out of credits. Buy more to continue sending.`,
+                link: "/dashboard/settings?tab=Billing",
+              }).catch(() => {});
+              return { sent, errors, skipped, reason: "insufficient_credits" };
+            }
+            throw err;
+          }
         }
 
         await sendEmail({

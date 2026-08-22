@@ -29,6 +29,21 @@ export async function POST(req: Request) {
   switch (action) {
     case "toggle": {
       const enabled = !account.warmupEnabled;
+
+      // Warmup is a subscription-only feature. Free users must upgrade.
+      if (enabled) {
+        const user = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { plan: true },
+        });
+        if (!user || user.plan === "free") {
+          return NextResponse.json(
+            { error: "Warmup requires a Starter plan or higher. Upgrade to enable warmup.", code: "PLAN_REQUIRED" },
+            { status: 403 }
+          );
+        }
+      }
+
       const updated = await prisma.emailAccount.update({
         where: { id: emailAccountId },
         data: {

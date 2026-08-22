@@ -43,6 +43,26 @@ export function getTrialStatus(plan: string, trialEndsAt: Date | null, trialVoid
   };
 }
 
+// When trial expires, zero out remaining credits so the user can't keep using
+// them as free pay-as-you-go after the trial window.
+export async function expireTrialCredits(userId: string): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { plan: true, creditBalance: true },
+  });
+  if (!user || user.plan !== "free" || user.creditBalance <= 0) return;
+
+  await prisma.$transaction([
+    prisma.creditTransaction.create({
+      data: { userId, amount: -user.creditBalance, reason: "trial_expired" },
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { creditBalance: 0 },
+    }),
+  ]);
+}
+
 // Throws TrialExpiredError when the user's free trial has ended. Call this in
 // every action endpoint to enforce the paywall. Returns the trial status for
 // callers that need it (e.g. to show a countdown).
@@ -54,6 +74,8 @@ export async function assertTrialActive(userId: string): Promise<TrialStatus> {
 
   const status = getTrialStatus(user?.plan ?? "free", user?.trialEndsAt ?? null, user?.trialVoided ?? false);
   if (status.expired) {
+    // Expire any leftover credits on first detection
+    await expireTrialCredits(userId);
     throw new TrialExpiredError(status.daysLeft);
   }
   return status;
@@ -78,4 +100,15 @@ export async function trialGuard(userId: string): Promise<NextResponse | null> {
     }
     throw err;
   }
+}
+
+// Like trialGuard but allows GET requests through when trial is expired.
+// Used on routes where the dashboard needs to read data (campaigns list,
+// leads list, settings) but should block writes (create/update/delete).
+export async function trialGuardAllowReads(
+  userId: string,
+  method?: string
+): Promise<NextResponse | null> {
+  if (method === "GET") return null;
+  return trialGuard(userId);
 }

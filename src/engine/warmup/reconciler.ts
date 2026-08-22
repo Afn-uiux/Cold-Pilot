@@ -12,6 +12,7 @@ export async function reconcileWarmupSchedules(): Promise<number> {
       warmupEnabled: true,
       isPaused: false,
       status: "active",
+      user: { plan: { not: "free" } },
     },
     select: {
       id: true,
@@ -131,6 +132,14 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
 
       if (log.senderMailbox.warmupCustomTrackingDomain && log.senderMailbox.customTrackingDomain) {
         emailBody += `\n\n---\n${log.senderMailbox.customTrackingDomain}`;
+      }
+
+      // Append the account's filter tag to the end of subject and body so
+      // mailbox-level filters (e.g. Gmail "from:tag") can catch warmup mail
+      const filterTag = log.senderMailbox.warmupFilterTag;
+      if (filterTag) {
+        subject = `${subject} ${filterTag}`;
+        emailBody = `${emailBody}\n\n${filterTag}`;
       }
 
       // Shared send gate — respects campaign sends too

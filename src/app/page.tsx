@@ -448,10 +448,17 @@ export default async function Home() {
 
       <Script id="landing-js">{`
         (function(){
-          if(!matchMedia("(prefers-reduced-motion:reduce)").matches){
-            var ro=new IntersectionObserver(function(e){e.forEach(function(ee){if(ee.isIntersecting){ee.target.classList.add("in");ro.unobserve(ee.target)}})},{threshold:0.08,rootMargin:"0px 0px -40px 0px"});
-            document.querySelectorAll(".reveal").forEach(function(el){ro.observe(el)});
+          var reveals=document.querySelectorAll(".reveal");
+          if(!reveals.length){return}
+          if(!("IntersectionObserver" in window)){
+            reveals.forEach(function(el){el.classList.add("in")});
+            return;
           }
+          var ro=new IntersectionObserver(function(e){e.forEach(function(ee){if(ee.isIntersecting){ee.target.classList.add("in");ro.unobserve(ee.target)}})},{threshold:0.08,rootMargin:"0px 0px -40px 0px"});
+          reveals.forEach(function(el){ro.observe(el)});
+          setTimeout(function(){
+            document.querySelectorAll(".reveal:not(.in)").forEach(function(el){el.classList.add("in")});
+          },4000);
         })();
       `}</Script>
     </div>
