@@ -3,6 +3,17 @@ import Script from "next/script";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import SiteHeader from "@/components/site-header";
+import { FlameIcon } from "@/components/icons/flame";
+import { RefreshIcon } from "@/components/icons/refresh";
+import { Message01Icon } from "@/components/icons/message-01";
+import { Settings01Icon } from "@/components/icons/settings-01";
+import { Shield02Icon } from "@/components/icons/shield-02";
+import { TrendUpIcon } from "@/components/icons/trend-up";
+import { Link01Icon } from "@/components/icons/link-01";
+import { GridViewIcon } from "@/components/icons/grid-view";
+import { Edit02Icon } from "@/components/icons/edit-02";
+import { SentIcon } from "@/components/icons/sent";
+import { ChevronRightIcon } from "@/components/icons/chevron-right";
 
 export default async function Home() {
   const session = await auth();
@@ -58,9 +69,11 @@ export default async function Home() {
         @keyframes featFlow{to{stroke-dashoffset:-24}}
         @media(prefers-reduced-motion:reduce){.feat-glow,.feat-pulse,.feat-flow{animation:none}}
         @media(max-width:820px){.feat-row{grid-template-columns:1fr;gap:24px;padding:40px 0}.feat-row[data-side="left"] .feat-illust{order:0}.feat-illust{height:220px}}
-        .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s cubic-bezier(.2,.7,.3,1), transform .7s cubic-bezier(.2,.7,.3,1)}
-        .reveal.in{opacity:1;transform:translateY(0)}
-        @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+        .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s cubic-bezier(.2,.7,.3,1), transform .7s cubic-bezier(.2,.7,.3,1);animation:revealFallback 0s 3.5s forwards}
+        .reveal.in{opacity:1;transform:translateY(0);animation:none}
+        @keyframes revealFallback{to{opacity:1;transform:translateY(0)}}
+        .no-js .reveal,.no-js .reveal.in{opacity:1;transform:none;transition:none;animation:none}
+        @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none;animation:none}}
         .why-grid{display:grid;grid-template-columns:repeat(3,1fr)}
         @media(max-width:760px){.why-grid{grid-template-columns:1fr 1fr}}
         @media(max-width:520px){.why-grid{grid-template-columns:1fr}}
@@ -165,12 +178,12 @@ export default async function Home() {
             <div className="feat-row reveal">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2c-1 3-4 4-4 9a4 4 0 0 0 8 0c0-2-1-3-1-3s.5 2-1 3c-2 1-2-1-2-3 0-2 2-3 0-6Z"/></svg>
+                  <FlameIcon size={15} />
                   Warmup
                 </span>
                 <h3>Inbox warm-up</h3>
                 <p>New inboxes send a slow, human-looking pattern for two weeks so mailbox providers learn to trust the address before your campaign starts.</p>
-                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -195,12 +208,12 @@ export default async function Home() {
             <div className="feat-row reveal" data-side="left">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+                  <RefreshIcon size={15} />
                   Rotation
                 </span>
                 <h3>Multi-inbox rotation</h3>
                 <p>Connect as many inboxes as you want. Sends spread across all of them so no single address carries the volume — or the risk.</p>
-                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -223,12 +236,12 @@ export default async function Home() {
             <div className="feat-row reveal">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 17 4 12l5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v2"/></svg>
+                  <Message01Icon size={15} />
                   Detection
                 </span>
                 <h3>Reply detection</h3>
                 <p>The moment a lead replies, books, or bounces, their sequence stops. No awkward follow-up after they've already answered.</p>
-                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -248,12 +261,12 @@ export default async function Home() {
             <div className="feat-row reveal" data-side="left">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+                  <Settings01Icon size={15} />
                   Personalization
                 </span>
                 <h3>Personalization tokens</h3>
                 <p>Pull first name, company, or any custom field into the subject line and body — no manual find-and-replace.</p>
-                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -272,12 +285,12 @@ export default async function Home() {
             <div className="feat-row reveal">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2 3 6v6c0 5 4 8 9 10 5-2 9-5 9-10V6l-9-4Z"/></svg>
+                  <Shield02Icon size={15} />
                   Deliverability
                 </span>
                 <h3>Deliverability monitor</h3>
                 <p>A spam-score check runs before every send, so you catch a flagged domain or spammy subject line before your leads do.</p>
-                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -296,12 +309,12 @@ export default async function Home() {
             <div className="feat-row reveal" data-side="left">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>
+                  <TrendUpIcon size={15} />
                   Analytics
                 </span>
                 <h3>Plain analytics</h3>
                 <p>Opens, replies, and bounces on one screen. Just what you need to know if the sequence is working.</p>
-                <a href="#pricing" className="feat-link">Get started<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 6l6 6-6 6"/></svg></a>
+                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -351,19 +364,19 @@ export default async function Home() {
           </div>
           <ol className="steps">
             <li className="step">
-              <div className="step-illust"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+              <div className="step-illust"><Link01Icon size={24} /></div>
               <div><h3>Connect your inbox</h3><p>Link Gmail or Outlook. Warm-up starts immediately, even before your first sequence.</p></div>
             </li>
             <li className="step">
-              <div className="step-illust"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18"/><path d="M9 3v18"/><path d="M13 13h4"/><path d="M13 17h4"/></svg></div>
+              <div className="step-illust"><GridViewIcon size={24} /></div>
               <div><h3>Import your leads</h3><p>Upload a CSV or paste a list. Map columns once and you're set.</p></div>
             </li>
             <li className="step">
-              <div className="step-illust"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+              <div className="step-illust"><Edit02Icon size={24} /></div>
               <div><h3>Write your sequence</h3><p>First email, follow-ups, delays. Tokens pull from your lead list.</p></div>
             </li>
             <li className="step">
-              <div className="step-illust"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></div>
+              <div className="step-illust"><SentIcon size={24} /></div>
               <div><h3>Launch and track</h3><p>Sends rotate across connected inboxes automatically. Watch replies come in.</p></div>
             </li>
           </ol>
@@ -407,7 +420,7 @@ export default async function Home() {
                 <li className="compare-row"><div><div className="name">Pro</div><div className="desc">Unlimited inboxes · 30,000 leads · AI included</div></div><div className="cost">$49</div></li>
                 <li className="compare-row"><div><div className="name">Agency</div><div className="desc">Unlimited inboxes · 150,000 leads · white-label &amp; API</div></div><div className="cost">$99</div></li>
               </ul>
-              <p className="compare-note">AI included in every paid plan, and every account starts with 1,000 free credits. See the full <Link href="/pricing" className="feat-link" style={{display:"inline-flex",alignItems:"center",gap:4}}>pricing<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:13,height:13}}><path d="M9 6l6 6-6 6"/></svg></Link>.</p>
+              <div className="compare-note">AI included in every paid plan, and every account starts with 1,000 free credits. See the full <Link href="/pricing" className="feat-link" style={{display:"inline-flex",alignItems:"center",gap:4}}>pricing<ChevronRightIcon size={13} /></Link>.</div>
             </div>
           </div>
         </div>

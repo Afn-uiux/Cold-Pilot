@@ -12,12 +12,18 @@ function baseUrl(req: NextRequest): string {
 }
 
 function clearSessionCookies(res: NextResponse): void {
-  res.cookies.set("authjs.session-token", "", { maxAge: 0, path: "/" });
-  res.cookies.set("authjs.csrf-token", "", { maxAge: 0, path: "/" });
-  res.cookies.set("authjs.callback-url", "", { maxAge: 0, path: "/" });
-  // Also clear the secure variants
-  res.cookies.set("__Secure-authjs.session-token", "", { maxAge: 0, path: "/" });
-  res.cookies.set("__Secure-authjs.callback-url", "", { maxAge: 0, path: "/" });
+  const clear = (name: string, opts: Record<string, any> = {}) =>
+    res.cookies.set(name, "", { maxAge: 0, path: "/", sameSite: "lax", ...opts });
+
+  // Non-secure variants (dev HTTP)
+  clear("authjs.session-token");
+  clear("authjs.csrf-token");
+  clear("authjs.callback-url");
+
+  // Secure variants (HTTPS / production)
+  clear("__Secure-authjs.session-token", { secure: true });
+  clear("__Secure-authjs.csrf-token", { secure: true });
+  clear("__Secure-authjs.callback-url", { secure: true });
 }
 
 async function revokeCurrentSession(): Promise<void> {
@@ -31,12 +37,16 @@ async function revokeCurrentSession(): Promise<void> {
 
 // Used by the dashboard sidebar link (plain GET navigation).
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.redirect(new URL("/auth/login", baseUrl(req)));
+  let session;
+  try {
+    session = await auth();
+  } catch {
+    session = null;
+  }
+  if (session?.sid) {
+    await revokeSession(session.sid).catch(() => {});
   }
 
-  await revokeSession(session.sid);
   const res = NextResponse.redirect(new URL("/auth/login", baseUrl(req)));
   clearSessionCookies(res);
   return res;

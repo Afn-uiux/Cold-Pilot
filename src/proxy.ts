@@ -2,51 +2,50 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { decode } from "next-auth/jwt";
 import { rateLimit } from "@/lib/rate-limit";
-import { isSessionValid } from "@/lib/session";
 
 const protectedPaths = ["/dashboard"];
 const authPaths = ["/auth/login", "/auth/signup"];
 const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET!;
 
-const cookieName =
-  process.env.NODE_ENV === "production"
-    ? "__Secure-authjs.session-token"
-    : "authjs.session-token";
+function getCookieName(request: NextRequest): string {
+  const proto = request.headers.get("x-forwarded-proto") || "http";
+  if (proto === "https" || process.env.NODE_ENV === "production") {
+    return "__Secure-authjs.session-token";
+  }
+  return "authjs.session-token";
+}
 
-function clearSessionCookies(res: NextResponse) {
+function clearSessionCookies(res: NextResponse, cookieName: string) {
   res.cookies.delete(cookieName);
-  // Legacy cookie from the old client-side binding scheme — harmless to
-  // clear if a returning browser still has it.
+  res.cookies.delete("__Secure-authjs.session-token");
+  res.cookies.delete("authjs.session-token");
   res.cookies.delete("session-binding");
 }
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const sessionCookie = request.cookies.get(cookieName)?.value;
+  const cookieName = getCookieName(request);
+  const sessionCookie = request.cookies.get(cookieName)?.value
+    || request.cookies.get("__Secure-authjs.session-token")?.value
+    || request.cookies.get("authjs.session-token")?.value;
 
   if (sessionCookie) {
     try {
       const token = await decode({ token: sessionCookie, secret, salt: cookieName });
-
-      // A token without a sid predates this scheme, or is malformed — treat
-      // it as signed out rather than trusting it implicitly.
-      const valid = token?.sid ? await isSessionValid(token.sid as string) : false;
-
-      if (!valid) {
+      if (!token) {
         const loginUrl = new URL("/auth/login", request.url);
         const res = NextResponse.redirect(loginUrl);
-        clearSessionCookies(res);
+        clearSessionCookies(res, cookieName);
         return res;
       }
     } catch {
       const loginUrl = new URL("/auth/login", request.url);
       const res = NextResponse.redirect(loginUrl);
-      clearSessionCookies(res);
+      clearSessionCookies(res, cookieName);
       return res;
     }
   }
 
-  // Rate limit auth pages (login/signup)
   if (authPaths.some((p) => pathname.startsWith(p))) {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
     const result = rateLimit(`auth:${ip}`, { max: 5, windowMs: 60_000 });
@@ -55,12 +54,10 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Redirect authenticated users away from auth pages
   if (sessionCookie && authPaths.some((p) => pathname.startsWith(p))) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Redirect unauthenticated users to login
   if (!sessionCookie && protectedPaths.some((p) => pathname.startsWith(p))) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);

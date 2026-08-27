@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Menu01Icon } from "@/components/icons/menu-01";
+import { Cancel01Icon } from "@/components/icons/cancel-01";
 
 const products = [
   { icon: "flame", href: "/warmup", title: "Warmup", desc: "New inboxes send a slow, human-looking pattern for two weeks so providers learn to trust the address before you launch." },
@@ -173,16 +175,24 @@ export default function SiteHeader() {
             <Link href="/auth/signup" className="sh-cta">Start free</Link>
           </div>
 
-          <button className="sh-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+          <button
+            type="button"
+            className="sh-toggle"
+            aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+            aria-controls="sh-mobile"
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((open) => !open)}
+          >
+            <Menu01Icon size={22} />
           </button>
         </div>
       </header>
 
-      <div className={`sh-mobile${mobileOpen ? " sh-mobile-open" : ""}`} id="sh-mobile" aria-hidden={!mobileOpen}>
-        <div className="sh-mobile-panel">
-          <button className="sh-mobile-close" aria-label="Close navigation" onClick={() => setMobileOpen(false)}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+      {mobileOpen && (
+      <div className="sh-mobile sh-mobile-open" id="sh-mobile" aria-hidden={!mobileOpen} onClick={() => setMobileOpen(false)}>
+        <div className="sh-mobile-panel" role="dialog" aria-modal="true" aria-label="Navigation menu" onClick={(event) => event.stopPropagation()}>
+          <button type="button" className="sh-mobile-close" aria-label="Close navigation" onClick={() => setMobileOpen(false)}>
+            <Cancel01Icon size={20} />
           </button>
 
           <button type="button" className="sh-acc-trigger" aria-expanded={!!acc.product} onClick={() => toggleAcc("product")}>
@@ -225,6 +235,7 @@ export default function SiteHeader() {
           </div>
         </div>
       </div>
+      )}
 
       <style>{`
         .sh{--cream:#FAFAF8;--ink:#0F0D14;--muted:#6B6578;--muted-2:#9B94A8;--border:rgba(15,13,20,0.08);--blue:#2563EB;--blue-hover:#1D4ED8;position:sticky;top:0;z-index:100;background:rgba(250,250,248,0.92);backdrop-filter:blur(12px);border-bottom:1px solid transparent;transition:border-color .2s}
@@ -269,15 +280,16 @@ export default function SiteHeader() {
         .sh-login:hover{color:var(--ink)}
         .sh-cta{display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:13.5px;font-weight:500;padding:10px 20px;border-radius:6px;background:var(--blue);color:#fff;white-space:nowrap;transition:background .15s}
         .sh-cta:hover{background:var(--blue-hover)}
-        .sh-toggle{display:none;background:none;border:none;color:var(--ink);cursor:pointer;padding:4px;z-index:110}
+        .sh-toggle{display:none;align-items:center;justify-content:center;width:44px;height:44px;background:none;border:none;color:var(--ink);cursor:pointer;padding:0;z-index:110;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+        .sh-toggle>div,.sh-mobile-close>div{pointer-events:none;display:flex}
+        .sh-mobile-close{align-self:flex-end;display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:none;border:1px solid var(--border);border-radius:8px;padding:0;cursor:pointer;color:var(--ink);touch-action:manipulation}
         @media(max-width:860px){.sh-nav{display:none}.sh-actions{display:none}.sh-toggle{display:flex!important}}
 
-        .sh-mobile{position:fixed;inset:0;z-index:200;background:rgba(15,13,20,0.4);opacity:0;pointer-events:none;transition:opacity .35s}
-        .sh-mobile-open{opacity:1;pointer-events:auto}
-        .sh-mobile-panel{position:absolute;top:0;left:0;right:0;width:100%;max-height:100%;background:var(--cream,#FAFAF8);border-bottom:1px solid var(--border);padding:22px clamp(20px,4vw,28px);transform:translateY(-100%);transition:transform .45s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;gap:2px;overflow-y:auto;box-shadow:0 30px 60px -20px rgba(15,13,20,.25);border-radius:0 0 18px 18px}
-        .sh-mobile-open .sh-mobile-panel{transform:translateY(0)}
-        .sh-mobile-close{align-self:flex-end;background:none;border:1px solid var(--border);border-radius:6px;padding:8px;cursor:pointer;color:var(--ink)}
-        .sh-acc-trigger{display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;border-bottom:1px solid var(--border);padding:15px 2px;font-family:inherit;font-size:16px;font-weight:500;color:var(--ink);cursor:pointer}
+        .sh-mobile{position:fixed;inset:0;z-index:200;background:rgba(15,13,20,0.4);opacity:1;pointer-events:auto;animation:shFadeIn .3s ease}
+        @keyframes shFadeIn{from{opacity:0}to{opacity:1}}
+        .sh-mobile-panel{position:absolute;top:0;left:0;right:0;width:100%;max-height:100dvh;background:var(--cream,#FAFAF8);border-bottom:1px solid var(--border);padding:calc(16px + env(safe-area-inset-top)) clamp(20px,4vw,28px) calc(22px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:2px;overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:0 30px 60px -20px rgba(15,13,20,.25);border-radius:0 0 18px 18px;animation:shSlideDown .4s cubic-bezier(.16,1,.3,1)}
+        @keyframes shSlideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+        .sh-acc-trigger{display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;border-bottom:1px solid var(--border);padding:15px 2px;font-family:inherit;font-size:16px;font-weight:500;color:var(--ink);cursor:pointer;text-align:left;touch-action:manipulation}
         .sh-acc-caret{color:var(--muted-2);transition:transform .24s ease}
         .sh-acc-trigger[aria-expanded="true"] .sh-acc-caret{transform:rotate(180deg)}
         .sh-acc-panel{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s cubic-bezier(.22,1,.36,1)}
@@ -290,6 +302,7 @@ export default function SiteHeader() {
         .sh-mobile-actions{display:flex;flex-direction:column;gap:10px;margin-top:auto;padding-top:20px}
         .sh-mobile-btn{display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-size:15px;font-weight:500;padding:14px 26px;border-radius:6px;background:var(--blue);color:#fff;text-decoration:none}
         .sh-mobile-btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--border)}
+        @media(max-width:420px){.sh-inner{padding:12px 16px}.sh-mobile-panel{border-radius:0;padding-left:18px;padding-right:18px}.sh-mobile-item-desc{font-size:12px}.sh-mobile-actions{padding-top:14px}}
         @media(prefers-reduced-motion:reduce){.sh-panel,.sh-mobile,.sh-mobile-panel,.sh-acc-panel,.sh-acc-caret{transition:none}}
       `}</style>
     </>

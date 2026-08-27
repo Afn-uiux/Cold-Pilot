@@ -37,7 +37,7 @@ export default function BillingSection() {
     <div className="space-y-8">
       <div className="card">
         <div className="card-header"><h3>Current plan</h3></div>
-        <div className="grid grid-cols-2 gap-6 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4 sm:gap-6 sm:grid-cols-3">
           <div>
             <p className="text-xs text-muted">Plan</p>
             <p className="text-lg font-medium mt-1">{currentPlan.name}</p>

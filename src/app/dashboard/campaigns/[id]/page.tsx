@@ -73,6 +73,8 @@ export default function CampaignDetailPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const aiDropdownRef = useRef<HTMLDivElement>(null);
+  const [aiDropdownPos, setAiDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const editorRefs = useRef<(RichTextEditorHandle | null)[]>([]);
 
   async function loadTemplates() {
@@ -108,6 +110,7 @@ export default function CampaignDetailPage() {
     }));
     setSteps(newSteps);
     setAiStepIdx(0);
+    setTab("sequences");
   }
 
   async function runAi(action: string, stepIndex: number) {
@@ -399,7 +402,7 @@ export default function CampaignDetailPage() {
               <button onClick={saveSteps} disabled={saving} className="btn btn-primary btn-sm min-w-[130px]">
                 {saving ? "Saving..." : "Save Sequence"}
               </button>
-              <div className="w-28">
+              <div className="w-28 shrink-0">
                 <Select value={String(aiStepIdx)} onChange={v => setAiStepIdx(parseInt(v))}
                   options={steps.map((_, i) => ({ value: String(i), label: `Step ${i + 1}` }))}
                   placeholder="Step" triggerClassName="w-full flex items-center justify-between gap-1 bg-white border border-border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-blue-accent text-left" />
@@ -504,7 +507,7 @@ export default function CampaignDetailPage() {
                           </div>
 
                           {/* Toolbar */}
-                          <div className="flex items-center gap-0.5 px-3 py-2 border-t border-border/30 bg-cream-2/30">
+                          <div className="flex items-center gap-0.5 px-3 py-2 border-t border-border/30 bg-cream-2/30 overflow-x-auto">
                             <button onClick={saveSteps} disabled={saving}
                               className="flex items-center gap-1.5 bg-blue-accent hover:bg-blue-700 text-white text-xs font-medium px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50 shadow-[0_1px_2px_0_rgba(0,0,0,0.06)] whitespace-nowrap">
                               <SaveIcon size={13} />
@@ -513,14 +516,14 @@ export default function CampaignDetailPage() {
 
                             <div className="w-px h-5 bg-border/40 shrink-0 mx-1.5"></div>
 
-                            <div className="relative">
-                              <button onClick={e => { e.stopPropagation(); setAiDropdownStep(aiDropdownStep === i ? null : i); }}
+                              <div className="relative" ref={aiDropdownRef}>
+                              <button onClick={e => { e.stopPropagation(); const rect = aiDropdownRef.current!.getBoundingClientRect(); setAiDropdownPos({ top: rect.bottom + 4, left: rect.left }); setAiDropdownStep(aiDropdownStep === i ? null : i); }}
                                 className="flex items-center gap-1.5 text-xs text-muted hover:text-blue-accent px-2.5 py-1.5 rounded-lg hover:bg-white/70 transition-all">
                                 <FlashIcon size={14} />
                                 AI Tools
                               </button>
                               {aiDropdownStep === i && (
-                                <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-border/50 rounded-xl shadow-lg z-20 py-1.5 overflow-hidden">
+                                <div className="fixed w-44 bg-white border border-border/50 rounded-xl shadow-lg z-[200] py-1.5" style={{ top: aiDropdownPos.top, left: aiDropdownPos.left }}>
                                   <button onClick={() => { setAiDropdownStep(null); setAiStepIdx(i); runAi("spin", i); }}
                                     disabled={aiLoading} className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-muted hover:text-blue-accent hover:bg-cream-2/60 transition-all disabled:opacity-30">
                                     <RefreshIcon size={14} />
@@ -623,7 +626,7 @@ export default function CampaignDetailPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setPreviewStep(null)}>
             <div className="bg-white rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] w-full max-w-[780px] max-h-[90vh] flex flex-col m-4" onClick={e => e.stopPropagation()}>
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
+              <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200">
                 <h2 className="text-xl font-bold text-[#1a1a1a]">Test Email</h2>
                 <button onClick={() => setPreviewStep(null)} className="text-gray-400 hover:text-gray-600 flex items-center justify-center">
                   <Cancel01Icon size={18} />
@@ -631,7 +634,7 @@ export default function CampaignDetailPage() {
               </div>
 
               {/* Body - two columns */}
-              <div className="flex-1 overflow-y-auto p-6">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
                 <div className="flex flex-col md:flex-row gap-6">
                   {/* Left column - Config */}
                   <div className="w-full md:w-[220px] shrink-0 space-y-5">
@@ -718,7 +721,7 @@ export default function CampaignDetailPage() {
               </div>
 
               {/* Bottom actions */}
-              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-gray-200">
                 <button disabled={testSending} onClick={async () => {
                   setTestMsg(""); setDeliverabilityScore(null);
                   try {
@@ -970,16 +973,17 @@ function AnalyticsTab({ campaignId, state, onPublish, onPause, onResume }: { cam
       {/* Tabbed card */}
       <div className="card !p-0 overflow-hidden">
         {/* Tabs header */}
-        <div className="flex items-center gap-8 border-b border-border px-8 pt-6">
-          {tabs.map(tab => (
-            <button key={tab} onClick={() => setAnalyticsTab(tab)}
-              className={`relative pb-4 text-sm font-medium transition-colors ${analyticsTab === tab ? "text-blue-accent" : "text-muted hover:text-blue-accent"}`}>
-              {tab}
-              {analyticsTab === tab && <span className="absolute -bottom-px left-0 right-0 h-0.5 rounded-full bg-blue-accent" />}
-            </button>
-          ))}
-          <div className="flex-1" />
-          <div className="flex items-center gap-2 pb-4">
+        <div className="flex items-center border-b border-border px-4 sm:px-8 pt-6">
+          <div className="flex items-center gap-6 sm:gap-8 overflow-x-auto flex-1 min-w-0">
+            {tabs.map(tab => (
+              <button key={tab} onClick={() => setAnalyticsTab(tab)}
+                className={`relative pb-4 text-sm font-medium transition-colors whitespace-nowrap ${analyticsTab === tab ? "text-blue-accent" : "text-muted hover:text-blue-accent"}`}>
+                {tab}
+                {analyticsTab === tab && <span className="absolute -bottom-px left-0 right-0 h-0.5 rounded-full bg-blue-accent" />}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 pb-4 shrink-0 ml-4">
             {state === "active" ? (
               <button onClick={onPause} className="btn btn-ghost btn-xs">Pause</button>
             ) : state === "draft" ? (
@@ -994,7 +998,7 @@ function AnalyticsTab({ campaignId, state, onPublish, onPause, onResume }: { cam
 
         {/* Step Analytics */}
         {analyticsTab === "Step Analytics" && (
-          <div className="overflow-x-auto px-8 pb-6">
+          <div className="overflow-x-auto px-4 sm:px-8 pb-6">
             <table className="w-full min-w-[600px] border-collapse">
               <thead>
                 <tr>
@@ -1155,9 +1159,9 @@ function ActivityFeedTab({ campaignId }: { campaignId: string }) {
   ];
 
   return (
-    <div className="px-8 pb-6">
+    <div className="px-4 sm:px-8 pb-6">
       {/* Search + filter + export */}
-      <div className="flex items-center gap-2 pt-6 pb-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-6 pb-4">
         <div className="relative flex-1 max-w-xs">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2">
             <Search01Icon size={14} />
@@ -1832,7 +1836,7 @@ function SuppressedTab({ campaignId }: { campaignId: string }) {
   if (loading) return <div className="flex items-center justify-center py-16 text-sm text-muted-2">Loading...</div>;
 
   return (
-    <div className="overflow-x-auto px-8 pb-6">
+    <div className="overflow-x-auto px-4 sm:px-8 pb-6">
       {suppressions.length > 0 ? (
         <table className="w-full min-w-[400px] border-collapse">
           <thead>
@@ -1904,9 +1908,9 @@ function BouncesTab({ stats }: { stats: any }) {
   ];
 
   return (
-    <div className="px-8 pb-6 space-y-8">
+    <div className="px-4 sm:px-8 pb-6 space-y-8">
       {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-4 pt-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6">
         {cards.map(c => (
           <div key={c.label} className="bg-cream-2 border border-border rounded-lg px-5 py-4">
             <div className="text-xs text-muted mb-1">{c.label}</div>
@@ -1953,7 +1957,7 @@ function BouncesTab({ stats }: { stats: any }) {
       ) : (
       <div>
         <h4 className="text-sm font-medium text-ink mb-3">Recent bounced leads</h4>
-        <div className="border border-border rounded-lg overflow-hidden">
+        <div className="border border-border rounded-lg overflow-hidden overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-cream-2">

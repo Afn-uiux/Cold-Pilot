@@ -183,13 +183,13 @@ export default function CrmPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[clamp(24px,3vw,32px)] font-medium tracking-tight">CRM</h1>
+      <div className="mb-6">
+        <h1 className="text-[clamp(24px,3vw,32px)] font-medium tracking-tight mb-4">CRM</h1>
         <div className="flex items-center gap-2">
           <Select value={selectedPipelineId} onChange={setSelectedPipelineId}
             options={pipelines.map(p => ({ value: p.id, label: p.name }))}
             placeholder="Select pipeline"
-            triggerClassName="flex items-center justify-between gap-2 bg-cream border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-accent min-w-[160px] text-left"
+            triggerClassName="flex items-center justify-between gap-2 bg-cream border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-accent min-w-[140px] sm:min-w-[160px] text-left"
           />
           {selectedPipelineId && (
             <button onClick={() => { setSettingsName(selectedPipeline?.name || ""); setSettingsStages(stages.join("\n")); setShowPipelineSettings(true); }}
@@ -238,8 +238,8 @@ export default function CrmPage() {
       {/* Deal detail slide-over */}
       {editDeal && (
         <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setEditDeal(null)}>
-          <div className="w-full max-w-md bg-cream border-l border-border shadow-2xl h-full overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-6 space-y-6">
+          <div className="w-full sm:max-w-md bg-cream border-l border-border shadow-2xl h-full overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-4 sm:p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-semibold text-ink">{editDeal.name}</h2>
                 <button onClick={() => setEditDeal(null)} className="text-muted-2 hover:text-blue-accent flex items-center justify-center">

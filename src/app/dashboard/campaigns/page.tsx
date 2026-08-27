@@ -190,12 +190,12 @@ export default function CampaignsPage() {
 
       <div className="px-6 lg:px-10 pt-7 pb-16">
         <div className="toolbar">
-          <div className="toolbar-left">
-            <div className="search">
-              <Search01Icon size={14} className="pointer-events-none" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#7A9AB5" }} />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search campaigns..." />
+          <div className="toolbar-left flex-col sm:flex-row gap-2">
+            <div className="search flex-1 max-w-none">
+              <Search01Icon size={14} className="pointer-events-none" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#7A9AB5" }} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search campaigns..." style={{ paddingLeft: 42 }} />
             </div>
-            <div className="w-40">
+            <div className="w-full sm:w-40">
               <Select value={statusFilter} onChange={setStatusFilter}
                 options={STATUSES.map(s => ({ value: s, label: s === "all" ? "All statuses" : s.charAt(0).toUpperCase() + s.slice(1) }))}
                 triggerClassName="w-full flex items-center justify-between gap-2 border border-border rounded-lg px-3 py-2 text-sm bg-transparent font-medium text-xs tracking-wider text-muted outline-none focus:border-ink text-left" />

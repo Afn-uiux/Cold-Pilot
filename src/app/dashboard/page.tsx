@@ -34,12 +34,12 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <header className="flex items-center justify-between px-6 lg:px-10 pt-8 pb-0 gap-5 flex-wrap">
+      <header className="dash-header">
         <div>
           <h1 className="font-medium text-[clamp(28px,3.5vw,36px)] font-normal tracking-tight leading-tight">Overview</h1>
           <p className="text-sm text-muted mt-1.5">Your outreach at a glance.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="dash-header-actions">
           <CreditBadge />
           <Link href="/dashboard/campaigns" className="btn btn-primary">New campaign</Link>
         </div>

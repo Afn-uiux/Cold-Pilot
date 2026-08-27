@@ -156,7 +156,7 @@ export default function EmailAccountDetailPage() {
   return (
     <div className="px-6 lg:px-10 py-8 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between gap-5 flex-wrap mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <button onClick={() => router.push("/dashboard/email-accounts")} className="text-muted hover:text-blue-accent transition-colors mr-1">
@@ -192,7 +192,7 @@ export default function EmailAccountDetailPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-0 border-b border-border mb-7">
+      <div className="flex gap-0 border-b border-border mb-7 overflow-x-auto">
         {TABS.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`text-sm py-2.5 px-5 border-b-2 transition-colors ${activeTab === tab.key ? "border-blue-accent text-ink font-medium" : "border-transparent text-muted hover:text-blue-accent"}`}>
@@ -204,7 +204,7 @@ export default function EmailAccountDetailPage() {
       {/* Warmup Tab */}
       {activeTab === "warmup" && (
         <>
-          <div className="grid grid-cols-3 gap-4 mb-7">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
             <div className="bg-cream-2/50 border border-border rounded-lg p-4">
               <p className="text-xs text-muted mb-1">Warmup emails received</p>
               <p className="text-2xl font-medium text-ink">{warmup?.summary?.warmupReceived ?? 0}</p>
@@ -305,7 +305,7 @@ export default function EmailAccountDetailPage() {
               <div>
                 <label className="block text-xs text-[#666] mb-1.5">Signature</label>
                 <div className="border border-[#ddd] rounded-lg overflow-hidden">
-                  <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-[#ddd] bg-white">
+                  <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-[#ddd] bg-white overflow-x-auto">
                     <button onClick={() => execFormat("bold")} className="w-7 h-7 flex items-center justify-center text-[#666] hover:text-blue-accent rounded hover:bg-gray-100" title="Bold"><BoldIcon size={14} /></button>
                     <button onClick={() => execFormat("italic")} className="w-7 h-7 flex items-center justify-center text-[#666] hover:text-blue-accent rounded hover:bg-gray-100" title="Italic"><ItalicIcon size={14} /></button>
                     <button onClick={() => execFormat("underline")} className="w-7 h-7 flex items-center justify-center text-[#666] hover:text-blue-accent rounded hover:bg-gray-100" title="Underline"><UnderlineIcon size={14} /></button>
@@ -349,20 +349,20 @@ export default function EmailAccountDetailPage() {
                 <input value={settings.filterTag} onChange={e => updateSetting("filterTag", e.target.value)}
                   className="w-full border border-[#ddd] rounded-lg px-3 py-2.5 text-sm outline-none focus:border-blue-accent" placeholder="Custom tag (e.g. 'golden-pineapples')" />
               </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-[#666] w-40 shrink-0">Default</span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+            <span className="text-sm text-[#666] sm:w-40 shrink-0">Default</span>
             <span className="text-sm font-mono text-[#666]">{account.warmupFilterTag || "—"}</span>
           </div>
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-[#666] w-40 shrink-0">Increase per day</label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                <label className="text-sm text-[#666] sm:w-40 shrink-0">Increase per day</label>
                 <div className="flex items-center gap-2">
                   <input type="number" value={settings.increasePerDay} onChange={e => updateSetting("increasePerDay", parseInt(e.target.value) || 0)}
                     className="w-16 border border-[#ddd] rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-accent text-center" />
                   <span className="text-xs text-[#999] italic">Suggested 1</span>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-[#666] w-40 shrink-0">Daily warmup limit</label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                <label className="text-sm text-[#666] sm:w-40 shrink-0">Daily warmup limit</label>
                 <div className="flex items-center gap-2">
                   <input type="number" value={settings.dailyLimit} onChange={e => updateSetting("dailyLimit", parseInt(e.target.value) || 0)}
                     className="w-16 border border-[#ddd] rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-accent text-center" />
@@ -374,8 +374,8 @@ export default function EmailAccountDetailPage() {
                   className="w-4 h-4 rounded border-[#ddd] text-blue-accent" />
                 <span className="text-sm text-[#666]">Disable slow warmup</span>
               </label>
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-[#666] w-40 shrink-0">Reply rate %</label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                <label className="text-sm text-[#666] sm:w-40 shrink-0">Reply rate %</label>
                 <div className="flex items-center gap-2">
                   <input type="number" value={settings.replyRate} onChange={e => updateSetting("replyRate", parseInt(e.target.value) || 0)}
                     className="w-16 border border-[#ddd] rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-accent text-center" />
@@ -403,36 +403,36 @@ export default function EmailAccountDetailPage() {
                 </button>
               </div>
 
-              <div className="bg-white border border-[#e5e7eb] rounded-lg p-4 flex items-center justify-between">
+              <div className="bg-white border border-[#e5e7eb] rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <p className="text-[14px] font-bold text-[#1a1a1a]">Weekdays only</p>
                   <p className="text-[12px] text-[#666] mt-1">Only send warmup emails on weekdays for a more natural sending pattern</p>
                 </div>
                 <button onClick={() => updateSetting("weekdaysOnly", !settings.weekdaysOnly)}
-                  className={`relative w-[38px] h-[21px] rounded-full transition-colors shrink-0 ${settings.weekdaysOnly ? "bg-blue-accent" : "bg-[#ccc]"}`}>
+                  className={`relative w-[38px] h-[21px] rounded-full transition-colors shrink-0 self-start sm:self-center ${settings.weekdaysOnly ? "bg-blue-accent" : "bg-[#ccc]"}`}>
                   <span className={`absolute block w-[17px] h-[17px] bg-white rounded-full top-[2px] shadow-sm transition-all ${settings.weekdaysOnly ? "left-[19px]" : "left-[2px]"}`} />
                 </button>
               </div>
 
-              <div className="bg-white border border-[#e5e7eb] rounded-lg p-4 flex items-center justify-between">
+              <div className="bg-white border border-[#e5e7eb] rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <p className="text-[14px] font-bold text-[#1a1a1a]">Read emulation</p>
                   <p className="text-[12px] text-[#666] mt-1">Spend time and scroll through your warmup email to emulate human-like reading</p>
                 </div>
                 <button onClick={() => updateSetting("readEmulation", !settings.readEmulation)}
-                  className={`relative w-[38px] h-[21px] rounded-full transition-colors shrink-0 ${settings.readEmulation ? "bg-blue-accent" : "bg-[#ccc]"}`}>
+                  className={`relative w-[38px] h-[21px] rounded-full transition-colors shrink-0 self-start sm:self-center ${settings.readEmulation ? "bg-blue-accent" : "bg-[#ccc]"}`}>
                   <span className={`absolute block w-[17px] h-[17px] bg-white rounded-full top-[2px] shadow-sm transition-all ${settings.readEmulation ? "left-[19px]" : "left-[2px]"}`} />
                 </button>
               </div>
 
               <div className="bg-white border border-[#e5e7eb] rounded-lg p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <p className="text-[14px] font-bold text-[#1a1a1a]">Warm custom tracking domain</p>
                     <p className="text-[12px] text-[#666] mt-1">Include your custom tracking domain in your warmup emails to further improve deliverability</p>
                   </div>
                   <button onClick={() => updateSetting("warmupCustomTrackingDomain", !settings.warmupCustomTrackingDomain)}
-                    className={`relative w-[38px] h-[21px] rounded-full transition-colors shrink-0 ${settings.warmupCustomTrackingDomain ? "bg-blue-accent" : "bg-[#ccc]"}`}>
+                    className={`relative w-[38px] h-[21px] rounded-full transition-colors shrink-0 self-start sm:self-center ${settings.warmupCustomTrackingDomain ? "bg-blue-accent" : "bg-[#ccc]"}`}>
                     <span className={`absolute block w-[17px] h-[17px] bg-white rounded-full top-[2px] shadow-sm transition-all ${settings.warmupCustomTrackingDomain ? "left-[19px]" : "left-[2px]"}`} />
                   </button>
                 </div>
@@ -447,7 +447,7 @@ export default function EmailAccountDetailPage() {
               </div>
 
               <div className="bg-white border border-[#e5e7eb] rounded-lg p-4">
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
                   <p className="text-[14px] font-bold text-[#1a1a1a]">Open Rate</p>
                   <div className="flex items-center gap-2">
                     <input type="number" min={0} max={100} value={settings.openRate} onChange={e => {
@@ -461,7 +461,7 @@ export default function EmailAccountDetailPage() {
               </div>
 
               <div className="bg-white border border-[#e5e7eb] rounded-lg p-4">
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
                   <p className="text-[14px] font-bold text-[#1a1a1a]">Spam Protection</p>
                   <div className="flex items-center gap-2">
                     <input type="number" min={0} max={100} value={settings.spamProtection} onChange={e => {
@@ -475,7 +475,7 @@ export default function EmailAccountDetailPage() {
               </div>
 
               <div className="bg-white border border-[#e5e7eb] rounded-lg p-4">
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
                   <p className="text-[14px] font-bold text-[#1a1a1a]">Mark Important</p>
                   <div className="flex items-center gap-2">
                     <input type="number" min={0} max={100} value={settings.markImportant} onChange={e => {

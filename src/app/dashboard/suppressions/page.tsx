@@ -48,8 +48,8 @@ export default function SuppressionsPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6 max-w-3xl">
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold">Suppressions</h1>
           <p className="text-sm text-muted mt-0.5">Blocked emails that will never be sent to</p>

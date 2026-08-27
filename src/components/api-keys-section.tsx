@@ -51,9 +51,9 @@ export default function ApiKeysSection() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h3 className="text-sm font-semibold">API Keys</h3>
-        <button onClick={() => setShowCreate(true)} className="bg-blue-accent text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity">
+        <button onClick={() => setShowCreate(true)} className="bg-blue-accent text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity shrink-0">
           Create Key
         </button>
       </div>
@@ -76,12 +76,12 @@ export default function ApiKeysSection() {
       ) : (
         <div className="space-y-2">
           {keys.map(k => (
-            <div key={k.id} className="flex items-center justify-between py-2.5 px-3 bg-cream border border-border rounded-lg">
-              <div>
+            <div key={k.id} className="flex flex-col sm:flex-row sm:items-center justify-between py-2.5 px-3 bg-cream border border-border rounded-lg gap-2">
+              <div className="min-w-0">
                 <p className="text-sm font-medium">{k.name}</p>
-                <p className="text-xs text-muted">{k.scopes} &middot; {k.lastUsedAt ? `Last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : "Never used"} &middot; Created {new Date(k.createdAt).toLocaleDateString()}</p>
+                <p className="text-xs text-muted truncate">{k.scopes} &middot; {k.lastUsedAt ? `Last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : "Never used"} &middot; Created {new Date(k.createdAt).toLocaleDateString()}</p>
               </div>
-              <button onClick={() => deleteKey(k.id)} className="text-xs text-muted hover:text-red-500 transition-colors">Delete</button>
+              <button onClick={() => deleteKey(k.id)} className="text-xs text-muted hover:text-red-500 transition-colors shrink-0 self-start sm:self-center">Delete</button>
             </div>
           ))}
         </div>

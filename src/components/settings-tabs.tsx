@@ -86,11 +86,11 @@ export default function SettingsTabs({ user }: { user: { name: string | null; em
       </header>
 
       <div className="px-6 lg:px-10 pt-7 pb-16">
-        <div className="grid grid-cols-[200px_1fr] gap-10 items-start">
-          <div className="flex flex-col gap-0.5 sticky top-8">
+        <div className="flex flex-col lg:grid lg:grid-cols-[200px_1fr] gap-6 lg:gap-10">
+          <div className="flex lg:flex-col gap-0.5 lg:sticky lg:top-8 overflow-x-auto lg:overflow-x-visible w-full lg:w-auto -mx-6 px-6 lg:mx-0 lg:px-0">
             {TABS.map((item) => (
               <button key={item} onClick={() => setActiveTab(item)}
-                className={`text-sm text-left px-4 py-2.5 rounded transition-colors ${activeTab === item ? "bg-cream-2 text-ink font-medium" : "text-muted hover:text-ink"}`}>
+                className={`text-sm text-left px-4 py-2.5 rounded transition-colors whitespace-nowrap shrink-0 ${activeTab === item ? "bg-cream-2 text-ink font-medium" : "text-muted hover:text-ink"}`}>
                 {item}
               </button>
             ))}
@@ -100,7 +100,7 @@ export default function SettingsTabs({ user }: { user: { name: string | null; em
             {activeTab === "Profile" && (
               <form onSubmit={saveProfile} className="card">
                 <div className="card-header"><h3>Profile</h3></div>
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="field-group">
                     <label className="block text-xs text-muted mb-2">Name</label>
                     <input name="name" className="w-full bg-transparent border-b border-border pb-2.5 text-sm outline-none focus:border-ink transition-colors" defaultValue={user.name || ""} />

@@ -14,9 +14,6 @@ export function renderEmail(templateId: EmailTemplateId, data?: Record<string, u
   const filePath = join(process.cwd(), "src", "lib", "email", "templates-html", template.filename);
   let html = readFileSync(filePath, "utf-8");
 
-  // Substitute {{key}} placeholders (e.g. {{verifyUrl}}, {{resetUrl}}) with
-  // the caller-provided data. Any placeholder left without a matching value
-  // is stripped rather than sent to a recipient literally as "{{...}}".
   html = html.replace(/\{\{(\w+)\}\}/g, (_match, key) => {
     const value = data?.[key];
     return value !== undefined && value !== null ? String(value) : "";
@@ -30,6 +27,19 @@ export function renderEmail(templateId: EmailTemplateId, data?: Record<string, u
 
 export async function sendTransactionalEmail({ to, template, data }: SendEmailOptions) {
   const { subject, html } = renderEmail(template, data);
+
+  if (process.env.RESEND_API_KEY) {
+    const { Resend } = await import("resend");
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    await resend.emails.send({
+      from: "Coldpilot <onboarding@resend.dev>",
+      to,
+      subject,
+      html,
+    });
+    return;
+  }
 
   const { default: nodemailer } = await import("nodemailer");
 

@@ -61,6 +61,11 @@ Thumbs.db
 # vercel
 .vercel
 
+# local dev/throwaway scripts
+check-users.js
+check-users.mjs
+start.bat
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

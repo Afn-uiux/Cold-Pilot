@@ -78,7 +78,7 @@ export default function TemplatesPage() {
             <button onClick={() => setShowCreate(true)} className="btn btn-primary">New Template</button>
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
             {templates.map(t => (
               <div key={t.id} className="border border-border rounded-lg p-5 bg-cream cursor-pointer hover:border-blue-accent transition-colors flex flex-col justify-between">
                 <div>

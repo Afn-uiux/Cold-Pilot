@@ -101,7 +101,8 @@ export async function login(formData: FormData) {
       redirect: false,
     });
     return { success: true };
-  } catch {
+  } catch (e: any) {
+    console.error("[LOGIN ERROR]", e?.name, e?.message, e?.code);
     return { error: "Invalid email or password" };
   }
 }

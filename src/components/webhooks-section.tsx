@@ -54,9 +54,9 @@ export default function WebhooksSection() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h3 className="text-sm font-semibold">Webhooks</h3>
-        <button onClick={() => setShowCreate(true)} className="bg-blue-accent text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity">
+        <button onClick={() => setShowCreate(true)} className="bg-blue-accent text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity shrink-0">
           Add Webhook
         </button>
       </div>
@@ -70,7 +70,7 @@ export default function WebhooksSection() {
       ) : (
         <div className="space-y-2">
           {webhooks.map(w => (
-            <div key={w.id} className="flex items-center justify-between py-2.5 px-3 bg-cream border border-border rounded-lg">
+            <div key={w.id} className="flex flex-col sm:flex-row sm:items-center justify-between py-2.5 px-3 bg-cream border border-border rounded-lg gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{w.url}</p>
                 <p className="text-xs text-muted">
@@ -78,7 +78,7 @@ export default function WebhooksSection() {
                   {w.lastStatus !== null ? (w.lastStatus >= 200 && w.lastStatus < 300 ? " OK" : ` HTTP ${w.lastStatus}`) : " Not fired yet"}
                 </p>
               </div>
-              <div className="flex items-center gap-2 ml-3">
+              <div className="flex items-center gap-2 sm:ml-3 shrink-0 self-start sm:self-center">
                 <button
                   onClick={() => toggleWebhook(w.id, !w.active)}
                   className={`text-xs px-2 py-1 rounded transition-colors ${w.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}

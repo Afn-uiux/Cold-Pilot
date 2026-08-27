@@ -42,16 +42,15 @@ export default function Sidebar({ user }: { user: any }) {
     fetchUnread();
     const interval = setInterval(fetchUnread, 20000);
     return () => { active = false; clearInterval(interval); };
-    // Re-poll immediately whenever the route changes (e.g. right after
-    // leaving the inbox, once the lead's lastReadAt has been updated).
   }, [pathname]);
 
   return (
     <>
       {/* Mobile hamburger */}
       <button
+        type="button"
         onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-50 lg:hidden bg-cream border border-border rounded-lg p-2.5 shadow-sm"
+        className="fixed top-4 left-4 z-50 lg:hidden bg-cream border border-border rounded-lg p-2.5 shadow-sm [&>div]:pointer-events-none"
         aria-label="Open menu"
       >
         <Menu01Icon size={18} />
@@ -67,14 +66,14 @@ export default function Sidebar({ user }: { user: any }) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-screen flex flex-col bg-cream z-50 transition-transform duration-200 ${
+        className={`fixed top-0 left-0 h-[100dvh] flex flex-col bg-cream z-50 transition-transform duration-200 overflow-y-auto ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0`}
         style={{ width: 200, borderRight: "1px solid var(--color-border)", padding: "28px 0" }}
       >
         <div className="font-medium text-lg tracking-tight px-6 mb-9 flex items-center justify-between">
           <Link href="/dashboard" onClick={() => setMobileOpen(false)}>Coldpilot</Link>
-          <button onClick={() => setMobileOpen(false)} className="lg:hidden text-muted hover:text-blue-accent">
+          <button type="button" onClick={() => setMobileOpen(false)} className="lg:hidden text-muted hover:text-blue-accent [&>div]:pointer-events-none">
             <Cancel01Icon size={16} />
           </button>
         </div>

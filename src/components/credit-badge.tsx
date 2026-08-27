@@ -79,14 +79,6 @@ export default function CreditBadge() {
         </div>
       )}
 
-      {isFree && (
-        <Link
-          href="/dashboard/settings?tab=Billing"
-          className="ml-2 inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-blue-accent text-white text-xs font-semibold hover:opacity-90 transition-opacity"
-        >
-          Get All Features
-        </Link>
-      )}
     </div>
   );
 }

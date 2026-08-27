@@ -58,7 +58,7 @@ export default function Select({
         onClick={() => setOpen(!open)}
         className={triggerClassName || "w-full flex items-center justify-between gap-2 bg-transparent border-b border-border pb-2 text-sm outline-none focus:border-ink text-left"}
       >
-        <span className={selected ? "text-ink" : "text-muted"}>
+        <span className={`truncate ${selected ? "text-ink" : "text-muted"}`}>
           {selected ? selected.label : placeholder || "Select..."}
         </span>
         <ChevronDownIcon

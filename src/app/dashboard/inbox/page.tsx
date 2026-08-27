@@ -75,6 +75,7 @@ function InboxPage() {
   const [campaignSearch, setCampaignSearch] = useState("");
   const [inboxSearch, setInboxSearch] = useState("");
   const [moreSearch, setMoreSearch] = useState("");
+  const [mobileView, setMobileView] = useState<"list" | "thread">("list");
 
   function fetchInbox() {
     fetch("/api/inbox").then(r => r.json()).then(data => {
@@ -100,6 +101,7 @@ function InboxPage() {
 
   function selectThread(id: string) {
     setSelectedId(id);
+    setMobileView("thread");
     setThreadLoading(true);
     setReply("");
     setSentOk(false);
@@ -191,17 +193,24 @@ function InboxPage() {
     <div className="flex flex-col h-[calc(100vh-0px)]">
       {/* Coldbox top bar — always visible */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-cream-2/30 shrink-0">
+        {/* Mobile back button */}
+        {mobileView === "thread" && (
+          <button onClick={() => { setMobileView("list"); setSelectedId(null); setLead(null); setEmailLogs([]); }}
+            className="lg:hidden text-muted hover:text-blue-accent transition-colors p-0.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+        )}
         <h2 className="text-base font-medium">Coldbox</h2>
         <button onClick={() => setColdboxOpen(!coldboxOpen)}
-          className="text-muted hover:text-blue-accent transition-colors p-0.5"
+          className="hidden lg:block text-muted hover:text-blue-accent transition-colors p-0.5"
           aria-label={coldboxOpen ? "Collapse sidebar" : "Expand sidebar"}>
           <PanelLeftIcon size={16} className={`transition-transform duration-300 ${coldboxOpen ? "" : "rotate-180"}`} />
         </button>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-      {/* Sidebar filters */}
-      <div className={`${coldboxOpen ? "w-[260px]" : "w-0"} shrink-0 border-r border-border overflow-hidden bg-cream-2/30 transition-all duration-200 ease-in-out`}>
+      {/* Sidebar filters — hidden on mobile */}
+      <div className={`hidden lg:block ${coldboxOpen ? "w-[260px]" : "w-0"} shrink-0 border-r border-border overflow-hidden bg-cream-2/30 transition-all duration-200 ease-in-out`}>
         <div className="w-[260px] overflow-y-auto">
           {/* Status dropdown */}
           <Dropdown open={statusOpen} onToggle={() => setStatusOpen(!statusOpen)} label="Status">
@@ -289,7 +298,7 @@ function InboxPage() {
         </div>
 
       {/* Thread list */}
-      <div className="w-[360px] shrink-0 border-r border-border overflow-y-auto">
+      <div className={`w-full lg:w-[360px] shrink-0 border-r border-border overflow-y-auto ${mobileView === "thread" ? "hidden lg:block" : ""}`}>
         <div className="border-b border-border">
           <div className="text-xs font-medium py-3 text-center text-ink relative">
             Primary
@@ -340,12 +349,12 @@ function InboxPage() {
       </div>
 
       {/* Thread view */}
-      <div className="flex-1 flex flex-col overflow-y-auto">
+      <div className={`flex-1 flex flex-col overflow-y-auto ${mobileView === "list" ? "hidden lg:flex" : ""}`}>
         {threadLoading ? (
           <div className="flex-1 flex items-center justify-center text-sm text-muted">Loading thread...</div>
         ) : selectedThread && lead ? (
           <>
-            <div className="px-8 py-5 border-b border-border">
+            <div className="px-4 lg:px-8 py-5 border-b border-border">
               <div className="flex items-center gap-3">
                 <h3 className="font-medium text-lg">{selectedThread.subject}</h3>
                 {selectedThread.dealStage && (
@@ -363,7 +372,7 @@ function InboxPage() {
               {selectedThread.emailAccountEmail && <p className="text-xs text-muted-2 mt-0.5">via {selectedThread.emailAccountEmail}</p>}
               {lead?.campaign && <p className="text-xs text-muted-2 mt-0.5">Campaign: {lead.campaign.name}</p>}
             </div>
-            <div className="flex-1 px-8 py-6 overflow-y-auto">
+            <div className="flex-1 px-4 lg:px-8 py-6 overflow-y-auto">
               {emailLogs.length > 0 ? emailLogs.map((log) => {
                 const isIncoming = log.type === "incoming";
                 const bodyText = log.bodyHtml ? htmlToText(log.bodyHtml) : "(no content)";
@@ -391,7 +400,7 @@ function InboxPage() {
                 <div className="text-sm text-muted py-8 text-center">No messages yet</div>
               )}
             </div>
-            <div className="px-8 py-5 border-t border-border">
+            <div className="px-4 lg:px-8 py-5 border-t border-border">
               {sentOk && <p className="text-xs text-green-600 mb-2">Reply sent!</p>}
               <textarea value={reply} onChange={e => setReply(e.target.value)}
                 placeholder="Write your reply..."

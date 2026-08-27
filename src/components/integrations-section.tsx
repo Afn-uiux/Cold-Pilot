@@ -79,9 +79,9 @@ export default function IntegrationsSection() {
           {toast}
         </div>
       )}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h3 className="text-sm font-semibold">Integrations</h3>
-        <button onClick={() => setShowConnect(true)} className="bg-blue-accent text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity">
+        <button onClick={() => setShowConnect(true)} className="bg-blue-accent text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-opacity shrink-0">
           Connect
         </button>
       </div>
@@ -93,12 +93,12 @@ export default function IntegrationsSection() {
       ) : (
         <div className="space-y-2">
           {integrations.map(i => (
-            <div key={i.id} className="flex items-center justify-between py-2.5 px-3 bg-cream border border-border rounded-lg">
-              <div>
+            <div key={i.id} className="flex flex-col sm:flex-row sm:items-center justify-between py-2.5 px-3 bg-cream border border-border rounded-lg gap-2">
+              <div className="min-w-0">
                 <p className="text-sm font-medium capitalize">{i.label || i.provider}</p>
-                <p className="text-xs text-muted">{i.provider} &middot; Connected {new Date(i.createdAt).toLocaleDateString()}</p>
+                <p className="text-xs text-muted truncate">{i.provider} &middot; Connected {new Date(i.createdAt).toLocaleDateString()}</p>
               </div>
-              <button onClick={() => disconnect(i.id)} className="text-xs text-muted hover:text-red-500 transition-colors">Disconnect</button>
+              <button onClick={() => disconnect(i.id)} className="text-xs text-muted hover:text-red-500 transition-colors shrink-0 self-start sm:self-center">Disconnect</button>
             </div>
           ))}
         </div>

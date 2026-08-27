@@ -5,31 +5,33 @@ import { prisma } from "@/lib/prisma";
 import { getPlan, CREDIT_COSTS } from "@/lib/plans";
 import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
 
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
-const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
+const AI_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+const AI_BASE_URL = process.env.ANTHROPIC_BASE_URL || "https://agentrouter.org";
 
-async function callDeepSeek(prompt: string): Promise<string> {
-  const res = await fetch(DEEPSEEK_URL, {
+async function callAI(prompt: string): Promise<string> {
+  const res = await fetch(`${AI_BASE_URL}/v1/messages`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+      "x-api-key": AI_API_KEY,
+      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "deepseek-chat",
+      model: "claude-opus-4-8",
+      max_tokens: 2048,
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-      max_tokens: 1024,
     }),
   });
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`DeepSeek API error (${res.status}): ${err}`);
+    throw new Error(`AI API error (${res.status}): ${err}`);
   }
 
   const data = await res.json();
-  return data.choices?.[0]?.message?.content?.trim() || "";
+  const content = data.content?.[0]?.text?.trim() || "";
+  if (!content) throw new Error("Empty response from AI");
+  return content;
 }
 
 type GeneratedStep = { subject: string; body: string };
@@ -142,10 +144,14 @@ export async function POST(req: Request) {
             `Offer: ${offerDetails || "Describe the product/service being sold."}\n` +
             `Target audience: ${targetAudience || "B2B decision makers."}\n` +
             `Case studies / social proof: ${caseStudies || "None provided."}\n\n` +
-            `Write a ${stepCount}-email cold outreach sequence. The first email is the initial outreach; each following email is a follow-up that references the previous one and adds value.\n` +
-            `Use {{firstName}} for the recipient's first name and {{company}} for their company name.\n` +
-            `Keep every email under 150 words, professional but friendly, personalized, and specific to the offer and audience above.\n` +
-            `Return ONLY a valid JSON array of exactly ${stepCount} objects. Each object has "subject" (a subject line) and "body" (the email body with \\n line breaks). No markdown, no extra text.`
+            `Write a ${stepCount}-email cold outreach sequence. The first email is the initial outreach; each following email is a follow-up that references the previous one and adds value.\n\n` +
+            `STRICT RULES for every email:\n` +
+            `- Exactly 3 paragraphs\n` +
+            `- Total length: 100 words maximum\n` +
+            `- Use simple, plain English — no jargon, no corporate buzzwords\n` +
+            `- Short sentences, easy to read\n` +
+            `- Use {{firstName}} for the recipient's first name and {{company}} for their company name\n\n` +
+            `Return ONLY a valid JSON array of exactly ${stepCount} objects. Each object has "subject" (a subject line) and "body" (the email body with \\n line breaks between paragraphs). No markdown, no extra text.`
         );
         const steps = extractJsonArray(result);
         if (steps.length > 0) {
@@ -217,22 +223,97 @@ export async function POST(req: Request) {
   }
 
   if (action === "generate-sequence") {
-    const companyName = typeof body.companyName === "string" ? body.companyName.trim() : "";
+    const companyName = typeof body.companyName === "string" ? body.companyName.trim() : "Your Company";
     const offerDetails = typeof body.offerDetails === "string" ? body.offerDetails.trim() : "";
     const targetAudience = typeof body.targetAudience === "string" ? body.targetAudience.trim() : "";
     const caseStudies = typeof body.caseStudies === "string" ? body.caseStudies.trim() : "";
     const rawCount = Number(body.stepCount);
     const stepCount = Math.min(Math.max(Number.isFinite(rawCount) ? Math.round(rawCount) : 3, 1), 10);
+
+    const offer = offerDetails || "we help businesses grow";
+    const audience = targetAudience || "companies like yours";
+    const proof = caseStudies || "";
+
+    const subjects = [
+      [`Quick question about {{company}}`, `One idea for {{company}}`, `Thoughts on {{company}}`],
+      [`Following up`, `Did you see this?`, `Worth a quick look`],
+      [`Last note from me`, `Checking in`, `Before I move on`],
+      [`One more thing`, `Quick follow-up`, `Still relevant?`],
+      [`Circling back`, `Did this help?`, `Any thoughts?`],
+    ];
+
+    const greetings = ["Hi {{firstName}},", "Hey {{firstName}},", "Hello {{firstName}},"];
+    const signs = ["Best,", "Cheers,", "Regards,", "Thanks,"];
+
+    const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+    const pickIdx = (arr: T[], i: number): T => arr[i % arr.length];
+
     const steps: GeneratedStep[] = [];
+
     for (let i = 0; i < stepCount; i++) {
-      const re = i > 0 ? "Re: " : "";
-      const subject = truncateSubject(`${re}${companyName || "Outreach"} — quick question about {{company}}`);
-      const bodyText =
-        i === 0
-          ? `Hi {{firstName}},\n\nI'm with ${companyName || "[Your Company]"}. ${offerDetails || "We help companies like yours grow."}\n\nTargeting ${targetAudience || "B2B decision makers"}, we've seen strong results — ${caseStudies || "here's how we can help."}\n\nWould you be open to a quick chat next week?\n\nBest,\n[Your Name]`
-          : `Hi {{firstName}},\n\nFollowing up on my last email. ${offerDetails || "We help companies like yours grow."} ${caseStudies || "Happy to share relevant examples."}\n\nIs this something worth a quick conversation?\n\nBest,\n[Your Name]`;
-      steps.push({ subject, body: bodyText });
+      const subject = i === 0
+        ? truncateSubject(pickIdx(subjects[0], i))
+        : truncateSubject(pickIdx(subjects[Math.min(i, subjects.length - 1)], i));
+
+      let body: string;
+
+      if (i === 0) {
+        const openers = [
+          `I noticed that ${audience} often struggle with the same challenges — and I think {{company}} could benefit from a fresh approach.`,
+          `I came across {{company}} and wanted to share something relevant.`,
+          `I've been looking at {{company}} and had a thought I wanted to share.`,
+        ];
+        const paragraphs = [
+          `${offer}. We've helped businesses like {{company}} see real results — ${proof ? proof.split(".")[0] + "." : "and I'd love to show you how."}`,
+          `We work with ${audience} every day, and ${offer}. The difference shows quickly.`,
+          `${offer}. Our clients typically see improvement within the first month.`,
+        ];
+        const ctas = [
+          "Could we chat about how a similar approach could benefit {{company}}?",
+          "Do you have a few minutes to discuss this?",
+          "Worth a brief conversation?",
+        ];
+        body = `${pick(greetings)}\n\n${pick(openers)}\n\n${pick(paragraphs)}\n\n${pick(ctas)}\n\n${pick(signs)}\n{{sendingAccountFirstName}}`;
+      } else if (i === stepCount - 1 && stepCount >= 3) {
+        const closes = [
+          [
+            `I don't want to take up more of your time.`,
+            `If a fresh approach to ${offer.split(" ").slice(0, 5).join(" ")} is something {{company}} needs, I'm here.`,
+            `If not, no worries — I'll stop reaching out.`,
+          ],
+          [
+            `Last one from me, I promise.`,
+            `We help ${audience} with ${offer}.`,
+            `If the timing isn't right, I totally get it.`,
+          ],
+        ];
+        const cb = pick(closes);
+        body = `${pick(greetings)}\n\n${cb[0]}\n${cb[1]}\n${cb[2]}\n\n${pick(signs)}\n{{sendingAccountFirstName}}`;
+      } else {
+        const followups = [
+          [
+            `Just wanted to check in and see if you had a chance to consider my previous email.`,
+            `I truly believe that ${offer.split(" ").slice(0, 6).join(" ")} could make a big difference for {{company}}.`,
+            `Do you have a few minutes to discuss this?`,
+          ],
+          [
+            `Circling back on my last email.`,
+            `We help ${audience} with ${offer}.`,
+            `Would a quick call work for you?`,
+          ],
+          [
+            `Wanted to make sure you saw my last email.`,
+            `${offer} — and we've done this for ${audience} before.`,
+            `Happy to share more details if you're interested.`,
+          ],
+        ];
+        const fb = pick(followups);
+        body = `${pick(greetings)}\n\n${fb[0]}\n${fb[1]}\n${fb[2]}\n\n${pick(signs)}\n{{sendingAccountFirstName}}`;
+      }
+
+      steps.push({ subject, body });
     }
+
     return NextResponse.json({ steps });
   }
 

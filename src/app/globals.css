@@ -16,17 +16,19 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(10, 22, 40, 0.15); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(10, 22, 40, 0.3); }
+::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
+::-webkit-scrollbar-track { background: transparent !important; }
+::-webkit-scrollbar-thumb { background: transparent !important; }
+::-webkit-scrollbar-thumb:hover { background: transparent !important; }
 
-* { scrollbar-width: thin; scrollbar-color: rgba(10, 22, 40, 0.15) transparent; }
+* { scrollbar-width: none !important; }
+html, body { scrollbar-width: none !important; overflow-x: hidden; }
 body {
   font-family: 'Geist', system-ui, sans-serif;
   background: var(--color-cream);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 ::selection { background: var(--color-blue-accent); color: #fff; }
 
@@ -35,7 +37,8 @@ body {
   font-family: inherit; font-size: 14px; font-weight: 500;
   padding: 11px 22px; border-radius: 6px; border: none; cursor: pointer;
   transition: background 0.2s, color 0.2s, border-color 0.2s;
-  white-space: nowrap; line-height: 1; text-decoration: none;
+  max-width: 100%; white-space: nowrap; line-height: 1; text-decoration: none;
+  touch-action: manipulation;
 }
 .btn-primary { background: var(--color-blue-accent) !important; color: #fff !important; }
 .btn-primary:hover { background: var(--color-blue-accent-hover) !important; }
@@ -67,6 +70,21 @@ body {
 .metric-change.up { color: #16A34A; }
 .metric-change.down { color: #DC2626; }
 
+.dash-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 32px clamp(24px, 4vw, 40px) 0; gap: 20px; flex-wrap: wrap;
+}
+.dash-header-actions {
+  display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .dash-header {
+    flex-direction: column; align-items: stretch; padding-top: 24px; gap: 16px;
+  }
+  .dash-header-actions { justify-content: space-between; }
+}
+
 .table-wrap { border: 1px solid var(--color-border); border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table { width: 100%; border-collapse: collapse; min-width: max-content; }
 thead th {
@@ -88,7 +106,7 @@ tbody tr:hover { background: var(--color-cream-2); }
 .search input {
   width: 100%; font-family: inherit; font-size: 14px; color: var(--color-ink);
   background: transparent; border: 1px solid var(--color-border);
-  border-radius: 6px; padding: 10px 14px 10px 36px; outline: none;
+  border-radius: 6px; padding: 10px 14px 10px 40px; outline: none;
   transition: border-color 0.2s;
 }
 .search input:focus { border-color: var(--color-blue-accent); }
@@ -120,16 +138,26 @@ tbody tr:hover { background: var(--color-cream-2); }
 @media (max-width: 900px) { .responsive-stack { grid-template-columns: 1fr; } }
 
 @media (max-width: 640px) {
+  html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+  button, a, input, select, textarea { max-width: 100%; }
+  .btn { min-height: 40px; white-space: normal; line-height: 1.2; text-align: center; }
   .table-wrap table { font-size: 13px; }
   thead th, tbody td { padding: 12px 14px; }
-  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .metrics { grid-template-columns: 1fr 1fr; }
   .metric { padding: 16px; }
-  .metric-value { font-size: 24px; }
+  .metric-value { font-size: 22px; }
   .card { padding: 16px; }
+  .card-header, .section-head { align-items: flex-start; flex-direction: column; }
   .empty-state { padding: 40px 20px; }
   .empty-state h3 { font-size: 18px; }
   .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar-left { align-items: stretch; flex-direction: column; }
   .search { max-width: 100%; }
+}
+
+@media (max-width: 380px) {
+  .metrics { grid-template-columns: 1fr 1fr; }
+  .metric-value { font-size: 20px; }
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }

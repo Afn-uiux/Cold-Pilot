@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import Sidebar from "./sidebar";
 import NotificationBell from "@/components/notification-bell";
 import OnboardingWizard from "@/components/onboarding-wizard";
@@ -14,6 +15,20 @@ export default async function DashboardLayout({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/auth/login");
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { completedOnboarding: true },
+  });
+  const needsOnboarding = !user?.completedOnboarding;
+
+  if (needsOnboarding) {
+    return (
+      <div className="flex min-h-screen">
+        <OnboardingWizard />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen">
