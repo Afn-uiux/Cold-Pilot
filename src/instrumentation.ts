@@ -3,7 +3,7 @@ export async function register() {
 
   const { prisma } = await import("@/lib/prisma");
   const { executeCampaign, checkForReplies, sendDailySummaries } = await import("@/engine/campaign");
-  const { reconcileWarmupSchedules, processDueWarmupSends, processSeedInboxes, saveHealthLog } = await import("@/engine/warmup");
+  const { reconcileWarmupSchedules, processDueWarmupSends, processSeedInboxes, processSeedInboxEngagement, processSeedSends, saveHealthLog } = await import("@/engine/warmup");
   const { sendEmailSafe } = await import("@/lib/email/send");
   const { acquireLock, newLeaderToken } = await import("@/lib/leader-lock");
 
@@ -101,6 +101,28 @@ export async function register() {
         }
       } catch (e) {
         console.error("[scheduler] warmup imap error:", e);
+      }
+
+      // Seed engagement — seeds behave like live inboxes: receive, reply,
+      // mark important, and rescue from spam (bidirectional participation).
+      try {
+        const seedEng = await processSeedInboxEngagement();
+        if (seedEng && (seedEng.received > 0 || seedEng.replied > 0 || seedEng.rescued > 0)) {
+          console.log("[scheduler] seed engagement:", JSON.stringify(seedEng));
+        }
+      } catch (e) {
+        console.error("[scheduler] seed engagement error:", e);
+      }
+
+      // Seed sends — seeds warm each other (and eligible customer mailboxes) so
+      // the network self-sustains even while idle.
+      try {
+        const seedSends = await processSeedSends();
+        if (seedSends && (seedSends.sent > 0 || seedSends.failed > 0)) {
+          console.log("[scheduler] seed sends:", JSON.stringify(seedSends));
+        }
+      } catch (e) {
+        console.error("[scheduler] seed sends error:", e);
       }
 
       // Health check — once per hour

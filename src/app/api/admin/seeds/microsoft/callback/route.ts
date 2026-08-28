@@ -4,13 +4,19 @@ import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptAccount } from "@/lib/crypto";
-import { recordMailboxConnect } from "@/lib/fraud";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return htmlPage({ success: false, error: "Not authenticated. Please log in first." });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true },
+    });
+    if (user?.role !== "admin") {
+      return htmlPage({ success: false, error: "Admin access required." });
     }
 
     const error = req.nextUrl.searchParams.get("error");
@@ -29,13 +35,12 @@ export async function GET(req: NextRequest) {
     const clientId = process.env.AZURE_AD_CLIENT_ID;
     const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
     const tenant = process.env.AZURE_AD_TENANT_ID || "common";
-    const redirectUri = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/api/email-accounts/microsoft/callback`;
+    const redirectUri = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/api/admin/seeds/microsoft/callback`;
 
     if (!clientId || !clientSecret) {
       return htmlPage({ success: false, error: "Microsoft OAuth not configured." });
     }
 
-    // Exchange code for tokens
     const tokenRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -49,7 +54,6 @@ export async function GET(req: NextRequest) {
     });
 
     if (!tokenRes.ok) {
-      const errText = await tokenRes.text();
       return htmlPage({ success: false, error: "Failed to exchange auth code for token." });
     }
 
@@ -61,7 +65,6 @@ export async function GET(req: NextRequest) {
       return htmlPage({ success: false, error: "No access token received." });
     }
 
-    // Get user email from Microsoft Graph
     const graphRes = await fetch("https://graph.microsoft.com/v1.0/me", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -73,20 +76,15 @@ export async function GET(req: NextRequest) {
     const graphData = await graphRes.json();
     const email = graphData.mail || graphData.userPrincipalName;
     const displayName = graphData.displayName || "";
-    // Immutable Microsoft object id — stable across reconnects and renames.
-    const providerAccountId = String(graphData.id || email);
 
     if (!email) {
       return htmlPage({ success: false, error: "Could not retrieve email from Microsoft account." });
     }
 
-    // Save or update the email account
-    const existing = await prisma.emailAccount.findFirst({
-      where: { userId: session.user.id, email },
-    });
+    const existing = await prisma.seedInbox.findUnique({ where: { email } });
 
     if (existing) {
-      await prisma.emailAccount.update({
+      await prisma.seedInbox.update({
         where: { id: existing.id },
         data: encryptAccount({
           microsoftToken: accessToken,
@@ -95,43 +93,35 @@ export async function GET(req: NextRequest) {
         }),
       });
     } else {
-      await prisma.emailAccount.create({
+      await prisma.seedInbox.create({
         data: encryptAccount({
-          userId: session.user.id,
           email,
           displayName,
-          provider: "Outlook",
+          provider: "outlook",
           smtpHost: "smtp.office365.com",
           smtpPort: 587,
           imapHost: "outlook.office365.com",
           imapPort: 993,
-          dailySendLimit: 50,
           microsoftToken: accessToken,
           microsoftRefreshToken: refreshToken,
+          status: "active",
+          warmupStartedAt: new Date(),
         }),
       });
     }
 
-    // Permanent mailbox fingerprinting (keyed on the immutable Graph id).
-    await recordMailboxConnect({
-      userId: session.user.id,
-      provider: "microsoft-oauth",
-      providerAccountId,
-      email,
-    });
-
     return htmlPage({ success: true });
   } catch (err: any) {
-    console.error("Microsoft account connection failed:", err);
-    return htmlPage({ success: false, error: "Failed to connect your Microsoft account. Please try again." });
+    console.error("Seed Microsoft connection failed:", err);
+    return htmlPage({ success: false, error: "Failed to connect seed. Please try again." });
   }
 }
 
 function htmlPage(result: { success: boolean; error?: string }) {
-  const payload = JSON.stringify({ source: "microsoft", ...result });
+  const payload = JSON.stringify({ source: "seed-microsoft", ...result });
   const html = `<!DOCTYPE html>
 <html>
-<head><title>Microsoft Account Connection</title></head>
+<head><title>Seed Connect</title></head>
 <body>
 <script>
   if (window.opener) {
@@ -139,7 +129,7 @@ function htmlPage(result: { success: boolean; error?: string }) {
   }
   window.close();
 </script>
-<p>${result.success ? "Account connected! You can close this window." : "Error: " + (result.error || "Unknown error")}</p>
+<p>${result.success ? "Seed connected! You can close this window." : "Error: " + (result.error || "Unknown error")}</p>
 </body>
 </html>`;
   return new Response(html, {

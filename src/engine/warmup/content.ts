@@ -176,18 +176,19 @@ function buildTemplateContent(senderName: string): { subject: string; body: stri
 
 export async function isDuplicate(
   senderMailboxId: string,
-  seedMailboxId: string,
+  receiver: { seedMailboxId: string | null; seedInboxId: string | null },
   subject: string,
   body: string,
 ): Promise<boolean> {
   const contentHash = hashContent(subject, body);
-  const existing = await prisma.warmupContent.findUnique({
+  const existing = await prisma.warmupContent.findFirst({
     where: {
-      senderMailboxId_seedMailboxId_contentHash: {
-        senderMailboxId,
-        seedMailboxId,
-        contentHash,
-      },
+      senderMailboxId,
+      contentHash,
+      OR: [
+        ...(receiver.seedMailboxId ? [{ seedMailboxId: receiver.seedMailboxId }] : []),
+        ...(receiver.seedInboxId ? [{ seedInboxId: receiver.seedInboxId }] : []),
+      ],
     },
   });
   return existing !== null;
@@ -195,7 +196,7 @@ export async function isDuplicate(
 
 export async function recordUsedContent(
   senderMailboxId: string,
-  seedMailboxId: string,
+  receiver: { seedMailboxId: string | null; seedInboxId: string | null },
   subject: string,
   body: string,
   source: string,
@@ -205,7 +206,8 @@ export async function recordUsedContent(
     await prisma.warmupContent.create({
       data: {
         senderMailboxId,
-        seedMailboxId,
+        seedMailboxId: receiver.seedMailboxId,
+        seedInboxId: receiver.seedInboxId,
         contentHash,
         subjectPreview: subject.slice(0, 60),
         bodyPreview: body.slice(0, 100),
@@ -277,7 +279,7 @@ async function generateViaAI(senderName: string, apiKey: string): Promise<{ subj
 export async function generateWarmupContent(
   senderMailboxId: string,
   senderName: string,
-  seedMailboxId: string,
+  receiver: { seedMailboxId: string | null; seedInboxId: string | null },
 ): Promise<{ subject: string; body: string; source: string }> {
   const mailbox = await prisma.emailAccount.findUnique({
     where: { id: senderMailboxId },
@@ -290,9 +292,9 @@ export async function generateWarmupContent(
     if (apiKey) {
       const aiContent = await generateViaAI(senderName, apiKey);
       if (aiContent) {
-        const duplicate = await isDuplicate(senderMailboxId, seedMailboxId, aiContent.subject, aiContent.body);
+        const duplicate = await isDuplicate(senderMailboxId, receiver, aiContent.subject, aiContent.body);
         if (!duplicate) {
-          await recordUsedContent(senderMailboxId, seedMailboxId, aiContent.subject, aiContent.body, "ai");
+          await recordUsedContent(senderMailboxId, receiver, aiContent.subject, aiContent.body, "ai");
           return { ...aiContent, source: "ai" };
         }
       }
@@ -307,16 +309,16 @@ export async function generateWarmupContent(
 
   for (let attempt = 0; attempt < 50; attempt++) {
     const content = buildTemplateContent(senderName);
-    const duplicate = await isDuplicate(senderMailboxId, seedMailboxId, content.subject, content.body);
+    const duplicate = await isDuplicate(senderMailboxId, receiver, content.subject, content.body);
     if (!duplicate) {
-      await recordUsedContent(senderMailboxId, seedMailboxId, content.subject, content.body, "templates");
+      await recordUsedContent(senderMailboxId, receiver, content.subject, content.body, "templates");
       return { ...content, source: "templates" };
     }
   }
 
   await resetUsedContent(senderMailboxId);
   const content = buildTemplateContent(senderName);
-  await recordUsedContent(senderMailboxId, seedMailboxId, content.subject, content.body, "templates");
+  await recordUsedContent(senderMailboxId, receiver, content.subject, content.body, "templates");
   return { ...content, source: "templates" };
 }
 

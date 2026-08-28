@@ -8,6 +8,29 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { decryptAccount, encryptAccount } from "@/lib/crypto";
 
+async function getGoogleAccessToken(refreshToken: string): Promise<string | null> {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+  try {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
 function getMicrosoftTokenUrl(tenant: string) {
   return `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
 }
@@ -80,6 +103,19 @@ export async function POST(req: Request) {
           where: { id: account.id },
           data: encryptAccount({ microsoftToken: refreshed.accessToken, microsoftRefreshToken: refreshed.refreshToken }),
         });
+      }
+    } else if (account.provider === "Gmail" && account.gmailToken) {
+      const accessToken = await getGoogleAccessToken(account.gmailToken);
+      if (accessToken) {
+        useOAuth = true;
+        smtpUser = account.email;
+        smtpPass = accessToken;
+        imapUser = account.email;
+        imapPass = accessToken;
+        if (!smtpHost) smtpHost = "smtp.gmail.com";
+        if (!smtpPort) smtpPort = 587;
+        if (!imapHost) imapHost = "imap.gmail.com";
+        if (!imapPort) imapPort = 993;
       }
     }
   }

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { calculateNextWarmupTime } from "./scheduler";
-import { pickWarmupPartner } from "./partner";
+import { pickWarmupReceiver, isEntitledToWarmup } from "./pool";
 import { generateWarmupContent } from "./content";
 import { sendWarmupEmail } from "./sender";
 import { decryptAccount } from "@/lib/crypto";
@@ -12,12 +12,14 @@ export async function reconcileWarmupSchedules(): Promise<number> {
       warmupEnabled: true,
       isPaused: false,
       status: "active",
-      user: { plan: { not: "free" } },
+      user: { deletedAt: null },
     },
     select: {
       id: true,
       email: true,
       warmupStartedAt: true,
+      userId: true,
+      user: { select: { plan: true, trialEndsAt: true, trialVoided: true, deletedAt: true } },
     },
   });
 
@@ -25,7 +27,10 @@ export async function reconcileWarmupSchedules(): Promise<number> {
 
   for (const mailbox of mailboxes) {
     try {
-      // Check if there's already a pending/upcoming warmup log
+      // Warmup runs while the owner is on an active trial OR a paid plan.
+      // Once the trial ends and they have not paid, warmup is paused.
+      if (!isEntitledToWarmup(mailbox.user)) continue;
+
       const pendingCount = await prisma.warmupLog.count({
         where: {
           senderMailboxId: mailbox.id,
@@ -35,7 +40,6 @@ export async function reconcileWarmupSchedules(): Promise<number> {
 
       if (pendingCount > 0) continue;
 
-      // Start warmup if not started
       if (!mailbox.warmupStartedAt) {
         await prisma.emailAccount.update({
           where: { id: mailbox.id },
@@ -43,23 +47,28 @@ export async function reconcileWarmupSchedules(): Promise<number> {
         });
       }
 
-      // Calculate next send time
       const nextTime = await calculateNextWarmupTime(mailbox.id);
       if (!nextTime) continue;
 
-      // Pick a partner seed
-      const partner = await pickWarmupPartner(mailbox.id, mailboxes.length);
-      if (!partner) continue;
+      // Pick a receiver: a platform seed inbox OR an eligible peer mailbox.
+      const receiver = await pickWarmupReceiver({ id: mailbox.id, userId: mailbox.userId });
+      if (!receiver) continue;
 
-      // Generate content
       const senderName = mailbox.email.split("@")[0];
-      const content = await generateWarmupContent(mailbox.id, senderName, partner.id);
+      const content = await generateWarmupContent(
+        mailbox.id,
+        senderName,
+        {
+          seedMailboxId: receiver.kind === "peer" ? receiver.id : null,
+          seedInboxId: receiver.kind === "seed" ? receiver.id : null,
+        },
+      );
 
-      // Create scheduled warmup log
       await prisma.warmupLog.create({
         data: {
           senderMailboxId: mailbox.id,
-          seedMailboxId: partner.id,
+          seedMailboxId: receiver.kind === "peer" ? receiver.id : null,
+          seedInboxId: receiver.kind === "seed" ? receiver.id : null,
           subject: content.subject,
           bodyPreview: content.body.slice(0, 200),
           bodyHtml: content.body,
@@ -83,10 +92,14 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
     where: {
       status: "scheduled",
       sentAt: { lte: now },
+      // Seed-originated sends are handled by the seed network engine
+      // (seed-send.ts) — this path only ships user-mailbox warmup.
+      senderMailboxId: { not: null },
     },
     include: {
       senderMailbox: true,
       seedMailbox: true,
+      seedInbox: true,
     },
     take: 50,
   });
@@ -96,25 +109,43 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
 
   for (const log of dueLogs) {
     try {
-      // Decrypt credentials
-      log.senderMailbox = decryptAccount(log.senderMailbox) as any;
-      log.seedMailbox = decryptAccount(log.seedMailbox) as any;
+      if (!log.senderMailbox) {
+        await prisma.warmupLog.delete({ where: { id: log.id } });
+        continue;
+      }
+      const sender = decryptAccount(log.senderMailbox) as any;
+      if (log.seedMailbox) log.seedMailbox = decryptAccount(log.seedMailbox) as any;
+      if (log.seedInbox) log.seedInbox = decryptAccount(log.seedInbox) as any;
 
-      // Use stored content if available, otherwise regenerate
+      // Resolve the destination address — the receiver is either a peer
+      // (user mailbox, seedMailboxId) or a platform seed (seedInboxId).
+      let toEmail: string;
+      if (log.seedInbox) {
+        toEmail = log.seedInbox.email;
+      } else if (log.seedMailbox) {
+        toEmail = log.seedMailbox.email;
+      } else {
+        // No valid receiver anymore — drop the stale log.
+        await prisma.warmupLog.delete({ where: { id: log.id } });
+        continue;
+      }
+
       let subject = log.subject;
       let emailBody = log.bodyHtml || log.bodyPreview || "";
 
       if (!subject || !emailBody) {
-        const senderName = log.senderMailbox.email.split("@")[0];
+        const senderName = sender.email.split("@")[0];
         const content = await generateWarmupContent(
-          log.senderMailboxId,
+          sender.id,
           senderName,
-          log.seedMailboxId,
+          {
+            seedMailboxId: log.seedMailbox ? log.seedMailboxId : null,
+            seedInboxId: log.seedInboxId,
+          },
         );
         subject = content.subject;
         emailBody = content.body;
 
-        // Persist regenerated content back to the log
         await prisma.warmupLog.update({
           where: { id: log.id },
           data: {
@@ -130,42 +161,38 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
         data: { status: "sending" },
       });
 
-      if (log.senderMailbox.warmupCustomTrackingDomain && log.senderMailbox.customTrackingDomain) {
-        emailBody += `\n\n---\n${log.senderMailbox.customTrackingDomain}`;
+      if (sender.warmupCustomTrackingDomain && sender.customTrackingDomain) {
+        emailBody += `\n\n---\n${sender.customTrackingDomain}`;
       }
 
-      // Append the account's filter tag to the end of subject and body so
-      // mailbox-level filters (e.g. Gmail "from:tag") can catch warmup mail
-      const filterTag = log.senderMailbox.warmupFilterTag;
+      const filterTag = sender.warmupFilterTag;
       if (filterTag) {
         subject = `${subject} ${filterTag}`;
         emailBody = `${emailBody}\n\n${filterTag}`;
       }
 
-      // Shared send gate — respects campaign sends too
       const gate = await canSendFromAccount(
-        log.senderMailboxId,
-        log.senderMailbox.dailySendLimit || 50,
+        sender.id,
+        sender.dailySendLimit || 50,
       );
       if (!gate.allowed) {
-        // Skip this warmup send, retry next tick
         await prisma.warmupLog.update({
           where: { id: log.id },
           data: { status: "scheduled" },
         });
-        console.log(`[warmup] Send blocked for ${log.senderMailbox.email}: ${gate.reason}`);
+        console.log(`[warmup] Send blocked for ${sender.email}: ${gate.reason}`);
         failed++;
         continue;
       }
 
       const result = await sendWarmupEmail(
-        log.senderMailbox.email,
-        log.senderMailbox.smtpHost!,
-        log.senderMailbox.smtpPort!,
-        log.senderMailbox.smtpUser!,
-        log.senderMailbox.smtpPass!,
-        log.senderMailbox.displayName || undefined,
-        log.seedMailbox.email,
+        sender.email,
+        sender.smtpHost!,
+        sender.smtpPort!,
+        sender.smtpUser!,
+        sender.smtpPass!,
+        sender.displayName || undefined,
+        toEmail,
         subject,
         emailBody,
       );
@@ -176,18 +203,25 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
           data: {
             status: "sent",
             messageId: result.messageId,
-            subject: subject,
+            subject,
             bodyPreview: emailBody.slice(0, 200),
             bodyHtml: emailBody,
             sentAt: new Date(),
           },
         });
 
-        // Update receiver lastHealthCheckAt as lastUsed proxy
-        await prisma.emailAccount.update({
-          where: { id: log.seedMailboxId },
-          data: { lastHealthCheckAt: new Date() },
-        });
+        // Mark receiver used for rotation.
+        if (log.seedInboxId) {
+          await prisma.seedInbox.update({
+            where: { id: log.seedInboxId },
+            data: { lastUsedAt: new Date() },
+          });
+        } else if (log.seedMailboxId) {
+          await prisma.emailAccount.update({
+            where: { id: log.seedMailboxId },
+            data: { lastHealthCheckAt: new Date() },
+          });
+        }
 
         sent++;
       } else {

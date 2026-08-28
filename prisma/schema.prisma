@@ -182,8 +182,8 @@ model EmailAccount {
   displayName    String?
   domain         String?
   warmupEnabled  Boolean @default(false)
-  warmupBase     Int     @default(5)
-  warmupIncrease Int     @default(1)
+  warmupBase     Int     @default(2)
+  warmupIncrease Int     @default(2)
   warmupMax      Int     @default(10)
   warmupDays     Int     @default(127)
   warmupFilterTag    String  @default("")
@@ -226,8 +226,10 @@ model EmailAccount {
 
 model WarmupLog {
   id               String    @id @default(cuid())
-  senderMailboxId  String
-  seedMailboxId    String
+  senderMailboxId  String?
+  senderInboxId    String?
+  seedMailboxId    String?
+  seedInboxId      String?
   messageId        String?
   subject          String?
   bodyPreview      String?
@@ -242,27 +244,34 @@ model WarmupLog {
   status           String    @default("sent")
   createdAt        DateTime  @default(now())
 
-  senderMailbox EmailAccount @relation("sentWarmupLogs", fields: [senderMailboxId], references: [id], onDelete: Cascade)
-  seedMailbox   EmailAccount @relation("receivedWarmupLogs", fields: [seedMailboxId], references: [id], onDelete: Cascade)
+  // The sender is EITHER a user's mailbox (senderMailboxId) OR a platform seed
+  // (senderInboxId) — one of the two is set.
+  senderMailbox EmailAccount? @relation("sentWarmupLogs", fields: [senderMailboxId], references: [id], onDelete: SetNull)
+  senderInbox   SeedInbox? @relation("sentSeedWarmupLogs", fields: [senderInboxId], references: [id], onDelete: SetNull)
+  // The receiver is EITHER another user's mailbox (peer warmup, seedMailboxId)
+  // OR a platform-owned seed inbox (seedInboxId). One of the two is set.
+  seedMailbox   EmailAccount? @relation("receivedWarmupLogs", fields: [seedMailboxId], references: [id], onDelete: SetNull)
+  seedInbox     SeedInbox? @relation("receivedSeedWarmupLogs", fields: [seedInboxId], references: [id], onDelete: SetNull)
 }
-
 model WarmupContent {
-  id              String   @id @default(cuid())
-  senderMailboxId String
-  seedMailboxId   String
-  contentHash     String
-  subjectPreview  String
-  bodyPreview     String
-  contentSource   String   @default("templates")
-  usedAt          DateTime @default(now())
+    id              String   @id @default(cuid())
+    senderMailboxId String
+    seedMailboxId   String?
+    seedInboxId     String?
+    contentHash     String
+    subjectPreview  String
+    bodyPreview     String
+    contentSource   String   @default("templates")
+    usedAt          DateTime @default(now())
 
-  senderMailbox EmailAccount @relation("sentWarmupContent", fields: [senderMailboxId], references: [id], onDelete: Cascade)
-  seedMailbox   EmailAccount @relation("receivedWarmupContent", fields: [seedMailboxId], references: [id], onDelete: Cascade)
+    senderMailbox EmailAccount @relation("sentWarmupContent", fields: [senderMailboxId], references: [id], onDelete: Cascade)
+    seedMailbox   EmailAccount? @relation("receivedWarmupContent", fields: [seedMailboxId], references: [id], onDelete: SetNull)
+    seedInbox     SeedInbox? @relation("receivedSeedWarmupContent", fields: [seedInboxId], references: [id], onDelete: SetNull)
 
-  @@unique([senderMailboxId, seedMailboxId, contentHash])
-  @@index([senderMailboxId])
-}
-
+    @@unique([senderMailboxId, seedMailboxId, contentHash])
+    @@unique([senderMailboxId, seedInboxId, contentHash])
+    @@index([senderMailboxId])
+  }
 model Campaign {
   accountIds       String  @default("[]")
   id               String   @id @default(cuid())
@@ -568,4 +577,51 @@ model CreditTransaction {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// Platform-owned warmup seed inboxes (the backbone of the warmup network).
+// These are inboxes operated by the platform that user mailboxes warm against.
+// The user-facing receivers also participate (see EmailAccount.warmupEnabled),
+// but this model holds the operator-owned pool that is always available.
+model SeedInbox {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  provider  String   @default("other")
+  smtpHost  String?
+  smtpPort  Int?
+  smtpUser  String?
+  smtpPass  String?
+  imapHost  String?
+  imapPort  Int?
+  imapUser  String?
+  imapPass  String?
+  gmailToken String?
+  microsoftToken String?
+  microsoftRefreshToken String?
+  displayName String?
+  status    String   @default("active") // active | paused | quarantined
+  healthScore Float  @default(100)
+  healthState String  @default("healthy")
+  lastUsedAt DateTime?
+  note      String?
+  dailyTarget    Int     @default(10)
+  warmupBase     Int     @default(2)
+  warmupIncrease Int     @default(2)
+  warmupStartedAt DateTime?
+  scheduleStart  String  @default("09:00")
+  scheduleEnd    String  @default("17:00")
+  minWaitMinutes Int     @default(10)
+  replyRate      Int     @default(75)
+  openRate       Int     @default(100)
+  spamProtection Int     @default(100)
+  markImportant  Int     @default(10)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  receivedWarmupLogs WarmupLog[] @relation("receivedSeedWarmupLogs")
+  receivedWarmupContent WarmupContent[] @relation("receivedSeedWarmupContent")
+  sentWarmupLogs WarmupLog[] @relation("sentSeedWarmupLogs")
+
+  @@index([status])
+  @@index([email])
 }

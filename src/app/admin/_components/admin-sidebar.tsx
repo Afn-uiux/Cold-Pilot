@@ -4,11 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home01Icon } from "@/components/icons/home-01";
 import { UserGroupIcon } from "@/components/icons/user-group";
+import { InboxIcon } from "@/components/icons/inbox";
 import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
 
 const LINKS = [
   { href: "/admin", label: "Overview", icon: "home" },
   { href: "/admin/users", label: "Users", icon: "users" },
+  { href: "/admin/seeds", label: "Seeds", icon: "inbox" },
 ];
 
 export default function AdminSidebar() {
@@ -64,6 +66,7 @@ function NavIcon({ name }: { name: string }) {
   switch (name) {
     case "home": return <Home01Icon size={16} />;
     case "users": return <UserGroupIcon size={16} />;
+    case "inbox": return <InboxIcon size={16} />;
     default: return null;
   }
 }

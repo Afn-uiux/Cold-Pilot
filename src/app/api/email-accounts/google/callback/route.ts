@@ -15,28 +15,27 @@ export async function GET(req: NextRequest) {
 
     const error = req.nextUrl.searchParams.get("error");
     if (error) {
-      return htmlPage({ success: false, error: "Microsoft login was cancelled or denied." });
+      return htmlPage({ success: false, error: "Google login was cancelled or denied." });
     }
 
     const code = req.nextUrl.searchParams.get("code");
     const returnedState = req.nextUrl.searchParams.get("state");
-    const cookieState = req.cookies.get("microsoft_oauth_state")?.value;
+    const cookieState = req.cookies.get("google_oauth_state")?.value;
 
     if (!code || !returnedState || returnedState !== cookieState) {
       return htmlPage({ success: false, error: "Invalid state parameter. Please try again." });
     }
 
-    const clientId = process.env.AZURE_AD_CLIENT_ID;
-    const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
-    const tenant = process.env.AZURE_AD_TENANT_ID || "common";
-    const redirectUri = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/api/email-accounts/microsoft/callback`;
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/api/email-accounts/google/callback`;
 
     if (!clientId || !clientSecret) {
-      return htmlPage({ success: false, error: "Microsoft OAuth not configured." });
+      return htmlPage({ success: false, error: "Google OAuth not configured." });
     }
 
     // Exchange code for tokens
-    const tokenRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -49,7 +48,6 @@ export async function GET(req: NextRequest) {
     });
 
     if (!tokenRes.ok) {
-      const errText = await tokenRes.text();
       return htmlPage({ success: false, error: "Failed to exchange auth code for token." });
     }
 
@@ -60,24 +58,27 @@ export async function GET(req: NextRequest) {
     if (!accessToken) {
       return htmlPage({ success: false, error: "No access token received." });
     }
+    if (!refreshToken) {
+      return htmlPage({ success: false, error: "Google did not return a refresh token. Please try again and grant access." });
+    }
 
-    // Get user email from Microsoft Graph
-    const graphRes = await fetch("https://graph.microsoft.com/v1.0/me", {
+    // Get user email from Google
+    const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
-    if (!graphRes.ok) {
-      return htmlPage({ success: false, error: "Failed to get user info from Microsoft." });
+    if (!userInfoRes.ok) {
+      return htmlPage({ success: false, error: "Failed to get user info from Google." });
     }
 
-    const graphData = await graphRes.json();
-    const email = graphData.mail || graphData.userPrincipalName;
-    const displayName = graphData.displayName || "";
-    // Immutable Microsoft object id — stable across reconnects and renames.
-    const providerAccountId = String(graphData.id || email);
+    const userInfo = await userInfoRes.json();
+    const email = userInfo.email;
+    const displayName = userInfo.name || "";
+    // Immutable Google sub id — stable across reconnects and renames.
+    const providerAccountId = String(userInfo.id || email);
 
     if (!email) {
-      return htmlPage({ success: false, error: "Could not retrieve email from Microsoft account." });
+      return htmlPage({ success: false, error: "Could not retrieve email from Google account." });
     }
 
     // Save or update the email account
@@ -89,8 +90,7 @@ export async function GET(req: NextRequest) {
       await prisma.emailAccount.update({
         where: { id: existing.id },
         data: encryptAccount({
-          microsoftToken: accessToken,
-          microsoftRefreshToken: refreshToken,
+          gmailToken: refreshToken,
           status: "active",
         }),
       });
@@ -100,38 +100,44 @@ export async function GET(req: NextRequest) {
           userId: session.user.id,
           email,
           displayName,
-          provider: "Outlook",
-          smtpHost: "smtp.office365.com",
+          provider: "Gmail",
+          smtpHost: "smtp.gmail.com",
           smtpPort: 587,
-          imapHost: "outlook.office365.com",
+          imapHost: "imap.gmail.com",
           imapPort: 993,
           dailySendLimit: 50,
-          microsoftToken: accessToken,
-          microsoftRefreshToken: refreshToken,
+          warmupEnabled: true,
+          warmupFilterTag: (function () {
+            const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+            let tag = "";
+            for (let i = 0; i < 6; i++) tag += chars[Math.floor(Math.random() * chars.length)];
+            return tag;
+          })(),
+          gmailToken: refreshToken,
         }),
       });
     }
 
-    // Permanent mailbox fingerprinting (keyed on the immutable Graph id).
+    // Permanent mailbox fingerprinting (keyed on the immutable Google sub id).
     await recordMailboxConnect({
       userId: session.user.id,
-      provider: "microsoft-oauth",
+      provider: "google-oauth",
       providerAccountId,
       email,
     });
 
     return htmlPage({ success: true });
   } catch (err: any) {
-    console.error("Microsoft account connection failed:", err);
-    return htmlPage({ success: false, error: "Failed to connect your Microsoft account. Please try again." });
+    console.error("Google account connection failed:", err);
+    return htmlPage({ success: false, error: "Failed to connect your Google account. Please try again." });
   }
 }
 
 function htmlPage(result: { success: boolean; error?: string }) {
-  const payload = JSON.stringify({ source: "microsoft", ...result });
+  const payload = JSON.stringify({ source: "google", ...result });
   const html = `<!DOCTYPE html>
 <html>
-<head><title>Microsoft Account Connection</title></head>
+<head><title>Google Account Connection</title></head>
 <body>
 <script>
   if (window.opener) {
