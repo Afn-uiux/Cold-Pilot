@@ -1,7 +1,10 @@
 import Link from "next/link";
 import Script from "next/script";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { PLANS } from "@/lib/plans";
+import { currencyFromHeaders, formatPrice, type Currency } from "@/lib/currency";
 import SiteHeader from "@/components/site-header";
 import { FlameIcon } from "@/components/icons/flame";
 import { RefreshIcon } from "@/components/icons/refresh";
@@ -18,6 +21,8 @@ import { ChevronRightIcon } from "@/components/icons/chevron-right";
 export default async function Home() {
   const session = await auth();
   if (session?.user) redirect("/dashboard");
+
+  const currency: Currency = currencyFromHeaders(await headers());
 
   return (
     <div className="landing-root">
@@ -401,7 +406,7 @@ export default async function Home() {
           <div className="pricing-layout" id="compare">
             <div className="price-main">
               <span className="label">Coldpilot</span>
-              <div className="amount" style={{fontFamily:"'Geist',system-ui,sans-serif",fontSize:"clamp(56px,10vw,80px)",lineHeight:1,marginTop:16}}>$19<span style={{fontSize:"clamp(16px,2vw,20px)",fontFamily:"'JetBrains Mono',monospace",color:"var(--muted-2)"}}> /mo</span></div>
+              <div className="amount" style={{fontFamily:"'Geist',system-ui,sans-serif",fontSize:"clamp(56px,10vw,80px)",lineHeight:1,marginTop:16}}>{formatPrice(PLANS.starter.price, currency)}<span style={{fontSize:"clamp(16px,2vw,20px)",fontFamily:"'JetBrains Mono',monospace",color:"var(--muted-2)"}}> /mo</span></div>
               <p className="desc">Starter — 5,000 leads, unlimited inboxes, and AI email generation. For one person running outreach.</p>
               <ul className="price-includes">
                 <li>Unlimited connected inboxes</li>
@@ -415,10 +420,10 @@ export default async function Home() {
             <div>
               <span className="label">Every tier</span>
               <ul className="compare-list" style={{marginTop:16}}>
-                <li className="compare-row"><div><div className="name">Free</div><div className="desc">2 inboxes · 300 leads · 1,000 free credits</div></div><div className="cost">$0</div></li>
-                <li className="compare-row highlight"><div><div className="name">Starter</div><div className="desc">Unlimited inboxes · 5,000 leads · AI included</div></div><div className="cost">$19</div></li>
-                <li className="compare-row"><div><div className="name">Pro</div><div className="desc">Unlimited inboxes · 30,000 leads · AI included</div></div><div className="cost">$49</div></li>
-                <li className="compare-row"><div><div className="name">Agency</div><div className="desc">Unlimited inboxes · 150,000 leads · white-label &amp; API</div></div><div className="cost">$99</div></li>
+                <li className="compare-row"><div><div className="name">Free</div><div className="desc">2 inboxes · 300 leads · 1,000 free credits</div></div><div className="cost">{formatPrice(PLANS.free.price, currency)}</div></li>
+                <li className="compare-row highlight"><div><div className="name">Starter</div><div className="desc">Unlimited inboxes · 5,000 leads · AI included</div></div><div className="cost">{formatPrice(PLANS.starter.price, currency)}</div></li>
+                <li className="compare-row"><div><div className="name">Pro</div><div className="desc">Unlimited inboxes · 30,000 leads · AI included</div></div><div className="cost">{formatPrice(PLANS.pro.price, currency)}</div></li>
+                <li className="compare-row"><div><div className="name">Agency</div><div className="desc">Unlimited inboxes · 150,000 leads · white-label &amp; API</div></div><div className="cost">{formatPrice(PLANS.agency.price, currency)}</div></li>
               </ul>
               <div className="compare-note">AI included in every paid plan, and every account starts with 1,000 free credits. See the full <Link href="/pricing" className="feat-link" style={{display:"inline-flex",alignItems:"center",gap:4}}>pricing<ChevronRightIcon size={13} /></Link>.</div>
             </div>
@@ -428,7 +433,7 @@ export default async function Home() {
 
       <div className="wrap">
         <div className="quote-block">
-          <blockquote>I built Coldpilot because every tool wanted <em style={{fontStyle:"italic"}}>$47 to start</em> and another charge for leads before I'd sent a single email.</blockquote>
+          <blockquote>I built Coldpilot because every tool wanted <em style={{fontStyle:"italic"}}>{formatPrice(70500, currency)} to start</em> and another charge for leads before I'd sent a single email.</blockquote>
           <p className="quote-attr">— Builder's note</p>
         </div>
       </div>

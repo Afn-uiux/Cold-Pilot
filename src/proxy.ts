@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { decode } from "next-auth/jwt";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { currencyFromCountry } from "@/lib/currency";
 
 const protectedPaths = ["/dashboard"];
 const authPaths = ["/auth/login", "/auth/signup"];
@@ -17,9 +18,9 @@ function buildCsp(nonce: string): string {
   const header = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""};
-    style-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' data: blob: https:;
-    font-src 'self' data:;
+    font-src 'self' data: https://fonts.gstatic.com;
     connect-src 'self' https:;
     child-src 'none';
     object-src 'none';
@@ -54,6 +55,18 @@ function clearSessionCookies(res: NextResponse, cookieName: string) {
 export async function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const cspHeader = buildCsp(nonce);
+
+  // Stamp the visitor's currency (from their country) so client components can
+  // render prices in naira (Nigeria) or dollars (everywhere else). Cloudflare
+  // proxies inject cf-ipcountry; without it (dev/self-hosted), default to NGN,
+  // which matches currencyFromHeaders() used by server-rendered pages.
+  const reqCountry = request.headers.get("cf-ipcountry") ?? request.headers.get("x-vercel-ip-country");
+  const ccCookie = reqCountry ? currencyFromCountry(reqCountry) : "NGN";
+  const applyCcCookie = (res: NextResponse) => {
+    if (request.cookies.get("cc")?.value !== ccCookie) {
+      res.cookies.set("cc", ccCookie, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 30, httpOnly: false });
+    }
+  };
 
   // Forward the nonce to the app so Next.js applies it to its own scripts.
   const requestHeaders = new Headers(request.headers);
@@ -112,6 +125,7 @@ export async function proxy(request: NextRequest) {
 
   const res = NextResponse.next({ request: { headers: requestHeaders } });
   res.headers.set("Content-Security-Policy", cspHeader);
+  applyCcCookie(res);
   return res;
 }
 

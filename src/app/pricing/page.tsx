@@ -3,6 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import SiteHeader from "@/components/site-header";
+import { CREDIT_PACKS } from "@/lib/plans";
+import { formatPrice } from "@/lib/currency";
+import { useCurrency } from "@/lib/currency-client";
 
 const tiers = [
   {
@@ -81,13 +84,6 @@ const tiers = [
   },
 ];
 
-const creditPacks = [
-  { credits: "100 credits", price: "₦7,500", per: "₦75 / credit" },
-  { credits: "500 credits", price: "₦22,500", per: "₦45 / credit" },
-  { credits: "2,000 credits", price: "₦60,000", per: "₦30 / credit" },
-  { credits: "10,000 credits", price: "₦150,000", per: "₦15 / credit" },
-];
-
 const faqs = [
   {
     q: 'What does "unlimited inboxes" mean?',
@@ -99,7 +95,7 @@ const faqs = [
   },
   {
     q: "What is a credit worth?",
-    a: "One credit is one unit of usage. Sending an email costs 1 credit, verifying an email costs 0.25 credits, and an AI email generation costs 2 credits. Every account gets 1,000 credits free on signup. Need more? Buy credit packs anytime — no subscription required. Packs start at 100 credits for ₦7,500.",
+    a: "One credit is one unit of usage. Sending an email costs 1 credit, verifying an email costs 0.25 credits, and an AI email generation costs 2 credits. Every account gets 1,000 credits free on signup. Need more? Buy credit packs anytime — no subscription required. Packs start at 100 credits for {pack_start}.",
   },
   {
     q: "Is there a free trial?",
@@ -121,6 +117,12 @@ export default function PricingPage() {
   const [view, setView] = useState<"plans" | "credits">("plans");
   const [yearly, setYearly] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const currency = useCurrency();
+  const creditPacks = CREDIT_PACKS.map((pack) => ({
+    credits: `${pack.credits.toLocaleString()} credits`,
+    price: formatPrice(pack.price, currency),
+    per: `${formatPrice(pack.price / pack.credits, currency)} / credit`,
+  }));
 
   return (
     <div className="pricing-root">
@@ -271,7 +273,7 @@ export default function PricingPage() {
       {view === "plans" && (
         <section className="tiers wrap">
           {tiers.map((tier) => {
-            const price = tier.monthly === 0 ? "₦0" : yearly ? `₦${(tier.monthly * 10).toLocaleString()}` : `₦${tier.monthly.toLocaleString()}`;
+            const price = formatPrice(yearly ? tier.monthly * 10 : tier.monthly, currency);
             const period = tier.monthly === 0 ? tier.period : yearly ? "/year" : tier.period;
             return (
               <div key={tier.name} className={"tier" + (tier.highlight ? " highlight" : "")}>
@@ -366,7 +368,7 @@ export default function PricingPage() {
                   <svg className="faq-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                 </button>
                 <div className="faq-answer" style={{ maxHeight: openFaq === i ? 240 : 0 }}>
-                  <p>{item.a}</p>
+                  <p>{item.a.replace("{pack_start}", formatPrice(CREDIT_PACKS[0].price, currency))}</p>
                 </div>
               </div>
             ))}

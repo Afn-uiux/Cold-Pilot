@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { signup } from "@/app/actions/auth";
 import Link from "next/link";
+import { PLANS } from "@/lib/plans";
+import { formatPrice } from "@/lib/currency";
+import { useCurrency } from "@/lib/currency-client";
 
 function simpleHash(str: string): string {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -59,6 +62,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [fingerprint, setFingerprint] = useState("");
+  const currency = useCurrency();
 
   useEffect(() => {
     let cancelled = false;
@@ -118,7 +122,7 @@ export default function SignupPage() {
           <h1 style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: "clamp(32px,5vw,40px)", fontWeight: 400, lineHeight: 1.1, letterSpacing: "-0.02em", marginTop: 16, color: "#0F1929" }}>
             Create your account
           </h1>
-          <p style={{ marginTop: 12, fontSize: 15, color: "#5A6B87", lineHeight: 1.6 }}>$29/mo flat. No credit card to start.</p>
+          <p style={{ marginTop: 12, fontSize: 15, color: "#5A6B87", lineHeight: 1.6 }}>{formatPrice(PLANS.starter.price, currency)}/mo flat. No credit card to start.</p>
 
           <form onSubmit={handleSubmit} style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 24 }}>
             <input type="hidden" name="fingerprint" value={fingerprint} />

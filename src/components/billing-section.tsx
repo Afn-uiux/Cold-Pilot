@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { PLANS, CREDIT_PACKS, type PlanId } from "@/lib/plans";
+import { formatPrice } from "@/lib/currency";
+import { useCurrency } from "@/lib/currency-client";
 
 export default function BillingSection() {
   const [state, setState] = useState<{ plan: PlanId; creditBalance: number; aiEnabled: boolean } | null>(null);
+  const currency = useCurrency();
 
   useEffect(() => {
     let active = true;
@@ -44,7 +47,7 @@ export default function BillingSection() {
           </div>
           <div>
             <p className="text-xs text-muted">Price</p>
-            <p className="text-lg font-medium mt-1">{currentPlan.price === 0 ? "Free" : `₦${currentPlan.price.toLocaleString()}/mo`}</p>
+            <p className="text-lg font-medium mt-1">{currentPlan.price === 0 ? "Free" : `${formatPrice(currentPlan.price, currency)}/mo`}</p>
           </div>
           <div>
             <p className="text-xs text-muted">Credit balance</p>
@@ -71,7 +74,7 @@ export default function BillingSection() {
                   <p className="font-medium">{p.name}</p>
                   {isCurrent && <span className="badge active">Current</span>}
                 </div>
-                <p className="text-2xl font-medium mt-2">₦{p.price.toLocaleString()}<span className="text-xs text-muted font-normal">/mo</span></p>
+                <p className="text-2xl font-medium mt-2">{formatPrice(p.price, currency)}<span className="text-xs text-muted font-normal">/mo</span></p>
                 <p className="text-xs text-muted mt-2">{p.leadLimit === Infinity ? "Unlimited" : p.leadLimit.toLocaleString()} leads</p>
                 <p className="text-xs text-muted mt-1">{p.inboxLimit === Infinity ? "Unlimited" : `${p.inboxLimit} inboxes`}</p>
                 <p className="text-xs text-muted mt-1">AI {p.aiEnabled ? "included" : "not included"}</p>
@@ -91,8 +94,8 @@ export default function BillingSection() {
           {CREDIT_PACKS.map(pack => (
             <div key={pack.credits} className="border border-border rounded-lg p-5">
               <p className="text-2xl font-medium">{pack.credits.toLocaleString()}<span className="text-sm text-muted font-normal"> credits</span></p>
-              <p className="text-sm text-muted mt-1">₦{pack.price.toLocaleString()}</p>
-              <p className="text-[11px] text-muted-2 mt-1">₦{(pack.price / pack.credits).toLocaleString()} / credit</p>
+              <p className="text-sm text-muted mt-1">{formatPrice(pack.price, currency)}</p>
+              <p className="text-[11px] text-muted-2 mt-1">{formatPrice(pack.price / pack.credits, currency)} / credit</p>
               <button disabled className="btn btn-ghost btn-sm mt-4 w-full" title="Coming soon">
                 Buy
               </button>

@@ -5,11 +5,21 @@ import { supabase } from "@/lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 
+function getSafeNext(raw: string | null): string | null {
+  if (!raw) return null;
+  // Only allow same-origin, single-slash relative paths. Rejects "//evil.com",
+  // "https://evil.com", backslashes, and protocol-relative URLs.
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\") || /^[a-z][a-z0-9+.-]*:/i.test(raw)) {
+    return null;
+  }
+  return raw;
+}
+
 function SupabaseCallbackInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const code = searchParams.get("code");
-  const next = searchParams.get("next") || "/dashboard";
+  const next = getSafeNext(searchParams.get("next")) || "/dashboard";
   const [status, setStatus] = useState("Signing in...");
 
   useEffect(() => {

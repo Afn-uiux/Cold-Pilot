@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { VARIABLE_LIST, processSpintax, getPersonalizedPreview } from "@/engine/personalize";
+import DOMPurify from "dompurify";
 
 import Select from "@/components/select";
 import ConfirmModal from "@/components/confirm-modal";
@@ -694,7 +695,7 @@ export default function CampaignDetailPage() {
                             <div className="text-sm font-semibold text-[#222] mb-4 pb-3 border-b border-gray-200">
                               {fillVariables(steps[previewStep]?.subject || "") || "(no subject)"}
                             </div>
-                            <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: getPreviewContent(previewStep) }} />
+                            <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getPreviewContent(previewStep)) }} />
                           </>
                         ) : (
                           <div className="text-sm text-gray-400">No content to preview</div>

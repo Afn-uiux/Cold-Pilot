@@ -242,7 +242,12 @@ function runAccountSmtp(targetEmail: string, config: SmtpConfig, resolve: (v: { 
     }, 15000);
 
     if (useTls) {
-      socket = tls.connect({ host: config.host, port: config.port, rejectUnauthorized: false }, () => {
+      // Verify the peer certificate (rejectUnauthorized: true). SMTP account
+      // credentials are sent via AUTH LOGIN later in this flow, so sending them
+      // over an unverified TLS channel would let a MITM read them. On a failed
+      // handshake the socket 'error' handler below resolves as inconclusive and
+      // the credentials are never transmitted.
+      socket = tls.connect({ host: config.host, port: config.port, rejectUnauthorized: true }, () => {
         step = 0;
       });
     } else {
@@ -271,7 +276,7 @@ function runAccountSmtp(targetEmail: string, config: SmtpConfig, resolve: (v: { 
           step = 2;
           socket.write(`AUTH LOGIN\r\n`);
         } else if (step === 11 && code === 220) {
-          const secureSocket = tls.connect({ socket, rejectUnauthorized: false }, () => {
+          const secureSocket = tls.connect({ socket, rejectUnauthorized: true }, () => {
             step = 1;
             buffer = "";
             socket.write(`EHLO coldpilot.com\r\n`);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import DOMPurify from "dompurify";
 import ReconnectModal from "@/components/reconnect-modal";
 import { ChevronLeftIcon } from "@/components/icons/chevron-left";
 import { ChevronDownIcon } from "@/components/icons/chevron-down";
@@ -329,7 +330,7 @@ export default function EmailAccountDetailPage() {
                   <div ref={sigRef} contentEditable suppressContentEditableWarning
                     className="min-h-[100px] p-3 text-sm outline-none bg-white"
                     onInput={e => updateSetting("signature", (e.target as HTMLDivElement).innerHTML)}
-                    dangerouslySetInnerHTML={{ __html: settings.signature || "Start typing here..." }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(settings.signature || "Start typing here...") }}
                     onFocus={e => { if (e.target.innerHTML === "Start typing here...") e.target.innerHTML = ""; }}
                     onBlur={e => { if (!e.target.innerHTML.trim()) e.target.innerHTML = "Start typing here..."; }}
                   />
