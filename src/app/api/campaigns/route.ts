@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { auth } from "@/lib/auth";
+import { getAuthContext, requireScope } from "@/lib/api-auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
@@ -8,13 +8,14 @@ import { sendEmailSafe } from "@/lib/email/send";
 import { sanitizeHtml } from "@/lib/sanitize";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ctx = await getAuthContext(req);
+  const denied = requireScope(ctx, "read");
+  if (denied) return denied;
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
   if (id) {
     const c = await prisma.campaign.findFirst({
-      where: { id, userId: session.user.id, deletedAt: null },
+      where: { id, userId: ctx!.userId, deletedAt: null },
       include: {
         steps: { orderBy: { order: "asc" } },
         schedules: { orderBy: { order: "asc" } },
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(c);
   }
   const campaigns = await prisma.campaign.findMany({
-    where: { userId: session.user.id, deletedAt: null },
+    where: { userId: ctx!.userId, deletedAt: null },
     include: { _count: { select: { leads: true, steps: true } }, steps: { select: { type: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -95,17 +96,16 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await auth();
-  if (session?.user?.id) {
-    const blocked = await trialGuard(session.user.id);
-    if (blocked) return blocked;
-  }
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ctx = await getAuthContext(req);
+  const denied = requireScope(ctx, "write");
+  if (denied) return denied;
+  const blocked = await trialGuard(ctx!.userId);
+  if (blocked) return blocked;
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
   const body = await req.json();
-  const c = await prisma.campaign.findFirst({ where: { id, userId: session.user.id, deletedAt: null } });
+  const c = await prisma.campaign.findFirst({ where: { id, userId: ctx!.userId, deletedAt: null } });
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (body.steps) {
     await prisma.campaignStep.deleteMany({ where: { campaignId: id } });
@@ -134,7 +134,7 @@ export async function PATCH(req: NextRequest) {
     await prisma.campaign.update({ where: { id }, data: campaignData });
     // Send transactional emails on status changes
     if (body.status && body.status !== c.status) {
-      const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true, name: true } });
+      const user = await prisma.user.findUnique({ where: { id: ctx!.userId }, select: { email: true, name: true } });
       if (user?.email) {
         if (body.status === "active" && c.status !== "active") {
           const leadCount = await prisma.lead.count({ where: { campaignId: id, deletedAt: null } });
@@ -172,38 +172,36 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (session?.user?.id) {
-    const blocked = await trialGuard(session.user.id);
-    if (blocked) return blocked;
-  }
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ctx = await getAuthContext(req);
+  const denied = requireScope(ctx, "write");
+  if (denied) return denied;
+  const blocked = await trialGuard(ctx!.userId);
+  if (blocked) return blocked;
   const { name, steps } = await req.json();
   if (!name || !steps?.length) return NextResponse.json({ error: "Name and steps required" }, { status: 400 });
   const campaign = await prisma.campaign.create({
-    data: { name, userId: session.user.id, status: "draft", steps: { create: steps.map((s: any, i: number) => ({ order: i, type: s.type || "email", subject: s.subject || null, bodyHtml: s.body ? sanitizeHtml(String(s.body)) : null, delayDays: s.delayDays ?? 0 })) } },
+    data: { name, userId: ctx!.userId, status: "draft", steps: { create: steps.map((s: any, i: number) => ({ order: i, type: s.type || "email", subject: s.subject || null, bodyHtml: s.body ? sanitizeHtml(String(s.body)) : null, delayDays: s.delayDays ?? 0 })) } },
     include: { steps: true },
   });
   // Send onboarding email if this is the user's first campaign
-  const campaignCount = await prisma.campaign.count({ where: { userId: session.user.id, deletedAt: null } });
+  const campaignCount = await prisma.campaign.count({ where: { userId: ctx!.userId, deletedAt: null } });
   if (campaignCount === 1) {
-    const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true } });
+    const user = await prisma.user.findUnique({ where: { id: ctx!.userId }, select: { email: true } });
     if (user?.email) sendEmailSafe(user.email, "onboarding-create-campaign");
   }
   return NextResponse.json(campaign);
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await auth();
-  if (session?.user?.id) {
-    const blocked = await trialGuard(session.user.id);
-    if (blocked) return blocked;
-  }
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ctx = await getAuthContext(req);
+  const denied = requireScope(ctx, "write");
+  if (denied) return denied;
+  const blocked = await trialGuard(ctx!.userId);
+  if (blocked) return blocked;
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
-  const c = await prisma.campaign.findFirst({ where: { id, userId: session.user.id, deletedAt: null } });
+  const c = await prisma.campaign.findFirst({ where: { id, userId: ctx!.userId, deletedAt: null } });
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const leads = await prisma.lead.findMany({

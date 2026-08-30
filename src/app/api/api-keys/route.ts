@@ -5,7 +5,9 @@ import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { hashApiKey } from "@/lib/api-auth";
+import { hashApiKey, parseScopes } from "@/lib/api-auth";
+
+const ALLOWED_SCOPES = new Set(["read", "write"]);
 
 export async function GET() {
   const session = await auth();
@@ -31,6 +33,11 @@ export async function POST(req: NextRequest) {
   const { name, scopes } = await req.json();
   if (!name?.trim()) return NextResponse.json({ error: "Name required" }, { status: 400 });
 
+  const parsed = parseScopes(scopes ?? "read");
+  if (parsed.length === 0 || !parsed.every(s => ALLOWED_SCOPES.has(s))) {
+    return NextResponse.json({ error: "Invalid scopes. Allowed: read, write" }, { status: 400 });
+  }
+
   const key = `cp_${crypto.randomBytes(24).toString("hex")}`;
 
   const apiKey = await prisma.apiKey.create({
@@ -38,7 +45,7 @@ export async function POST(req: NextRequest) {
       userId: session.user.id,
       name: name.trim(),
       key: hashApiKey(key),
-      scopes: scopes || "read",
+      scopes: parsed.join(","),
     },
   });
 

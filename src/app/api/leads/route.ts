@@ -1,20 +1,19 @@
 export const runtime = "nodejs";
 
-import { auth } from "@/lib/auth";
+import { getAuthContext, requireScope } from "@/lib/api-auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET(req: NextRequest) {
+  const ctx = await getAuthContext(req);
+  const denied = requireScope(ctx, "read");
+  if (denied) return denied;
 
   const { searchParams } = new URL(req.url);
   const campaignId = searchParams.get("campaignId");
 
-  const where: any = { userId: session.user.id, deletedAt: null };
+  const where: any = { userId: ctx!.userId, deletedAt: null };
   if (campaignId) where.campaignId = campaignId;
 
   const leads = await prisma.lead.findMany({
@@ -26,15 +25,12 @@ export async function GET(req: Request) {
   return NextResponse.json(leads);
 }
 
-export async function DELETE(req: Request) {
-  const session = await auth();
-  if (session?.user?.id) {
-    const blocked = await trialGuard(session.user.id);
-    if (blocked) return blocked;
-  }
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function DELETE(req: NextRequest) {
+  const ctx = await getAuthContext(req);
+  const denied = requireScope(ctx, "write");
+  if (denied) return denied;
+  const blocked = await trialGuard(ctx!.userId);
+  if (blocked) return blocked;
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
@@ -42,12 +38,12 @@ export async function DELETE(req: Request) {
   const campaignId = searchParams.get("campaignId");
 
   if (campaignId) {
-    await prisma.lead.updateMany({ where: { campaignId, userId: session.user.id, deletedAt: null }, data: { deletedAt: new Date() } });
+    await prisma.lead.updateMany({ where: { campaignId, userId: ctx!.userId, deletedAt: null }, data: { deletedAt: new Date() } });
     return NextResponse.json({ success: true, deleted: "campaign" });
   }
 
   if (all === "true") {
-    await prisma.lead.updateMany({ where: { userId: session.user.id, deletedAt: null }, data: { deletedAt: new Date() } });
+    await prisma.lead.updateMany({ where: { userId: ctx!.userId, deletedAt: null }, data: { deletedAt: new Date() } });
     return NextResponse.json({ success: true, deleted: "all" });
   }
 
@@ -55,7 +51,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Lead ID required" }, { status: 400 });
   }
 
-  const lead = await prisma.lead.findFirst({ where: { id, userId: session.user.id, deletedAt: null } });
+  const lead = await prisma.lead.findFirst({ where: { id, userId: ctx!.userId, deletedAt: null } });
   if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.lead.update({ where: { id }, data: { deletedAt: new Date() } });

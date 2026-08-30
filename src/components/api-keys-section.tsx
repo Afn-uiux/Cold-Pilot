@@ -16,6 +16,7 @@ export default function ApiKeysSection() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<string[]>(["read"]);
   const [newKey, setNewKey] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -33,7 +34,7 @@ export default function ApiKeysSection() {
     const res = await fetch("/api/api-keys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, scopes }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -98,6 +99,20 @@ export default function ApiKeysSection() {
               className="w-full border border-border rounded-lg px-3 py-2 text-sm mb-4 outline-none focus:border-blue-accent"
               onKeyDown={e => e.key === "Enter" && createKey()}
             />
+            <p className="text-xs font-medium text-muted mb-2">Scopes</p>
+            <div className="flex gap-4 mb-4">
+              {[["read", "Read (view campaigns, leads)"], ["write", "Write (create, update, delete)"]].map(([s, label]) => (
+                <label key={s} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scopes.includes(s)}
+                    onChange={() => setScopes(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
+                    className="w-4 h-4"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm text-muted hover:text-ink transition-colors">Cancel</button>
               <button onClick={createKey} className="bg-blue-accent text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">Create</button>
