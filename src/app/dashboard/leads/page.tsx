@@ -56,6 +56,8 @@ export default function LeadsPage() {
   const [importResult, setImportResult] = useState<any>(null);
   const [importCampaignId, setImportCampaignId] = useState(urlCampaignId);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     const leadsUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
@@ -149,6 +151,37 @@ export default function LeadsPage() {
     toast("All leads removed", "success");
   }
 
+  async function refreshLeads() {
+    const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
+    const fresh = await fetch(freshUrl).then(r => r.json());
+    setLeads(Array.isArray(fresh) ? fresh : []);
+  }
+
+  async function runVerify(ids: string[]) {
+    if (ids.length === 0) return;
+    setVerifying(true);
+    setVerifyMsg(null);
+    try {
+      const res = await fetch("/api/leads/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setVerifyMsg({ type: "error", text: data.error || "Verification failed" });
+        return;
+      }
+      setVerifyMsg({ type: "success", text: `Verified ${data.valid} valid, ${data.invalid} invalid, ${data.risky} risky, ${data.unknown} unknown` });
+      await refreshLeads();
+      setSelectedIds(new Set());
+    } catch {
+      setVerifyMsg({ type: "error", text: "Verification failed" });
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   async function handlePasteImport() {
     const lines = manualEmails.split(/[\n,]+/).map(l => l.trim()).filter(l => l.includes("@"));
     if (lines.length === 0) return;
@@ -237,6 +270,14 @@ export default function LeadsPage() {
                 <button onClick={handleRemoveSelected} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Remove selected ({selectedIds.size})</button>
               )}
               <button onClick={() => setShowConfirmAll(true)} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Remove all</button>
+              {selectedIds.size > 0 && (
+                <button onClick={() => runVerify(Array.from(selectedIds))} disabled={verifying} className="btn btn-ghost btn-sm disabled:opacity-40">
+                  {verifying ? "Verifying..." : `Verify selected (${selectedIds.size})`}
+                </button>
+              )}
+              <button onClick={() => runVerify(leads.map(l => l.id))} disabled={verifying} className="btn btn-ghost btn-sm disabled:opacity-40">
+                {verifying ? "Verifying..." : "Verify all"}
+              </button>
             </>
           )}
           <button onClick={() => { setShowImport(true); setImportResult(null); setCsvFile(null); setLinkUrl(""); }} className="btn btn-primary">+ Import Leads</button>
@@ -252,6 +293,12 @@ export default function LeadsPage() {
             </div>
           </div>
         </div>
+
+        {verifyMsg && (
+          <div className={`text-sm p-3 rounded-lg mb-4 ${verifyMsg.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+            {verifyMsg.text}
+          </div>
+        )}
 
         {loading ? (
           <div className="text-center text-muted py-16 text-sm">Loading leads...</div>
@@ -287,6 +334,7 @@ export default function LeadsPage() {
                       </>
                     )}
                     <th>Status</th>
+                    <th>Email Verif</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -325,6 +373,11 @@ export default function LeadsPage() {
                           </>
                         )}
                         <td><span className={`badge ${l.status === "replied" ? "active" : l.status === "pending" ? "draft" : ""}`}>{l.status}</span></td>
+                        <td>
+                          <span className={`badge ${l.verificationStatus === "valid" ? "active" : l.verificationStatus === "risky" ? "paused" : l.verificationStatus === "invalid" ? "danger" : "draft"}`}>
+                            {l.verificationStatus === "valid" ? "Valid" : l.verificationStatus === "invalid" ? "Invalid" : l.verificationStatus === "risky" ? "Risky" : "Unverified"}
+                          </span>
+                        </td>
                         <td>
                           <button onClick={() => handleRemove(l.id)} className="text-xs text-red-500 hover:text-red-700 transition-colors font-medium">Delete</button>
                         </td>

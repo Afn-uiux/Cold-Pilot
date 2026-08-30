@@ -57,6 +57,7 @@ body {
 .badge.draft { border-color: var(--color-border); color: var(--color-muted-2); }
 .badge.paused { border-color: rgba(234,179,8,0.25); background: rgba(234,179,8,0.08); color: #CA8A04; }
 .badge.completed { border-color: rgba(10,22,40,0.12); background: var(--color-cream-2); color: var(--color-ink); }
+.badge.danger { border-color: rgba(239,68,68,0.25); background: rgba(239,68,68,0.08); color: #DC2626; }
 
 .metrics {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
