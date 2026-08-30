@@ -31,6 +31,12 @@ function buildCsp(nonce: string): string {
   return header.replace(/\s{2,}/g, " ").trim();
 }
 
+function applySecurityHeaders(res: NextResponse, csp: string) {
+  res.headers.set("Content-Security-Policy", csp);
+  res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), usb=(), autoplay=(), encrypted-media=(), payment=()");
+  res.headers.delete("X-Powered-By");
+}
+
 function getCookieName(request: NextRequest): string {
   // Cookie naming must not branch purely on a client-supplied
   // `x-forwarded-proto` header: an attacker could spoof it to make the proxy
@@ -87,14 +93,14 @@ export async function proxy(request: NextRequest) {
         const loginUrl = new URL("/auth/login", request.url);
         const res = NextResponse.redirect(loginUrl);
         clearSessionCookies(res, cookieName);
-        res.headers.set("Content-Security-Policy", cspHeader);
+        applySecurityHeaders(res, cspHeader);
         return res;
       }
     } catch {
       const loginUrl = new URL("/auth/login", request.url);
       const res = NextResponse.redirect(loginUrl);
       clearSessionCookies(res, cookieName);
-      res.headers.set("Content-Security-Policy", cspHeader);
+      applySecurityHeaders(res, cspHeader);
       return res;
     }
   }
@@ -104,14 +110,14 @@ export async function proxy(request: NextRequest) {
     const result = rateLimit(`auth:${ip}`, { max: 5, windowMs: 60_000 });
     if (!result.ok) {
       const res = new NextResponse("Too many requests. Try again later.", { status: 429 });
-      res.headers.set("Content-Security-Policy", cspHeader);
+      applySecurityHeaders(res, cspHeader);
       return res;
     }
   }
 
   if (sessionCookie && isAuthPath) {
     const res = NextResponse.redirect(new URL("/dashboard", request.url));
-    res.headers.set("Content-Security-Policy", cspHeader);
+    applySecurityHeaders(res, cspHeader);
     return res;
   }
 
@@ -119,12 +125,12 @@ export async function proxy(request: NextRequest) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     const res = NextResponse.redirect(loginUrl);
-    res.headers.set("Content-Security-Policy", cspHeader);
+    applySecurityHeaders(res, cspHeader);
     return res;
   }
 
   const res = NextResponse.next({ request: { headers: requestHeaders } });
-  res.headers.set("Content-Security-Policy", cspHeader);
+  applySecurityHeaders(res, cspHeader);
   applyCcCookie(res);
   return res;
 }

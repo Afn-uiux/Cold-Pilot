@@ -33,7 +33,7 @@ export async function sendTransactionalEmail({ to, template, data }: SendEmailOp
     const resend = new Resend(process.env.RESEND_API_KEY);
 
     await resend.emails.send({
-      from: "Coldpilot <onboarding@resend.dev>",
+      from: "Coldpilot <hello@mail.usecoldpilot.com>",
       to,
       subject,
       html,
