@@ -49,14 +49,26 @@ function isNameGroupField(header: string): boolean {
   }));
 }
 
+// A value that starts with a spreadsheet-formula prefix would be executed as a
+// formula if the data is ever exported to CSV/XLSX and opened in Excel/Sheets.
+// Prefixing a leading apostrophe neutralises that (classic CSV-injection defense).
+const MAX_CUSTOM_FIELD_LEN = 1000;
+function escapeCsvFormula(value: string): string {
+  if (/^[=+\-@]/.test(value) || /^\t/.test(value) || /^\r/.test(value)) {
+    return "'" + value;
+  }
+  return value;
+}
+
 function extractCustomFields(headers: string[], cols: string[]): Record<string, string> | null {
   const custom: Record<string, string> = {};
   let hasCustom = false;
   for (let i = 0; i < headers.length; i++) {
     const h = headers[i];
-    const val = cols[i]?.trim();
+    let val = cols[i]?.trim();
     if (!val) continue;
-    custom[h] = val;
+    if (val.length > MAX_CUSTOM_FIELD_LEN) val = val.slice(0, MAX_CUSTOM_FIELD_LEN);
+    custom[h] = escapeCsvFormula(val);
     hasCustom = true;
   }
   return hasCustom ? custom : null;

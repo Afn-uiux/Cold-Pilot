@@ -8,6 +8,12 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
+// Nonce-based CSP (set per-request in src/proxy.ts) requires every page to be
+// dynamically rendered so Next.js can inject the per-request nonce into its
+// framework/inline scripts. This disables static pre-rendering/ISR/CDN caching;
+// it is required for a strict, nonce-based Content-Security-Policy.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Coldpilot — Cold email that lands in the inbox",
   description: "Send campaigns that land in inboxes, not spam folders. Warm-up, rotation, reply detection — all in one place.",

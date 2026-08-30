@@ -14,15 +14,10 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           // Do not leak the URL (which may carry reset tokens) via Referer.
           { key: "Referrer-Policy", value: "no-referrer" },
-          // CSP to contain any HTML injection. frame-ancestors => clickjacking.
-          {
-            key: "Content-Security-Policy",
-            value:
-              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-              "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; " +
-              "font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none'; " +
-              "child-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
-          },
+          // NOTE: Content-Security-Policy is NOT set here. It is set per-request
+          // with a nonce in src/proxy.ts (required so Next.js can apply the
+          // per-request nonce to its scripts). A static CSP here would conflict
+          // with / defeat the nonce-based policy.
         ],
       },
     ];

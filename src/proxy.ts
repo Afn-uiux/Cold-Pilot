@@ -7,6 +7,29 @@ const protectedPaths = ["/dashboard"];
 const authPaths = ["/auth/login", "/auth/signup"];
 const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET!;
 
+// Build a strict, nonce-based CSP. script-src uses a per-request nonce (plus
+// 'strict-dynamic') so only Next.js-approved scripts run — no 'unsafe-inline'
+// and, in production, no 'unsafe-eval' (React/Next don't use eval in prod).
+// style-src keeps 'unsafe-inline' because the app uses inline style attributes,
+// which nonces cannot cover and which are not an executable payload.
+function buildCsp(nonce: string): string {
+  const isDev = process.env.NODE_ENV === "development";
+  const header = `
+    default-src 'self';
+    script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""};
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob: https:;
+    font-src 'self' data:;
+    connect-src 'self' https:;
+    child-src 'none';
+    object-src 'none';
+    frame-ancestors 'none';
+    base-uri 'self';
+    form-action 'self'
+  `;
+  return header.replace(/\s{2,}/g, " ").trim();
+}
+
 function getCookieName(request: NextRequest): string {
   // Cookie naming must not branch purely on a client-supplied
   // `x-forwarded-proto` header: an attacker could spoof it to make the proxy
@@ -29,11 +52,20 @@ function clearSessionCookies(res: NextResponse, cookieName: string) {
 }
 
 export async function proxy(request: NextRequest) {
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const cspHeader = buildCsp(nonce);
+
+  // Forward the nonce to the app so Next.js applies it to its own scripts.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+
   const { pathname } = request.nextUrl;
   const cookieName = getCookieName(request);
   const sessionCookie = request.cookies.get(cookieName)?.value
     || request.cookies.get("__Secure-authjs.session-token")?.value
     || request.cookies.get("authjs.session-token")?.value;
+  const isAuthPath = authPaths.some((p) => pathname.startsWith(p));
+  const isProtectedPath = protectedPaths.some((p) => pathname.startsWith(p));
 
   if (sessionCookie) {
     try {
@@ -42,37 +74,55 @@ export async function proxy(request: NextRequest) {
         const loginUrl = new URL("/auth/login", request.url);
         const res = NextResponse.redirect(loginUrl);
         clearSessionCookies(res, cookieName);
+        res.headers.set("Content-Security-Policy", cspHeader);
         return res;
       }
     } catch {
       const loginUrl = new URL("/auth/login", request.url);
       const res = NextResponse.redirect(loginUrl);
       clearSessionCookies(res, cookieName);
+      res.headers.set("Content-Security-Policy", cspHeader);
       return res;
     }
   }
 
-  if (authPaths.some((p) => pathname.startsWith(p))) {
+  if (isAuthPath) {
     const ip = getClientIp(request.headers);
     const result = rateLimit(`auth:${ip}`, { max: 5, windowMs: 60_000 });
     if (!result.ok) {
-      return new NextResponse("Too many requests. Try again later.", { status: 429 });
+      const res = new NextResponse("Too many requests. Try again later.", { status: 429 });
+      res.headers.set("Content-Security-Policy", cspHeader);
+      return res;
     }
   }
 
-  if (sessionCookie && authPaths.some((p) => pathname.startsWith(p))) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  if (sessionCookie && isAuthPath) {
+    const res = NextResponse.redirect(new URL("/dashboard", request.url));
+    res.headers.set("Content-Security-Policy", cspHeader);
+    return res;
   }
 
-  if (!sessionCookie && protectedPaths.some((p) => pathname.startsWith(p))) {
+  if (!sessionCookie && isProtectedPath) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
-    return NextResponse.redirect(loginUrl);
+    const res = NextResponse.redirect(loginUrl);
+    res.headers.set("Content-Security-Policy", cspHeader);
+    return res;
   }
 
-  return NextResponse.next();
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
+  res.headers.set("Content-Security-Policy", cspHeader);
+  return res;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/auth/:path*"],
+  matcher: [
+    {
+      source: "/((?!api|_next/static|_next/image|favicon.ico).*)",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+      ],
+    },
+  ],
 };
