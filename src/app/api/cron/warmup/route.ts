@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
 
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { enqueueJob } from "@/lib/queue";
 import { processDueWarmupSends, reconcileWarmupSchedules, processSeedInboxes } from "@/engine/warmup";
@@ -7,8 +8,11 @@ import { processDueWarmupSends, reconcileWarmupSchedules, processSeedInboxes } f
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("authorization");
-
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  const expected = cronSecret ? `Bearer ${cronSecret}` : "";
+  const a = Buffer.from(authHeader || "");
+  const b = Buffer.from(expected);
+  const authorized = a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
+  if (!cronSecret || !authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

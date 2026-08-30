@@ -1,6 +1,7 @@
 import dns from "dns/promises";
 import net from "net";
 import tls from "tls";
+import { assertSafeSocketTarget, isAllowedSocketPort } from "./ssrf";
 import { isDisposable } from "./disposable";
 import { isTyposquat } from "./typosquat";
 import { getDomainReputation, isHighBounceDomain, isMediumBounceDomain } from "./domain-reputation";
@@ -97,6 +98,22 @@ export async function verifyMX(email: string): Promise<{ valid: boolean; mxRecor
 
 function smtpVerify(email: string, mxHost: string): Promise<{ valid: boolean; catchAll: boolean; reason: string }> {
   return new Promise((resolve) => {
+    // SSRF guard: the MX host comes from DNS MX records of a user-supplied
+    // email domain, so it is attacker-influenced. Reject targets that resolve
+    // to private/reserved/internal addresses before opening any socket.
+    assertSafeSocketTarget(mxHost, 25, { dnsResolve: false }).then((err) => {
+      if (err) {
+        resolve({ valid: false, catchAll: false, reason: "ssrf_blocked" });
+        return;
+      }
+      openSmtpSocket(email, mxHost, resolve);
+    }).catch(() => {
+      resolve({ valid: false, catchAll: false, reason: "ssrf_blocked" });
+    });
+  });
+}
+
+function openSmtpSocket(email: string, mxHost: string, resolve: (v: { valid: boolean; catchAll: boolean; reason: string }) => void) {
     const socket = net.createConnection({ host: mxHost, port: 25 });
     let buffer = "";
     let resolved = false;
@@ -183,11 +200,30 @@ function smtpVerify(email: string, mxHost: string): Promise<{ valid: boolean; ca
         resolve({ valid: false, catchAll: false, reason: "connection_closed" });
       }
     });
-  });
 }
 
 function smtpVerifyViaAccount(targetEmail: string, config: SmtpConfig): Promise<{ valid: boolean; reason: string }> {
   return new Promise((resolve) => {
+    // SSRF guard: config.host/port is user-supplied account SMTP config, which
+    // an attacker could point at internal/metadata addresses. Validate both
+    // the port allow-list and the resolved host before opening any socket.
+    if (!isAllowedSocketPort(config.port)) {
+      resolve({ valid: false, reason: "account_port_not_allowed" });
+      return;
+    }
+    assertSafeSocketTarget(config.host, config.port, { dnsResolve: false }).then((err) => {
+      if (err) {
+        resolve({ valid: false, reason: "account_ssrf_blocked" });
+        return;
+      }
+      runAccountSmtp(targetEmail, config, resolve);
+    }).catch(() => {
+      resolve({ valid: false, reason: "account_ssrf_blocked" });
+    });
+  });
+}
+
+function runAccountSmtp(targetEmail: string, config: SmtpConfig, resolve: (v: { valid: boolean; reason: string }) => void) {
     const useTls = config.port === 465;
     let socket: net.Socket;
     let resolved = false;
@@ -328,7 +364,6 @@ function smtpVerifyViaAccount(targetEmail: string, config: SmtpConfig): Promise<
         resolve({ valid: false, reason: "account_connection_closed" });
       }
     });
-  });
 }
 
 function generateRandomAddress(domain: string): string {

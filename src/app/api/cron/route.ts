@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
 
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { enqueueJob } from "@/lib/queue";
@@ -9,7 +10,11 @@ export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    const expected = cronSecret ? `Bearer ${cronSecret}` : "";
+    const a = Buffer.from(authHeader || "");
+    const b = Buffer.from(expected);
+    const authorized = a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
+    if (!cronSecret || !authorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

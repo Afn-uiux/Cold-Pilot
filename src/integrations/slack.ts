@@ -12,6 +12,7 @@ export async function sendSlackNotification(webhookUrl: string, message: string)
 
   const res = await fetch(webhookUrl, {
     method: "POST",
+    redirect: "manual",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text: message }),
   });

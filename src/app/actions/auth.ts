@@ -18,8 +18,8 @@ export async function signup(formData: FormData) {
     return { error: "Email and password are required" };
   }
 
-  if (password.length < 6) {
-    return { error: "Password must be at least 6 characters" };
+  if (password.length < 12) {
+    return { error: "Password must be at least 12 characters" };
   }
 
   const { headers } = await import("next/headers");

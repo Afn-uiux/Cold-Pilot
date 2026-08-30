@@ -7,7 +7,7 @@ import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
 import crypto from "crypto";
 
 const AI_API_KEY = process.env.ANTHROPIC_API_KEY || "";
-const AI_BASE_URL = process.env.ANTHROPIC_BASE_URL || "https://agentrouter.org";
+const AI_BASE_URL = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
 
 async function callAI(prompt: string): Promise<string> {
   const res = await fetch(`${AI_BASE_URL}/v1/messages`, {
