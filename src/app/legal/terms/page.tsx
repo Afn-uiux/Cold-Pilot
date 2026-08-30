@@ -11,7 +11,7 @@ export default function TermsPage() {
       </header>
       <main style={{ maxWidth: 680, margin: "0 auto", padding: "40px clamp(20px,4vw,40px) 80px" }}>
         <h1 style={{ fontSize: "clamp(28px,4vw,36px)", fontWeight: 400, letterSpacing: "-0.02em", marginBottom: 8 }}>Terms of Service</h1>
-        <p style={{ fontSize: 13, color: "#8A9BB5", marginBottom: 40 }}>Last updated: July 25, 2026</p>
+        <p style={{ fontSize: 13, color: "#8A9BB5", marginBottom: 40 }}>Last updated: August 30, 2026</p>
 
         <div style={{ fontSize: 15, color: "#374151", lineHeight: 1.8 }}>
           <h2 style={{ fontSize: 20, fontWeight: 500, marginTop: 32, marginBottom: 12, color: "#0F1929" }}>1. Acceptance of Terms</h2>
@@ -33,7 +33,7 @@ export default function TermsPage() {
           <p style={{ marginBottom: 16 }}>Coldpilot is provided &ldquo;as is&rdquo; without warranties. We are not liable for any indirect, incidental, or consequential damages arising from your use of the service.</p>
 
           <h2 style={{ fontSize: 20, fontWeight: 500, marginTop: 32, marginBottom: 12, color: "#0F1929" }}>7. Contact</h2>
-          <p>For questions about these terms, contact us at <a href="mailto:hello@coldpilot.io" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.15)" }}>hello@coldpilot.io</a>.</p>
+          <p>For questions about these terms, contact us at <a href="mailto:hello@usecoldpilot.com" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.15)" }}>hello@usecoldpilot.com</a>.</p>
         </div>
       </main>
     </div>
