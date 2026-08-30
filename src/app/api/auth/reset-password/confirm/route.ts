@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
-import { rateLimitAsync } from "@/lib/rate-limit";
+import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import bcrypt from "bcryptjs";
 
 const IDENTIFIER_PREFIX = "reset_password:";
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
   }
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = getClientIp(req.headers as unknown as { get(name: string): string | null });
   const rl = await rateLimitAsync(`reset-confirm:${ip}`, { max: 10, windowMs: 60_000 });
   if (!rl.ok) {
     return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });

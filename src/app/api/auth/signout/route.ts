@@ -5,12 +5,6 @@ import { auth } from "@/lib/auth";
 import { revokeSession } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
 
-function baseUrl(req: NextRequest): string {
-  const host = req.headers.get("host") || "localhost:3000";
-  const proto = req.headers.get("x-forwarded-proto") || "http";
-  return `${proto}://${host}`;
-}
-
 function clearSessionCookies(res: NextResponse): void {
   const clear = (name: string, opts: Record<string, any> = {}) =>
     res.cookies.set(name, "", { maxAge: 0, path: "/", sameSite: "lax", ...opts });
@@ -35,26 +29,10 @@ async function revokeCurrentSession(): Promise<void> {
   }
 }
 
-// Used by the dashboard sidebar link (plain GET navigation).
-export async function GET(req: NextRequest) {
-  let session;
-  try {
-    session = await auth();
-  } catch {
-    session = null;
-  }
-  if (session?.sid) {
-    await revokeSession(session.sid).catch(() => {});
-  }
-
-  const res = NextResponse.redirect(new URL("/auth/login", baseUrl(req)));
-  clearSessionCookies(res);
-  return res;
-}
-
-// Used by next-auth/react signOut({ redirect: false }) — the client POSTs with
-// a csrfToken and expects a JSON response. Mirrors Auth.js's double-submit
-// CSRF check (cookie value is `token|sha256(token + secret)`).
+// Sign-out is deliberately POST-only. A GET sign-out would be CSRF-able (an
+// attacker could embed /api/auth/signout as an <img>/link and force a logout /
+// session downgrade on a victim). Clients must use the CSRF-protected POST
+// (e.g. next-auth/react signOut or a form POST with csrfToken).
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const bodyCsrf = String(formData.get("csrfToken") ?? "");

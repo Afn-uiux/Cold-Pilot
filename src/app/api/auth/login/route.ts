@@ -8,6 +8,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    const code = (formData.get("code") as string) || undefined;
 
     if (!email || !password) {
       return NextResponse.redirect(new URL("/auth/login?error=missing", req.url));
@@ -16,6 +17,7 @@ export async function POST(req: NextRequest) {
     const result = await signIn("credentials", {
       email,
       password,
+      ...(code ? { code } : {}),
       redirect: false,
     });
 

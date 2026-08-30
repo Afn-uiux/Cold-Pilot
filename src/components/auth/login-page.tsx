@@ -143,6 +143,18 @@ export default function LoginPage() {
               </div>
             </div>
 
+            <div>
+              <label style={{ display: "block", fontSize: 13, color: "#5A6B87", marginBottom: 8 }} htmlFor="code">2FA code (if enabled)</label>
+              <input id="code" name="code" type="text" inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code"
+                style={{
+                  width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929",
+                  background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)",
+                  padding: "10px 0", outline: "none", borderRadius: 0
+                }}
+                onFocus={e => e.target.style.borderBottomColor = "#0F1929"}
+                onBlur={e => e.target.style.borderBottomColor = "rgba(15,25,41,0.08)"} />
+            </div>
+
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: -8 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#5A6B87", cursor: "pointer" }}>
                 <input type="checkbox" name="remember" style={{ width: 14, height: 14, accentColor: "#0F1929" }} />

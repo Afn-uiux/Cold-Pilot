@@ -5,6 +5,7 @@ import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -109,7 +110,7 @@ export async function PATCH(req: NextRequest) {
   if (body.steps) {
     await prisma.campaignStep.deleteMany({ where: { campaignId: id } });
     for (let i = 0; i < body.steps.length; i++) {
-      const s = body.steps[i]; await prisma.campaignStep.create({ data: { order: i, type: "email", subject: s.subject || null, bodyHtml: s.bodyHtml || null, delayDays: s.delayDays ?? 0, delayUnit: s.delayUnit || "days", campaignId: id } });
+      const s = body.steps[i]; await prisma.campaignStep.create({ data: { order: i, type: "email", subject: s.subject || null, bodyHtml: s.bodyHtml ? sanitizeHtml(String(s.bodyHtml)) : null, delayDays: s.delayDays ?? 0, delayUnit: s.delayUnit || "days", campaignId: id } });
     }
     return NextResponse.json({ success: true });
   }
@@ -180,7 +181,7 @@ export async function POST(req: NextRequest) {
   const { name, steps } = await req.json();
   if (!name || !steps?.length) return NextResponse.json({ error: "Name and steps required" }, { status: 400 });
   const campaign = await prisma.campaign.create({
-    data: { name, userId: session.user.id, status: "draft", steps: { create: steps.map((s: any, i: number) => ({ order: i, type: s.type || "email", subject: s.subject || null, bodyHtml: s.body || null, delayDays: s.delayDays ?? 0 })) } },
+    data: { name, userId: session.user.id, status: "draft", steps: { create: steps.map((s: any, i: number) => ({ order: i, type: s.type || "email", subject: s.subject || null, bodyHtml: s.body ? sanitizeHtml(String(s.body)) : null, delayDays: s.delayDays ?? 0 })) } },
     include: { steps: true },
   });
   // Send onboarding email if this is the user's first campaign

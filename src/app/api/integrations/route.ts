@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { assertSafeSocketTarget } from "@/lib/ssrf";
 
 export async function GET() {
   const session = await auth();
@@ -27,6 +28,15 @@ export async function POST(req: NextRequest) {
 
   const { provider, config, label } = await req.json();
   if (!provider || !config) return NextResponse.json({ error: "Provider and config required" }, { status: 400 });
+
+  if (provider === "slack" && config.webhookUrl) {
+    let ok = false;
+    try {
+      const u = new URL(config.webhookUrl);
+      ok = u.protocol === "https:" && (await assertSafeSocketTarget(u.hostname, u.port ? Number(u.port) : 443)) === null;
+    } catch { ok = false; }
+    if (!ok) return NextResponse.json({ error: "Slack webhook URL must be a public https URL" }, { status: 400 });
+  }
 
   const integration = await prisma.integration.upsert({
     where: { userId_provider: { userId: session.user.id, provider } },

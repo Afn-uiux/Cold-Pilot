@@ -3,10 +3,10 @@ export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/totp";
-import { rateLimitAsync } from "@/lib/rate-limit";
+import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = getClientIp(req.headers);
   const { email, token } = await req.json();
   if (!email || !token) return NextResponse.json({ error: "Email and token required" }, { status: 400 });
 

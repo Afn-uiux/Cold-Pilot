@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export async function GET() {
   const session = await auth();
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
   }
 
   const template = await prisma.template.create({
-    data: { name, subject, bodyHtml: bodyHtml || "", userId: session.user.id },
+    data: { name, subject, bodyHtml: bodyHtml ? sanitizeHtml(String(bodyHtml)) : "", userId: session.user.id },
   });
 
   return NextResponse.json(template);

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { categorizeBounce } from "@/lib/bounce";
 import { decryptAccount } from "@/lib/crypto";
 import { canSendFromAccount } from "@/lib/send-gate";
-import { signRedirect } from "@/lib/track-sign";
+import { signRedirect, signUnsubscribe } from "@/lib/track-sign";
 
 interface SendOptions {
   to: string;
@@ -109,7 +109,7 @@ export async function sendEmail(opts: SendOptions) {
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
-  const unsubscribeUrl = opts.unsubscribeHeader ? `${baseUrl}/api/unsubscribe?lead=${opts.leadId}` : null;
+  const unsubscribeUrl = opts.unsubscribeHeader ? `${baseUrl}/api/unsubscribe?lead=${opts.leadId}&sig=${signUnsubscribe(opts.leadId)}` : null;
 
   // Open/click tracking work by having the recipient's mail client load a URL
   // from the public internet. A localhost URL is only reachable from this

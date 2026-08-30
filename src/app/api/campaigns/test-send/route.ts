@@ -20,17 +20,35 @@ export async function POST(req: NextRequest) {
   if (!recipientEmail?.includes("@")) return NextResponse.json({ error: "Valid recipient email required" }, { status: 400 });
   if (!subject?.trim() && !bodyHtml?.trim()) return NextResponse.json({ error: "Cannot send a blank email — add a subject or body first" }, { status: 400 });
 
-  const rawAccount = await prisma.emailAccount.findFirst({ where: { userId: session.user.id } });
-  if (!rawAccount) return NextResponse.json({ error: "No email account connected" }, { status: 400 });
+  const rawAccounts = await prisma.emailAccount.findMany({ where: { userId: session.user.id } });
+  if (!rawAccounts.length) return NextResponse.json({ error: "No email account connected" }, { status: 400 });
+  const rawAccount = rawAccounts[0];
   const account = decryptAccount(rawAccount);
+
+  // Anti-relay: the sender must be one of the user's own connected addresses,
+  // so test-send cannot be abused to spoof an arbitrary From.
+  const requestedFrom = senderEmail || account.email;
+  const isOwnAddress = rawAccounts.some((a: any) => { try { return (decryptAccount(a)).email === requestedFrom; } catch { return false; } });
+  if (!isOwnAddress) {
+    return NextResponse.json({ error: "Sender email must be one of your connected addresses" }, { status: 400 });
+  }
+  const fromEmail = requestedFrom;
+
+  // Anti-relay: the recipient must be the user themself or a lead they own —
+  // never an arbitrary third-party address (which would turn test-send into a
+  // free relay/spam tool).
+  const target = String(recipientEmail).toLowerCase().trim();
+  const ownedLead = await prisma.lead.findFirst({ where: { userId: session.user.id, email: target, deletedAt: null }, select: { id: true, email: true } });
+  const ownedAddress = isOwnAddress && requestedFrom.toLowerCase() === target ? true : undefined;
+  if (!ownedLead && !ownedAddress) {
+    return NextResponse.json({ error: "Recipient must be a lead in your account or your own email" }, { status: 400 });
+  }
 
   // Shared send gate
   const gate = await canSendFromAccount(account.id, account.dailySendLimit || 50);
   if (!gate.allowed) {
     return NextResponse.json({ error: `Send blocked: ${gate.reason}` }, { status: 429 });
   }
-
-  const fromEmail = senderEmail || account.email;
 
   try {
     if (account.gmailToken) {

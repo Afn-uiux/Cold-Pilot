@@ -7,6 +7,7 @@ import { dispatchIntegrationEvent } from "@/integrations";
 import { classifyReply } from "@/lib/classify";
 import { categorizeBounce } from "@/lib/bounce";
 import { sendEmailSafe } from "@/lib/email/send";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { decryptAccount } from "@/lib/crypto";
@@ -268,7 +269,7 @@ async function executeCampaignInner(campaignId: string) {
     const account = accounts.find(a => a.id === lead.sendingAccountId) || accounts[emailCount % accounts.length];
     const currentStepIdx = lead.currentStep || 0;
     const step = emailSteps[currentStepIdx];
-    const accountSignature = (account as any)?.signature || "";
+    const accountSignature = sanitizeHtml((account as any)?.signature || "");
 
     if (!step) {
       if (lead.status === "sent") {

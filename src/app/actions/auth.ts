@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { TRIAL_MS } from "@/lib/trial";
 import { signIn } from "@/lib/auth";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { sendEmailSafe } from "@/lib/email/send";
 import { computeSignupRisk } from "@/lib/fraud";
 
@@ -24,8 +24,7 @@ export async function signup(formData: FormData) {
 
   const { headers } = await import("next/headers");
   const h = await headers();
-  const rawIp = h.get("x-forwarded-for") || h.get("x-real-ip") || "unknown";
-  const ip = rawIp.split(",")[0].trim();
+  const ip = getClientIp(h as unknown as { get(name: string): string | null });
 
   const { allowed, retryAfterMs } = checkRateLimit(`signup:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 });
   if (!allowed) {
@@ -35,7 +34,10 @@ export async function signup(formData: FormData) {
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    return { error: "An account with this email already exists" };
+    // Enumeration-safe: respond identically to a successful signup so an
+    // attacker cannot probe which emails are registered. No account is created
+    // and nothing is revealed; the legitimate owner just signs in normally.
+    return { success: true };
   }
 
   const hashedPassword = await bcrypt.hash(password, 12);
@@ -78,6 +80,7 @@ export async function signup(formData: FormData) {
 export async function login(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
+  const code = (formData.get("code") as string) || undefined;
 
   if (!email || !password) {
     return { error: "Email and password are required" };
@@ -85,7 +88,7 @@ export async function login(formData: FormData) {
 
   const { headers } = await import("next/headers");
   const h = await headers();
-  const ip = h.get("x-forwarded-for") || h.get("x-real-ip") || "unknown";
+  const ip = getClientIp(h as unknown as { get(name: string): string | null });
   const rateKey = `login:${ip}:${email}`;
 
   const { allowed, retryAfterMs } = checkRateLimit(rateKey);
@@ -98,6 +101,7 @@ export async function login(formData: FormData) {
     await signIn("credentials", {
       email,
       password,
+      ...(code ? { code } : {}),
       redirect: false,
     });
     return { success: true };
@@ -114,6 +118,9 @@ export async function login(formData: FormData) {
 // reintroduce a variant that skips the emailed token.)
 
 export async function demoLogin() {
+  if (process.env.NODE_ENV === "production") {
+    return { error: "Demo login is disabled in production" };
+  }
   const email = "demo@coldpilot.io";
   const password = "demo123456";
 

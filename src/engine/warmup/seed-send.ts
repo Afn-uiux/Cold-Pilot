@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
 import { sendWarmupEmail } from "./sender";
-import { isEntitledToWarmup } from "./pool";
+import { isEntitledToWarmup, isHealthyPeerReceiver } from "./pool";
 
 function parseTimeOfDay(str: string): number {
   const p = (str || "09:00").split(":");
@@ -166,10 +166,15 @@ async function pickReceiver(
     select: {
       id: true,
       email: true,
+      healthScore: true,
+      healthState: true,
+      warmupBounceFlag: true,
       user: { select: { plan: true, trialEndsAt: true, trialVoided: true, deletedAt: true } },
     },
   });
-  const eligiblePeers = peers.filter(p => !excludeIds.has(p.id) && isEntitledToWarmup(p.user));
+  const eligiblePeers = peers.filter(
+    p => !excludeIds.has(p.id) && isEntitledToWarmup(p.user) && isHealthyPeerReceiver(p),
+  );
   if (eligiblePeers.length === 0) return null;
   const p = eligiblePeers[Math.floor(Math.random() * eligiblePeers.length)];
   return { kind: "peer", id: p.id, email: p.email };

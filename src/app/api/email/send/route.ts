@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { auth } from "@/lib/auth";
 import { trialGuard } from "@/lib/trial";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/engine/send";
 
 export async function POST(req: Request) {
@@ -20,6 +21,16 @@ export async function POST(req: Request) {
   if (!to || !subject || !htmlBody || !emailAccountId || !leadId) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
+
+  // BOLA/IDOR hardening: the caller may only send through their own account
+  // and to their own lead. The engine guard (account.userId === lead.userId)
+  // alone does NOT tie either resource to the authenticated caller.
+  const [account, lead] = await Promise.all([
+    prisma.emailAccount.findFirst({ where: { id: emailAccountId, userId: session.user.id } }),
+    prisma.lead.findFirst({ where: { id: leadId, userId: session.user.id } }),
+  ]);
+  if (!account) return NextResponse.json({ error: "Email account not found" }, { status: 404 });
+  if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
   try {
     const result = await sendEmail({

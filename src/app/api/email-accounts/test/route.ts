@@ -7,6 +7,7 @@ import { ImapFlow } from "imapflow";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { decryptAccount, encryptAccount } from "@/lib/crypto";
+import { assertSafeSocketTarget, isAllowedSocketPort } from "@/lib/ssrf";
 
 async function getGoogleAccessToken(refreshToken: string): Promise<string | null> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -124,46 +125,61 @@ export async function POST(req: Request) {
 
   if (smtpHost && smtpPort && smtpUser && smtpPass !== undefined) {
     const port = Number(smtpPort);
-    try {
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port,
-        secure: port === 465,
-        auth: useOAuth
-          ? { type: "OAuth2", user: smtpUser, accessToken: smtpPass }
-          : { user: smtpUser, pass: smtpPass },
-        tls: { rejectUnauthorized: false },
-        connectionTimeout: 10000,
-      });
-      await transporter.verify();
-    } catch (err: any) {
-      let message = "SMTP connection failed";
-      if (err.code === "EAUTH") message = "Invalid SMTP username or password.";
-      else if (err.code === "ESOCKET") message = `Could not connect to ${smtpHost}:${port}.`;
-      else if (err.code === "ETIMEDOUT") message = "SMTP connection timed out.";
-      else if (err.message?.includes("SSL")) message = "SSL/TLS handshake failed. Try a different encryption.";
-      else message = err.message || message;
-      errors.push(message);
+    const hostErr = await assertSafeSocketTarget(smtpHost, port);
+    if (hostErr) {
+      errors.push(`SMTP: ${hostErr}`);
+    } else if (!isAllowedSocketPort(port)) {
+      errors.push(`SMTP: port ${port} not allowed`);
+    } else {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port,
+          secure: port === 465,
+          auth: useOAuth
+            ? { type: "OAuth2", user: smtpUser, accessToken: smtpPass }
+            : { user: smtpUser, pass: smtpPass },
+          tls: { rejectUnauthorized: true },
+          connectionTimeout: 10000,
+        });
+        await transporter.verify();
+      } catch (err: any) {
+        let message = "SMTP connection failed";
+        if (err.code === "EAUTH") message = "Invalid SMTP username or password.";
+        else if (err.code === "ESOCKET") message = `Could not connect to ${smtpHost}:${port}.`;
+        else if (err.code === "ETIMEDOUT") message = "SMTP connection timed out.";
+        else if (err.message?.includes("SSL")) message = "SSL/TLS handshake failed. Try a different encryption.";
+        else message = err.message || message;
+        errors.push(message);
+      }
     }
   }
 
   if (imapHost && imapUser && imapPass !== undefined) {
-    try {
-      const client = new ImapFlow({
-        host: imapHost,
-        port: Number(imapPort) || 993,
-        secure: true,
-        auth: useOAuth ? { user: imapUser, accessToken: imapPass } : { user: imapUser, pass: imapPass },
-        logger: false,
-      });
-      await client.connect();
-      await client.logout();
-    } catch (err: any) {
-      let message = "IMAP connection failed";
-      if (err.code === "AUTHENTICATIONFAILED") message = "Invalid IMAP username or password.";
-      else if (err.returnCode === 1 || err.code === "ECONNREFUSED") message = `Could not connect to ${imapHost}:${imapPort || 993}.`;
-      else message = err.message || message;
-      errors.push(message);
+    const imapPortNum = Number(imapPort) || 993;
+    const hostErr = await assertSafeSocketTarget(imapHost, imapPortNum);
+    if (hostErr) {
+      errors.push(`IMAP: ${hostErr}`);
+    } else if (!isAllowedSocketPort(imapPortNum)) {
+      errors.push(`IMAP: port ${imapPortNum} not allowed`);
+    } else {
+      try {
+        const client = new ImapFlow({
+          host: imapHost,
+          port: imapPortNum,
+          secure: true,
+          auth: useOAuth ? { user: imapUser, accessToken: imapPass } : { user: imapUser, pass: imapPass },
+          logger: false,
+        });
+        await client.connect();
+        await client.logout();
+      } catch (err: any) {
+        let message = "IMAP connection failed";
+        if (err.code === "AUTHENTICATIONFAILED") message = "Invalid IMAP username or password.";
+        else if (err.returnCode === 1 || err.code === "ECONNREFUSED") message = `Could not connect to ${imapHost}:${imapPortNum}.`;
+        else message = err.message || message;
+        errors.push(message);
+      }
     }
   }
 

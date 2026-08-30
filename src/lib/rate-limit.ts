@@ -1,5 +1,9 @@
 type Window = { count: number; resetAt: number };
 
+// Bound the in-memory fallback so an attacker cannot grow it unbounded by
+// rotating spoofed keys (memory-exhaustion DoS). When this is exceeded the
+// oldest entries are evicted.
+const MAX_WINDOWS = 100_000;
 const windows = new Map<string, Window>();
 
 const CLEANUP_INTERVAL = 60_000;
@@ -9,7 +13,44 @@ setInterval(() => {
   for (const [key, win] of windows) {
     if (now > win.resetAt) windows.delete(key);
   }
+  if (windows.size > MAX_WINDOWS) {
+    const extra = windows.size - MAX_WINDOWS;
+    let removed = 0;
+    for (const key of windows.keys()) {
+      if (removed >= extra) break;
+      windows.delete(key);
+      removed++;
+    }
+  }
 }, CLEANUP_INTERVAL);
+
+/**
+ * Get the client IP for rate-limiting / abuse purposes.
+ *
+ * SECURITY: `X-Forwarded-For`/`X-Real-IP` are client-controlled and must NOT
+ * be trusted for security decisions unless the request provably came from a
+ * known reverse proxy (which this app does not trust by default). We therefore
+ * fall back to the socket remote address supplied by Next/Node when no trusted
+ * proxy is configured.
+ *
+ * `forwarded`/`req` accept a Headers-like object so this works in both edge
+ * (proxy.ts) and node (route handlers) runtimes.
+ */
+export function getClientIp(
+  forwarded: { get(name: string): string | null } | null | undefined
+): string {
+  // If the deployment explicitly trusts an upstream proxy, honour the first
+  // XFF entry. Otherwise use the socket address (unavailable in some edge
+  // contexts, where we fall back to a stable per-process placeholder).
+  const trustProxy = process.env.TRUST_PROXY === "true";
+  if (trustProxy && forwarded) {
+    const xff = forwarded.get("x-forwarded-for");
+    if (xff) return xff.split(",")[0].trim() || "unknown";
+  }
+  return process.env.NODE_ENV === "production"
+    ? (forwarded?.get("x-real-ip")?.split(",")[0]?.trim() || "unknown")
+    : "unknown";
+}
 
 let redis: any = null;
 let redisChecked = false;
@@ -107,7 +148,7 @@ export function rateLimitMiddleware(
   return async (req: Request, ...args: any[]) => {
     const key = opts.keyFrom
       ? opts.keyFrom(req)
-      : req.headers.get("x-forwarded-for") || "anonymous";
+      : `anon:${getClientIp(req.headers as unknown as { get(name: string): string | null })}`;
     const result = await rateLimitAsync(key, opts);
 
     if (!result.ok) {

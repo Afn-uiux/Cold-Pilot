@@ -5,6 +5,7 @@ import { generateWarmupContent } from "./content";
 import { sendWarmupEmail } from "./sender";
 import { decryptAccount } from "@/lib/crypto";
 import { canSendFromAccount } from "@/lib/send-gate";
+import { categorizeBounce } from "@/lib/bounce";
 
 export async function reconcileWarmupSchedules(): Promise<number> {
   const mailboxes = await prisma.emailAccount.findMany({
@@ -225,9 +226,19 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
 
         sent++;
       } else {
+        // A failed warmup send. Categorize it so hard vs soft bounces feed the
+        // separate bounce signal (kept OUT of the warmup placement health
+        // score, exactly like Instantly). Transport/network/auth failures are
+        // flagged as non-bounces and recorded so they don't skew the score.
+        let bounceType: string | null = "failed";
+        try {
+          bounceType = result.error ? categorizeBounce({ message: result.error }).type : "failed";
+        } catch {
+          bounceType = "failed";
+        }
         await prisma.warmupLog.update({
           where: { id: log.id },
-          data: { status: "failed" },
+          data: { status: "failed", bounceType },
         });
         failed++;
       }

@@ -203,6 +203,8 @@ model EmailAccount {
   warmupAiEnabled Boolean @default(false)
   healthScore    Float   @default(100)
   healthState    String  @default("healthy")
+  warmupBounceRate Float  @default(0)
+  warmupBounceFlag  Boolean @default(false)
   isPaused       Boolean @default(false)
   warmupWeek     Int     @default(1)
   currentDailyVolume Int  @default(5)
@@ -241,6 +243,7 @@ model WarmupLog {
   rescuedFromSpam  Boolean   @default(false)
   markedImportant  Boolean   @default(false)
   replyReceived    Boolean   @default(false)
+  bounceType       String?   // hard_bounce | soft_bounce | connection_error | auth_error | suppressed (warmup sends only)
   status           String    @default("sent")
   createdAt        DateTime  @default(now())
 
@@ -571,7 +574,7 @@ model CreditTransaction {
   userId    String
   amount    Float
   reason    String
-  refId     String?
+  refId     String?   @unique
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

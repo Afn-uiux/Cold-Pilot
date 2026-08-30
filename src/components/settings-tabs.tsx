@@ -16,6 +16,7 @@ export default function SettingsTabs({ user }: { user: { name: string | null; em
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "Profile");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [profileError, setProfileError] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -47,6 +48,7 @@ export default function SettingsTabs({ user }: { user: { name: string | null; em
     e.preventDefault();
     setSaving(true);
     setSaved(false);
+    setProfileError("");
     const form = new FormData(e.currentTarget);
     try {
       const res = await fetch("/api/user", {
@@ -55,10 +57,18 @@ export default function SettingsTabs({ user }: { user: { name: string | null; em
         body: JSON.stringify({
           name: form.get("name"),
           email: form.get("email"),
+          password: form.get("password") || undefined,
         }),
       });
-      if (res.ok) setSaved(true);
-    } catch {}
+      if (res.ok) {
+        setSaved(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setProfileError(data.error || "Failed to save profile.");
+      }
+    } catch {
+      setProfileError("Failed to save profile.");
+    }
     setSaving(false);
   }
 
@@ -109,8 +119,13 @@ export default function SettingsTabs({ user }: { user: { name: string | null; em
                     <label className="block text-xs text-muted mb-2">Email</label>
                     <input name="email" suppressHydrationWarning className="w-full bg-transparent border-b border-border pb-2.5 text-sm outline-none focus:border-ink transition-colors" defaultValue={user.email || ""} />
                   </div>
+                  <div className="field-group">
+                    <label className="block text-xs text-muted mb-2">Current password <span className="text-muted/70 font-normal">(required to change email)</span></label>
+                    <input name="password" type="password" autoComplete="current-password" className="w-full bg-transparent border-b border-border pb-2.5 text-sm outline-none focus:border-ink transition-colors" placeholder="••••••••" />
+                  </div>
                 </div>
                 {saved && <p className="text-xs text-green-600 mt-2">Saved!</p>}
+                {profileError && <p className="text-xs text-red-600 mt-2">{profileError}</p>}
                 <div className="mt-6"><button type="submit" disabled={saving} className="btn btn-primary btn-sm">{saving ? "Saving..." : "Save Changes"}</button></div>
               </form>
             )}

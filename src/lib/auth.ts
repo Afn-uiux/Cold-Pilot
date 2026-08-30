@@ -3,7 +3,8 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
-import { createSession, revokeSession, SESSION_TTL_MS } from "./session";
+import { createSession, revokeSession, isSessionValid, SESSION_TTL_MS } from "./session";
+import { verifyToken as verifyTotp } from "./totp";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -16,6 +17,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        code: { label: "Two-factor code", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
@@ -33,6 +35,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         );
 
         if (!isValid) return null;
+
+        // Enforce 2FA server-side: password alone never yields a session when
+        // TOTP is enabled. A wrong/missing code fails here, before any session
+        // is minted (the /api/auth/2fa/verify endpoint is not part of login).
+        if (user.totpSecret) {
+          const code = typeof credentials.code === "string" ? credentials.code : "";
+          if (!code || !verifyTotp(user.totpSecret, code)) return null;
+        }
 
         return {
           id: user.id,
@@ -54,7 +64,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return true;
     },
     async session({ session, token }) {
-      if (token.sub && session.user) {
+      // Server-side session revocation enforcement: a token is only usable if
+      // its UserSession row still exists and hasn't expired. Without this the
+      // JWT remains valid for the full TTL even after sign-out, password reset
+      // or an admin kill (the row alone is never consulted elsewhere).
+      const sid = token.sid as string | undefined;
+      const sidValid = sid ? await isSessionValid(sid) : false;
+      if (token.sub && session.user && sidValid) {
         const user = await prisma.user.findUnique({
           where: { id: token.sub },
           select: { role: true, deletedAt: true },
@@ -65,8 +81,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
         session.user.id = token.sub;
         session.user.role = user.role || "user";
+      } else {
+        session.user = undefined as unknown as typeof session.user;
       }
-      session.sid = token.sid as string | undefined;
+      session.sid = sid;
       return session;
     },
     async jwt({ token, user }) {

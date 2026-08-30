@@ -5,6 +5,7 @@ import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { hashApiKey } from "@/lib/api-auth";
 
 export async function GET() {
   const session = await auth();
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     data: {
       userId: session.user.id,
       name: name.trim(),
-      key,
+      key: hashApiKey(key),
       scopes: scopes || "read",
     },
   });

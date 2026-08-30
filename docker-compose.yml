@@ -2,23 +2,26 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: coldpilot
-      POSTGRES_PASSWORD: coldpilot
-      POSTGRES_DB: coldpilot
+      POSTGRES_USER: ${POSTGRES_USER:-coldpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-coldpilot}
+    # Bind to loopback only so the DB is never reachable off-box.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U coldpilot"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-coldpilot}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
+    # Bind to loopback only; no auth is fine because it is not exposed beyond
+    # the host's own network stack.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

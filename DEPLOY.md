@@ -52,6 +52,7 @@ Run through in order. Skip nothing before pointing real traffic at the server.
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string |
 | `AUTH_SECRET` | Session/cookie signing |
+| `AUTH_URL` | Pin the canonical origin (e.g. `https://usecoldpilot.com`). Prevents Host-header-based redirect confusion; set it in production rather than relying on `trustHost`. |
 | `NEXT_PUBLIC_URL` | Public base URL (unsubscribe links, tracking) |
 | `NEXT_PUBLIC_SITE_URL` | Public site URL |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Gmail OAuth login + sending |

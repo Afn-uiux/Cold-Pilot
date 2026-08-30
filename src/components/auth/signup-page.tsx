@@ -87,6 +87,12 @@ export default function SignupPage() {
     setLoading(false);
     if (result?.error) {
       setError(result.error);
+    } else {
+      // Fresh signups redirect via the server action's signIn. This fallback
+      // covers edge paths (e.g. an email that already has an account) so the
+      // form still lands somewhere instead of silently hanging — the proxy then
+      // gates /dashboard and shows login if there is no session.
+      window.location.href = "/dashboard";
     }
   }
 

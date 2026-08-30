@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
+import { THROTTLED_MAX } from "./health";
 
 // A warmup recipient can be either a platform-owned SeedInbox or another
 // user's eligible mailbox ("peer"). This file owns the logic for picking a
@@ -22,6 +23,29 @@ export function isEntitledToWarmup(user: {
   // (and they have not paid), warmup is paused.
   if (user.trialVoided) return false;
   return !!user.trialEndsAt && user.trialEndsAt.getTime() > Date.now();
+}
+
+// A sender's warmup only pairs with a healthy peer receiver. A mailbox with a
+// measured degraded placement (<60%) or a hard-bounce flag (>=1.8%) is kept
+// OUT of the peer-receiver pool so it recovers by sending to platform seeds
+// only — healthy senders never pair with a bad-reputation mailbox, mirroring
+// the industry "below 60% is broken" and "bounce rate pauses the inbox" rules.
+// A mailbox that has simply not sent yet (no measurement) is fine to receive.
+export function isHealthyPeerReceiver(m: {
+  healthState?: string | null;
+  healthScore?: number | null;
+  warmupBounceFlag?: boolean | null;
+}): boolean {
+  // Hard-bounce flagged mailboxes recover via seeds only — don't route peer
+  // warmup into an inbox whose bounce signal has tripped.
+  if (m.warmupBounceFlag) return false;
+  if (m.healthState === "throttled") return false;
+  if (typeof m.healthScore === "number" && Number.isFinite(m.healthScore)) {
+    // Only gate on measured placement (score>0 implies the mailbox has sent in
+    // the window). A 0 score means "not yet measured" — acceptable as receiver.
+    if (m.healthScore > 0 && m.healthScore < THROTTLED_MAX) return false;
+  }
+  return true;
 }
 
 // Platform seeds are always eligible if active. Peers are eligible only while
@@ -59,12 +83,15 @@ async function findPeerReceiver(
       id: true,
       email: true,
       lastHealthCheckAt: true,
+      healthScore: true,
+      healthState: true,
+      warmupBounceFlag: true,
       user: { select: { plan: true, trialEndsAt: true, trialVoided: true, deletedAt: true } },
     },
   });
 
   const eligible = recipients.filter(
-    r => !excludeIds.has(r.id) && isEntitledToWarmup(r.user),
+    r => !excludeIds.has(r.id) && isEntitledToWarmup(r.user) && isHealthyPeerReceiver(r),
   );
 
   if (eligible.length === 0) return null;

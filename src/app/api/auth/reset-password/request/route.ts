@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
-import { rateLimitAsync } from "@/lib/rate-limit";
+import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import crypto from "crypto";
 
 // Identifier prefix keeps reset tokens in the same VerificationToken table
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = getClientIp(req.headers as unknown as { get(name: string): string | null });
   const rl = await rateLimitAsync(`reset-request:${ip}`, { max: 5, windowMs: 60_000 });
   const rlEmail = await rateLimitAsync(`reset-request:${email.toLowerCase()}`, { max: 3, windowMs: 60_000 });
   if (!rl.ok || !rlEmail.ok) {

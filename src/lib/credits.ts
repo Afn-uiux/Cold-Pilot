@@ -78,6 +78,8 @@ export async function getCreditState(userId: string): Promise<CreditState | null
 
 // Atomically deducts credits. Throws InsufficientCreditsError when the user
 // doesn't have enough, leaving the balance untouched.
+// When a `refId` idempotency key is supplied and a credit transaction with that
+// key already exists, this is a retry of a settled charge and is a no-op.
 export async function spendCredits(
   userId: string,
   amount: number,
@@ -85,6 +87,11 @@ export async function spendCredits(
   refId?: string
 ): Promise<void> {
   await ensureSignupCredits(userId);
+
+  if (refId) {
+    const existing = await prisma.creditTransaction.findUnique({ where: { refId } });
+    if (existing) return;
+  }
 
   const result = await prisma.user.updateMany({
     where: { id: userId, creditBalance: { gte: amount } },
@@ -111,6 +118,11 @@ export async function addCredits(
   reason: string,
   refId?: string
 ): Promise<void> {
+  if (refId) {
+    const existing = await prisma.creditTransaction.findUnique({ where: { refId } });
+    if (existing) return;
+  }
+
   await prisma.user.update({
     where: { id: userId },
     data: { creditBalance: { increment: amount } },

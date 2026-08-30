@@ -416,8 +416,10 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
 
     if (accountResult.reason === "account_auth_failed" || accountResult.reason === "account_connection_error" || accountResult.reason === "account_connection_closed" || accountResult.reason === "account_smtp_timeout" || accountResult.reason === "account_tls_error" || accountResult.reason === "account_tls_closed") {
       // Account SMTP failed — fall back to raw port 25
-    } else {
+    } else if (accountResult.reason === "mailbox_not_found" || accountResult.reason === "mailbox_full_or_rejected") {
       return { status: "invalid", reason: accountResult.reason, provider, format: true, mxValid: true, smtpValid: false };
+    } else {
+      return { status: "unknown", reason: accountResult.reason, provider, format: true, mxValid: true, smtpValid: false };
     }
   }
 
@@ -440,10 +442,10 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
   }
 
   if (SMTP_UNREACHABLE_REASONS.has(smtpResult.reason)) {
-    return { status: "valid", reason: "mx_valid_smtp_unreachable", provider, format: true, mxValid: true, smtpValid: false };
+    return { status: "unknown", reason: "mx_valid_smtp_unreachable", provider, format: true, mxValid: true, smtpValid: false };
   }
 
-  return { status: "valid", reason: `mx_valid_${smtpResult.reason}`, provider, format: true, mxValid: true, smtpValid: false };
+  return { status: "unknown", reason: `mx_valid_${smtpResult.reason}`, provider, format: true, mxValid: true, smtpValid: false };
 }
 
 export function canSendToLead(verificationStatus: string | null, enableRiskyEmails: boolean, disableBounceProtect: boolean): { allowed: boolean; reason: string } {

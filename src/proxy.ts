@@ -1,15 +1,21 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { decode } from "next-auth/jwt";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 const protectedPaths = ["/dashboard"];
 const authPaths = ["/auth/login", "/auth/signup"];
 const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET!;
 
 function getCookieName(request: NextRequest): string {
+  // Cookie naming must not branch purely on a client-supplied
+  // `x-forwarded-proto` header: an attacker could spoof it to make the proxy
+  // look for/clear the wrong (__Secure- vs plain) session cookie. Only trust an
+  // explicit proxy boundary (production always runs behind a TLS-terminating
+  // proxy; dev/self-hosted must set TRUST_PROXY=true before the header is used).
   const proto = request.headers.get("x-forwarded-proto") || "http";
-  if (proto === "https" || process.env.NODE_ENV === "production") {
+  const trustProxy = process.env.NODE_ENV === "production" || process.env.TRUST_PROXY === "true";
+  if (process.env.NODE_ENV === "production" || (trustProxy && proto === "https")) {
     return "__Secure-authjs.session-token";
   }
   return "authjs.session-token";
@@ -47,7 +53,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (authPaths.some((p) => pathname.startsWith(p))) {
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const ip = getClientIp(request.headers);
     const result = rateLimit(`auth:${ip}`, { max: 5, windowMs: 60_000 });
     if (!result.ok) {
       return new NextResponse("Too many requests. Try again later.", { status: 429 });

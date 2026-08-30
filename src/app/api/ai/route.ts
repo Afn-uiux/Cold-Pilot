@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { trialGuard } from "@/lib/trial";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPlan, CREDIT_COSTS } from "@/lib/plans";
 import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
+import crypto from "crypto";
 
 const AI_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const AI_BASE_URL = process.env.ANTHROPIC_BASE_URL || "https://agentrouter.org";
@@ -40,7 +41,7 @@ const MAX_SUBJECT = 80;
 
 function truncateSubject(subject: string): string {
   const clean = subject.replace(/\s+/g, " ").trim();
-  return clean.length > MAX_SUBJECT ? clean.slice(0, MAX_SUBJECT - 1).trimEnd() + "…" : clean;
+  return clean.length > MAX_SUBJECT ? clean.slice(0, MAX_SUBJECT - 1).trimEnd() + "â€¦" : clean;
 }
 
 function extractJsonArray(raw: string): GeneratedStep[] {
@@ -91,7 +92,10 @@ export async function POST(req: Request) {
   const { action, text, context } = body;
 
   try {
-    await spendCredits(session.user.id, CREDIT_COSTS.ai, "ai", action);
+    // refId must be unique per operation for idempotent credit ledgering. A
+    // fresh UUID makes every AI generation its own transaction (the old static
+    // `action` string like "write"/"spin" collided across calls).
+    await spendCredits(session.user.id, CREDIT_COSTS.ai, "ai", `ai:${action}:${crypto.randomUUID()}`);
   } catch (err) {
     if (err instanceof InsufficientCreditsError) {
       return NextResponse.json(
@@ -107,17 +111,17 @@ export async function POST(req: Request) {
     throw err;
   }
 
-  if (DEEPSEEK_API_KEY) {
+  if (AI_API_KEY) {
     try {
       if (action === "spin") {
-        const result = await callDeepSeek(
+        const result = await callAI(
           `Rewrite the following email text to say the same thing differently while keeping the same tone and structure. Return only the rewritten text:\n\n${text}`
         );
         return NextResponse.json({ result });
       }
 
       if (action === "check") {
-        const result = await callDeepSeek(
+        const result = await callAI(
           `Check the following email text for grammar, spelling, tone, and readability issues. List each issue found, or say "Looks good! No issues found." if nothing is wrong:\n\n${text}`
         );
         return NextResponse.json({ result });
@@ -125,7 +129,7 @@ export async function POST(req: Request) {
 
       if (action === "write") {
         const style = context === "followup" ? "follow-up" : context === "reengagement" ? "re-engagement" : "outreach";
-        const result = await callDeepSeek(
+        const result = await callAI(
           `Write a cold email for ${style}. Use {{firstName}} for the recipient's name and {{company}} for their company. Keep it under 150 words, professional but friendly. Return only the email body.`
         );
         return NextResponse.json({ result });
@@ -139,7 +143,7 @@ export async function POST(req: Request) {
         const rawCount = Number(body.stepCount);
         const stepCount = Math.min(Math.max(Number.isFinite(rawCount) ? Math.round(rawCount) : 3, 1), 10);
 
-        const result = await callDeepSeek(
+        const result = await callAI(
           `You are a cold email outreach expert for ${companyName || "a B2B company"}.\n` +
             `Offer: ${offerDetails || "Describe the product/service being sold."}\n` +
             `Target audience: ${targetAudience || "B2B decision makers."}\n` +
@@ -148,7 +152,7 @@ export async function POST(req: Request) {
             `STRICT RULES for every email:\n` +
             `- Exactly 3 paragraphs\n` +
             `- Total length: 100 words maximum\n` +
-            `- Use simple, plain English — no jargon, no corporate buzzwords\n` +
+            `- Use simple, plain English â€” no jargon, no corporate buzzwords\n` +
             `- Short sentences, easy to read\n` +
             `- Use {{firstName}} for the recipient's first name and {{company}} for their company name\n\n` +
             `Return ONLY a valid JSON array of exactly ${stepCount} objects. Each object has "subject" (a subject line) and "body" (the email body with \\n line breaks between paragraphs). No markdown, no extra text.`
@@ -159,11 +163,11 @@ export async function POST(req: Request) {
         }
       }
     } catch (e) {
-      console.error("DeepSeek error, falling back:", (e as Error).message);
+      console.error("AI error, falling back:", (e as Error).message);
     }
   }
 
-  // Fallback: simulated AI when no DeepSeek key is set
+  // Fallback: simulated AI when no AI API key is set
   if (action === "spin") {
     const sentences = text.split(/(?<=[.!?])\s+/);
     const spun = sentences.map((s: string) => {
@@ -246,7 +250,7 @@ export async function POST(req: Request) {
     const signs = ["Best,", "Cheers,", "Regards,", "Thanks,"];
 
     const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
-    const pickIdx = (arr: T[], i: number): T => arr[i % arr.length];
+    const pickIdx = <T,>(arr: T[], i: number): T => arr[i % arr.length];
 
     const steps: GeneratedStep[] = [];
 
@@ -259,12 +263,12 @@ export async function POST(req: Request) {
 
       if (i === 0) {
         const openers = [
-          `I noticed that ${audience} often struggle with the same challenges — and I think {{company}} could benefit from a fresh approach.`,
+          `I noticed that ${audience} often struggle with the same challenges â€” and I think {{company}} could benefit from a fresh approach.`,
           `I came across {{company}} and wanted to share something relevant.`,
           `I've been looking at {{company}} and had a thought I wanted to share.`,
         ];
         const paragraphs = [
-          `${offer}. We've helped businesses like {{company}} see real results — ${proof ? proof.split(".")[0] + "." : "and I'd love to show you how."}`,
+          `${offer}. We've helped businesses like {{company}} see real results â€” ${proof ? proof.split(".")[0] + "." : "and I'd love to show you how."}`,
           `We work with ${audience} every day, and ${offer}. The difference shows quickly.`,
           `${offer}. Our clients typically see improvement within the first month.`,
         ];
@@ -279,7 +283,7 @@ export async function POST(req: Request) {
           [
             `I don't want to take up more of your time.`,
             `If a fresh approach to ${offer.split(" ").slice(0, 5).join(" ")} is something {{company}} needs, I'm here.`,
-            `If not, no worries — I'll stop reaching out.`,
+            `If not, no worries â€” I'll stop reaching out.`,
           ],
           [
             `Last one from me, I promise.`,
@@ -303,7 +307,7 @@ export async function POST(req: Request) {
           ],
           [
             `Wanted to make sure you saw my last email.`,
-            `${offer} — and we've done this for ${audience} before.`,
+            `${offer} â€” and we've done this for ${audience} before.`,
             `Happy to share more details if you're interested.`,
           ],
         ];

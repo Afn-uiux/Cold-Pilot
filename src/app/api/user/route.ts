@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getCreditState } from "@/lib/credits";
 import { getTrialStatus } from "@/lib/trial";
+import bcrypt from "bcryptjs";
 
 export async function GET() {
   const session = await auth();
@@ -37,10 +38,31 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { name, email } = await req.json();
+  const { name, email, password } = await req.json();
+
+  // Changing the account email is a high-sensitivity action: it can be used to
+  // hijack another address or repoint the login identifier. Require the user's
+  // current password as proof of account control. Passwordless (OAuth-only)
+  // accounts must set a password before they can change their email.
+  if (email !== undefined && typeof email === "string" && email.trim()) {
+    const account = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { password: true },
+    });
+    if (!account?.password) {
+      return NextResponse.json(
+        { error: "Set a password first, then verify it to change your email." },
+        { status: 400 }
+      );
+    }
+    if (typeof password !== "string" || !(await bcrypt.compare(password, account.password))) {
+      return NextResponse.json({ error: "Current password is required to change your email" }, { status: 403 });
+    }
+  }
+
   const data: any = {};
   if (name !== undefined) data.name = name;
-  if (email !== undefined) data.email = email;
+  if (email !== undefined && typeof email === "string" && email.trim()) data.email = email.trim();
 
   const updated = await prisma.user.update({
     where: { id: session.user.id },

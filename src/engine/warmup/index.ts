@@ -1,6 +1,6 @@
 export { generateWarmupContent } from "./content";
 export { calculateNextWarmupTime, warmupRampTarget } from "./scheduler";
-export { pickWarmupReceiver, isEntitledToWarmup } from "./pool";
+export { pickWarmupReceiver, isEntitledToWarmup, isHealthyPeerReceiver } from "./pool";
 export { calculateHealthScore, saveHealthLog, adjustmentFor } from "./health";
 export { reconcileWarmupSchedules, processDueWarmupSends } from "./reconciler";
 export { sendWarmupEmail } from "./sender";

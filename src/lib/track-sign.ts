@@ -9,6 +9,12 @@ function getKey(): Buffer {
   return createHash("sha256").update(`${secret}:track-redirect`).digest();
 }
 
+function getUnsubscribeKey(): Buffer {
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error("AUTH_SECRET env variable is not set");
+  return createHash("sha256").update(`${secret}:unsubscribe`).digest();
+}
+
 function payload(leadId: string, stepId: string | undefined, url: string): string {
   return `${leadId}:${stepId || ""}:${url}`;
 }
@@ -28,6 +34,22 @@ export function verifyRedirect(
 ): boolean {
   if (!signature) return false;
   const expected = signRedirect(leadId, stepId, url);
+  const a = Buffer.from(expected, "hex");
+  const b = Buffer.from(signature, "hex");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+// Signs the (leadId) triple for the unsubscribe link so a recipient can only
+// unsubscribe a lead whose token they actually hold, and so one lead's token
+// cannot be replayed against another.
+export function signUnsubscribe(leadId: string): string {
+  return createHmac("sha256", getUnsubscribeKey()).update(leadId).digest("hex");
+}
+
+export function verifyUnsubscribe(leadId: string, signature: string | null): boolean {
+  if (!signature) return false;
+  const expected = signUnsubscribe(leadId);
   const a = Buffer.from(expected, "hex");
   const b = Buffer.from(signature, "hex");
   if (a.length !== b.length) return false;

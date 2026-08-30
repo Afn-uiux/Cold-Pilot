@@ -18,14 +18,23 @@ function base32Encode(buf: Buffer): string {
 }
 
 export function generateSecret(): { secret: string; base32: string } {
-  const buf = crypto.randomBytes(10);
+  // 20 bytes = 160-bit / 32 char base32 secret (RFC 6238 standard).
+  const buf = crypto.randomBytes(20);
   const base32 = base32Encode(buf);
   return { secret: buf.toString("hex"), base32 };
+}
+
+function constantEquals(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 export function verifyToken(secretHex: string, token: string): boolean {
   const secret = Buffer.from(secretHex, "hex");
   const epoch = Math.floor(Date.now() / 30000);
+  const cleanToken = token.trim();
 
   for (let offset = -1; offset <= 1; offset++) {
     const time = Buffer.alloc(8);
@@ -35,7 +44,7 @@ export function verifyToken(secretHex: string, token: string): boolean {
     const offsetBits = hmac[hmac.length - 1] & 0xf;
     const code = ((hmac[offsetBits] & 0x7f) << 24 | (hmac[offsetBits + 1] & 0xff) << 16 | (hmac[offsetBits + 2] & 0xff) << 8 | (hmac[offsetBits + 3] & 0xff)) % 1000000;
 
-    if (code.toString(10).padStart(6, "0") === token) return true;
+    if (constantEquals(code.toString(10).padStart(6, "0"), cleanToken)) return true;
   }
 
   return false;

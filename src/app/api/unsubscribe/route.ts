@@ -5,11 +5,13 @@ import { createNotification } from "@/lib/notify";
 import { dispatchWebhookEvent } from "@/lib/webhook";
 import { dispatchIntegrationEvent } from "@/integrations";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyUnsubscribe } from "@/lib/track-sign";
 
 export async function GET(req: NextRequest) {
   const leadId = req.nextUrl.searchParams.get("lead");
+  const sig = req.nextUrl.searchParams.get("sig");
 
-  if (!leadId) {
+  if (!leadId || !sig || !verifyUnsubscribe(leadId, sig)) {
     return new NextResponse("<html><body><h1>Invalid unsubscribe link</h1></body></html>", {
       status: 400,
       headers: { "Content-Type": "text/html" },

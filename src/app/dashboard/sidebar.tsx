@@ -128,13 +128,14 @@ export default function Sidebar({ user }: { user: any }) {
         </nav>
 
         <div className="pt-3 border-t border-border px-6">
-          <a
-            href="/api/auth/signout"
+          <button
+            type="button"
+            onClick={() => signOut({ redirect: false }).finally(() => { window.location.href = "/auth/login"; })}
             className="flex items-center gap-3 py-2.5 text-sm text-muted hover:text-blue-accent transition-colors w-full text-left"
           >
             <Logout01Icon size={16} />
             Sign out
-          </a>
+          </button>
         </div>
       </aside>
     </>
