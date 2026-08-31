@@ -6,6 +6,7 @@ import { Home01Icon } from "@/components/icons/home-01";
 import { UserGroupIcon } from "@/components/icons/user-group";
 import { InboxIcon } from "@/components/icons/inbox";
 import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
+import { IconTarget } from "@/components/icon-target";
 
 const LINKS = [
   { href: "/admin", label: "Overview", icon: "home" },
@@ -42,7 +43,7 @@ export default function AdminSidebar() {
               {isActive && (
                 <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-accent rounded-r-sm" />
               )}
-              <NavIcon name={link.icon} />
+              <IconTarget className="flex items-center"><NavIcon name={link.icon} /></IconTarget>
               {link.label}
             </Link>
           );
@@ -54,7 +55,7 @@ export default function AdminSidebar() {
           href="/dashboard"
           className="flex items-center gap-3 py-2.5 text-sm text-muted hover:text-blue-accent transition-colors"
         >
-          <ArrowLeft02Icon size={16} />
+          <IconTarget className="flex items-center"><ArrowLeft02Icon size={16} /></IconTarget>
           Back to App
         </Link>
       </div>

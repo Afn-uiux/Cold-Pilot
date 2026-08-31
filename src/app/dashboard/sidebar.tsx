@@ -14,6 +14,7 @@ import { Shield02Icon } from "@/components/icons/shield-02";
 import { Logout01Icon } from "@/components/icons/logout-01";
 import { Menu01Icon } from "@/components/icons/menu-01";
 import { Cancel01Icon } from "@/components/icons/cancel-01";
+import { IconTarget } from "@/components/icon-target";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: "home" },
@@ -53,7 +54,7 @@ export default function Sidebar({ user }: { user: any }) {
         className="fixed top-4 left-4 z-50 lg:hidden bg-cream border border-border rounded-lg p-2.5 shadow-sm [&>div]:pointer-events-none"
         aria-label="Open menu"
       >
-        <Menu01Icon size={18} />
+        <IconTarget className="flex items-center"><Menu01Icon size={18} /></IconTarget>
       </button>
 
       {/* Overlay for mobile */}
@@ -74,7 +75,7 @@ export default function Sidebar({ user }: { user: any }) {
         <div className="font-medium text-lg tracking-tight px-6 mb-9 flex items-center justify-between">
           <Link href="/dashboard" onClick={() => setMobileOpen(false)}>Coldpilot</Link>
           <button type="button" onClick={() => setMobileOpen(false)} className="lg:hidden text-muted hover:text-blue-accent [&>div]:pointer-events-none">
-            <Cancel01Icon size={16} />
+            <IconTarget className="flex items-center"><Cancel01Icon size={16} /></IconTarget>
           </button>
         </div>
 
@@ -95,7 +96,7 @@ export default function Sidebar({ user }: { user: any }) {
                 {isActive && (
                   <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-accent rounded-r-sm" />
                 )}
-                <NavIcon name={item.icon} />
+                <IconTarget className="flex items-center"><NavIcon name={item.icon} /></IconTarget>
                 {item.label}
                 {item.href === "/dashboard/inbox" && unreadCount > 0 && (
                   <span className="ml-auto flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-blue-accent text-white text-[10px] font-medium leading-none">
@@ -120,7 +121,7 @@ export default function Sidebar({ user }: { user: any }) {
                 {isActive && (
                   <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-accent rounded-r-sm" />
                 )}
-                <NavIcon name={item.icon} />
+                <IconTarget className="flex items-center"><NavIcon name={item.icon} /></IconTarget>
                 {item.label}
               </Link>
             );
@@ -133,7 +134,7 @@ export default function Sidebar({ user }: { user: any }) {
             onClick={() => signOut({ redirect: false }).finally(() => { window.location.href = "/auth/login"; })}
             className="flex items-center gap-3 py-2.5 text-sm text-muted hover:text-blue-accent transition-colors w-full text-left"
           >
-            <Logout01Icon size={16} />
+            <IconTarget className="flex items-center"><Logout01Icon size={16} /></IconTarget>
             Sign out
           </button>
         </div>

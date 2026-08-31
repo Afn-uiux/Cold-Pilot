@@ -17,6 +17,7 @@ import { GridViewIcon } from "@/components/icons/grid-view";
 import { Edit02Icon } from "@/components/icons/edit-02";
 import { SentIcon } from "@/components/icons/sent";
 import { ChevronRightIcon } from "@/components/icons/chevron-right";
+import { IconTarget } from "@/components/icon-target";
 
 export default async function Home() {
   const session = await auth();
@@ -183,12 +184,12 @@ export default async function Home() {
             <div className="feat-row reveal">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <FlameIcon size={15} />
+                  <IconTarget className="inline-flex items-center"><FlameIcon size={15} /></IconTarget>
                   Warmup
                 </span>
                 <h3>Inbox warm-up</h3>
                 <p>New inboxes send a slow, human-looking pattern for two weeks so mailbox providers learn to trust the address before your campaign starts.</p>
-                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
+                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -213,12 +214,12 @@ export default async function Home() {
             <div className="feat-row reveal" data-side="left">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <RefreshIcon size={15} />
+                  <IconTarget className="inline-flex items-center"><RefreshIcon size={15} /></IconTarget>
                   Rotation
                 </span>
                 <h3>Multi-inbox rotation</h3>
                 <p>Connect as many inboxes as you want. Sends spread across all of them so no single address carries the volume — or the risk.</p>
-                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
+                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -241,12 +242,12 @@ export default async function Home() {
             <div className="feat-row reveal">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <Message01Icon size={15} />
+                  <IconTarget className="inline-flex items-center"><Message01Icon size={15} /></IconTarget>
                   Detection
                 </span>
                 <h3>Reply detection</h3>
                 <p>The moment a lead replies, books, or bounces, their sequence stops. No awkward follow-up after they've already answered.</p>
-                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
+                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -266,12 +267,12 @@ export default async function Home() {
             <div className="feat-row reveal" data-side="left">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <Settings01Icon size={15} />
+                  <IconTarget className="inline-flex items-center"><Settings01Icon size={15} /></IconTarget>
                   Personalization
                 </span>
                 <h3>Personalization tokens</h3>
                 <p>Pull first name, company, or any custom field into the subject line and body — no manual find-and-replace.</p>
-                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
+                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -290,12 +291,12 @@ export default async function Home() {
             <div className="feat-row reveal">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <Shield02Icon size={15} />
+                  <IconTarget className="inline-flex items-center"><Shield02Icon size={15} /></IconTarget>
                   Deliverability
                 </span>
                 <h3>Deliverability monitor</h3>
                 <p>A spam-score check runs before every send, so you catch a flagged domain or spammy subject line before your leads do.</p>
-                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
+                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -314,12 +315,12 @@ export default async function Home() {
             <div className="feat-row reveal" data-side="left">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <TrendUpIcon size={15} />
+                  <IconTarget className="inline-flex items-center"><TrendUpIcon size={15} /></IconTarget>
                   Analytics
                 </span>
                 <h3>Plain analytics</h3>
                 <p>Opens, replies, and bounces on one screen. Just what you need to know if the sequence is working.</p>
-                <a href="#pricing" className="feat-link">Get started<ChevronRightIcon size={13} /></a>
+                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -369,19 +370,19 @@ export default async function Home() {
           </div>
           <ol className="steps">
             <li className="step">
-              <div className="step-illust"><Link01Icon size={24} /></div>
+              <div className="step-illust"><IconTarget><Link01Icon size={24} /></IconTarget></div>
               <div><h3>Connect your inbox</h3><p>Link Gmail or Outlook. Warm-up starts immediately, even before your first sequence.</p></div>
             </li>
             <li className="step">
-              <div className="step-illust"><GridViewIcon size={24} /></div>
+              <div className="step-illust"><IconTarget><GridViewIcon size={24} /></IconTarget></div>
               <div><h3>Import your leads</h3><p>Upload a CSV or paste a list. Map columns once and you're set.</p></div>
             </li>
             <li className="step">
-              <div className="step-illust"><Edit02Icon size={24} /></div>
+              <div className="step-illust"><IconTarget><Edit02Icon size={24} /></IconTarget></div>
               <div><h3>Write your sequence</h3><p>First email, follow-ups, delays. Tokens pull from your lead list.</p></div>
             </li>
             <li className="step">
-              <div className="step-illust"><SentIcon size={24} /></div>
+              <div className="step-illust"><IconTarget><SentIcon size={24} /></IconTarget></div>
               <div><h3>Launch and track</h3><p>Sends rotate across connected inboxes automatically. Watch replies come in.</p></div>
             </li>
           </ol>
@@ -425,7 +426,7 @@ export default async function Home() {
                 <li className="compare-row"><div><div className="name">Pro</div><div className="desc">Unlimited inboxes · 30,000 leads · AI included</div></div><div className="cost">{formatPrice(PLANS.pro.price, currency)}</div></li>
                 <li className="compare-row"><div><div className="name">Agency</div><div className="desc">Unlimited inboxes · 150,000 leads · white-label &amp; API</div></div><div className="cost">{formatPrice(PLANS.agency.price, currency)}</div></li>
               </ul>
-              <div className="compare-note">AI included in every paid plan, and every account starts with 1,000 free credits. See the full <Link href="/pricing" className="feat-link" style={{display:"inline-flex",alignItems:"center",gap:4}}>pricing<ChevronRightIcon size={13} /></Link>.</div>
+              <div className="compare-note">AI included in every paid plan, and every account starts with 1,000 free credits. See the full <Link href="/pricing" className="feat-link" style={{display:"inline-flex",alignItems:"center",gap:4}}>pricing<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></Link>.</div>
             </div>
           </div>
         </div>
