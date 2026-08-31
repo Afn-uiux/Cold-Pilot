@@ -101,7 +101,7 @@ function smtpVerify(email: string, mxHost: string): Promise<{ valid: boolean; ca
     // SSRF guard: the MX host comes from DNS MX records of a user-supplied
     // email domain, so it is attacker-influenced. Reject targets that resolve
     // to private/reserved/internal addresses before opening any socket.
-    assertSafeSocketTarget(mxHost, 25, { dnsResolve: false }).then((err) => {
+    assertSafeSocketTarget(mxHost, 25).then((err) => {
       if (err) {
         resolve({ valid: false, catchAll: false, reason: "ssrf_blocked" });
         return;
@@ -211,7 +211,7 @@ function smtpVerifyViaAccount(targetEmail: string, config: SmtpConfig): Promise<
       resolve({ valid: false, reason: "account_port_not_allowed" });
       return;
     }
-    assertSafeSocketTarget(config.host, config.port, { dnsResolve: false }).then((err) => {
+    assertSafeSocketTarget(config.host, config.port).then((err) => {
       if (err) {
         resolve({ valid: false, reason: "account_ssrf_blocked" });
         return;

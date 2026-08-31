@@ -6,19 +6,18 @@ import { getPlan, CREDIT_COSTS } from "@/lib/plans";
 import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
 import crypto from "crypto";
 
-const AI_API_KEY = process.env.ANTHROPIC_API_KEY || "";
-const AI_BASE_URL = process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com";
+const AI_API_KEY = process.env.DEEPSEEK_API_KEY || "";
+const AI_BASE_URL = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 
 async function callAI(prompt: string): Promise<string> {
-  const res = await fetch(`${AI_BASE_URL}/v1/messages`, {
+  const res = await fetch(`${AI_BASE_URL}/v1/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": AI_API_KEY,
-      "anthropic-version": "2023-06-01",
+      Authorization: `Bearer ${AI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "claude-opus-4-8",
+      model: "deepseek-chat",
       max_tokens: 2048,
       messages: [{ role: "user", content: prompt }],
     }),
@@ -30,7 +29,7 @@ async function callAI(prompt: string): Promise<string> {
   }
 
   const data = await res.json();
-  const content = data.content?.[0]?.text?.trim() || "";
+  const content = data.choices?.[0]?.message?.content?.trim() || "";
   if (!content) throw new Error("Empty response from AI");
   return content;
 }

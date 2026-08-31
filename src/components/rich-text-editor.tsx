@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import DOMPurify from "dompurify";
 
 export interface RichTextEditorHandle {
   exec(cmd: string, value?: string): void;
@@ -31,7 +32,9 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(
       const div = divRef.current;
       if (!div) return;
       if (div.innerHTML !== value && document.activeElement !== div) {
-        div.innerHTML = value;
+        // this is a raw innerHTML sink; sanitize here rather than relying on
+        // every caller feeding pre-cleaned data
+        div.innerHTML = DOMPurify.sanitize(value);
       }
     }, [value]);
 
