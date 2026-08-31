@@ -5,6 +5,8 @@ import { trialGuard } from "@/lib/trial";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/engine/send";
+import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
+import { CREDIT_COSTS } from "@/lib/plans";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -25,12 +27,30 @@ export async function POST(req: Request) {
   // BOLA/IDOR hardening: the caller may only send through their own account
   // and to their own lead. The engine guard (account.userId === lead.userId)
   // alone does NOT tie either resource to the authenticated caller.
-  const [account, lead] = await Promise.all([
+  const [account, lead, user] = await Promise.all([
     prisma.emailAccount.findFirst({ where: { id: emailAccountId, userId: session.user.id } }),
     prisma.lead.findFirst({ where: { id: leadId, userId: session.user.id } }),
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { plan: true } }),
   ]);
   if (!account) return NextResponse.json({ error: "Email account not found" }, { status: 404 });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+
+  // Metered-billing guard: free/pay-as-you-go manual sends must spend a credit,
+  // matching the campaign engine. The refId makes this idempotent across retries.
+  if (user?.plan === "free") {
+    try {
+      await spendCredits(session.user.id, CREDIT_COSTS.campaign, "campaign_send", `manual_send:${leadId}`);
+    } catch (err) {
+      if (err instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { error: "You're out of credits. Buy more to send emails." },
+          { status: 402 },
+        );
+      }
+      console.error("Manual send credit deduction failed:", err);
+      return NextResponse.json({ error: "Failed to process credits. Please try again." }, { status: 500 });
+    }
+  }
 
   try {
     const result = await sendEmail({

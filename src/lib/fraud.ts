@@ -104,7 +104,12 @@ export async function voidTrial(userId: string, reason: string): Promise<void> {
     // Only claw back free signup credits; purchased credits are left alone.
     if (user.plan === "free" && user.creditBalance > 0) {
       await tx.creditTransaction.create({
-        data: { userId, amount: -user.creditBalance, reason: "trial_voided", refId: reason },
+        // refId must be globally unique. Keying it on `reason` alone means the
+        // SECOND user ever voided for the same reason (e.g. "mailbox_reuse")
+        // collides on the unique index, throws, and rolls back this whole
+        // transaction — so their trial silently never voids. Namespace per user
+        // (voidTrial fires at most once per user, so this stays unique).
+        data: { userId, amount: -user.creditBalance, reason: "trial_voided", refId: `trial_void:${userId}` },
       });
       await tx.user.update({ where: { id: userId }, data: { creditBalance: 0 } });
     }

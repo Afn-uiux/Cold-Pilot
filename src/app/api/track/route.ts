@@ -28,9 +28,11 @@ export async function GET(req: NextRequest) {
           data: { clickedAt: new Date() },
         });
         console.log(`[track] click: leadId=${id} stepId=${stepId} updated=${updated.count}`);
-        const lead = await prisma.lead.findUnique({ where: { id }, select: { email: true, userId: true } });
-        if (lead) {
-          dispatchWebhookEvent({ event: "click", userId: lead.userId, data: { leadId: id, email: lead.email } });
+        if (updated.count > 0) {
+          const lead = await prisma.lead.findUnique({ where: { id }, select: { email: true, userId: true } });
+          if (lead) {
+            dispatchWebhookEvent({ event: "click", userId: lead.userId, data: { leadId: id, email: lead.email } });
+          }
         }
       } else {
         const updated = await prisma.emailLog.updateMany({
@@ -38,9 +40,11 @@ export async function GET(req: NextRequest) {
           data: { openedAt: new Date() },
         });
         console.log(`[track] open: leadId=${id} stepId=${stepId} updated=${updated.count}`);
-        const lead = await prisma.lead.findUnique({ where: { id }, select: { email: true, userId: true } });
-        if (lead) {
-          dispatchWebhookEvent({ event: "open", userId: lead.userId, data: { leadId: id, email: lead.email } });
+        if (updated.count > 0) {
+          const lead = await prisma.lead.findUnique({ where: { id }, select: { email: true, userId: true } });
+          if (lead) {
+            dispatchWebhookEvent({ event: "open", userId: lead.userId, data: { leadId: id, email: lead.email } });
+          }
         }
       }
     } catch (err) {

@@ -2,6 +2,7 @@ import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
+import { assertSafeMailTarget } from "@/lib/ssrf";
 
 const SPAM_FOLDERS: Record<string, string[]> = {
   gmail: ["[Gmail]/Spam", "Spam"],
@@ -54,6 +55,8 @@ async function sendSeedReply(
   const body = randomReplyBody();
 
   try {
+    // SSRF guard: smtpHost/smtpPort come from user-configured account settings.
+    await assertSafeMailTarget(account.smtpHost, account.smtpPort, "SMTP");
     const transporter = nodemailer.createTransport({
       host: account.smtpHost,
       port: account.smtpPort,
@@ -95,6 +98,8 @@ async function connectToAccount(account: {
   imapUser: string;
   imapPass: string;
 }) {
+  // SSRF guard: imapHost/imapPort come from user-configured account settings.
+  await assertSafeMailTarget(account.imapHost, account.imapPort, "IMAP");
   const client = new ImapFlow({
     host: account.imapHost,
     port: account.imapPort,

@@ -58,9 +58,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (!user.email) return false;
       const existing = await prisma.user.findUnique({
         where: { email: user.email },
-        select: { deletedAt: true },
+        select: { deletedAt: true, totpSecret: true },
       });
       if (existing?.deletedAt) return false;
+      // 2FA bypass hardening: the Google provider has no TOTP step, while the
+      // Credentials provider enforces it. A user with 2FA enabled must not be
+      // able to sign in via Google and skip it. (Google provisioning/linking is
+      // not implemented, so this also rejects unprovisioned Google logins.)
+      if (existing?.totpSecret) return false;
       return true;
     },
     async session({ session, token }) {
@@ -69,7 +74,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // JWT remains valid for the full TTL even after sign-out, password reset
       // or an admin kill (the row alone is never consulted elsewhere).
       const sid = token.sid as string | undefined;
-      const sidValid = sid ? await isSessionValid(sid) : false;
+      // Bind the sid to the token's subject: a valid sid alone is not enough,
+      // it must belong to this exact user. Prevents session forgery where a
+      // crafted `sub` is paired with an attacker's own legitimate sid.
+      const sidValid = sid ? await isSessionValid(sid, token.sub) : false;
       if (token.sub && session.user && sidValid) {
         const user = await prisma.user.findUnique({
           where: { id: token.sub },

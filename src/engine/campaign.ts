@@ -15,6 +15,7 @@ import { canSendToLead } from "@/lib/verify";
 import { canSendFromAccount } from "@/lib/send-gate";
 import { recordBounce, recordSend } from "@/lib/domain-reputation";
 import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
+import { assertSafeMailTarget } from "@/lib/ssrf";
 import { CREDIT_COSTS } from "@/lib/plans";
 
 function isWithinSchedule(campaign: { startDate: Date | null; endDate: Date | null; noEndDate: boolean; schedules: { startTime: string; endTime: string; timezone: string; days: string }[] }): boolean {
@@ -348,12 +349,13 @@ async function executeCampaignInner(campaignId: string) {
         htmlBody = htmlBody
           .replace(/\{\{signature\}\}/gi, accountSignature)
           .replace(/\{\{accountSignature\}\}/gi, accountSignature);
+        htmlBody = sanitizeHtml(htmlBody);
 
         // Deduct 1 credit before sending (only for free/pay-as-you-go users).
         // Paid subscribers send for free — credits only used for verification/AI.
         if (campaign.user?.plan === "free") {
           try {
-            await spendCredits(campaign.userId, CREDIT_COSTS.campaign, "campaign_send", lead.id);
+            await spendCredits(campaign.userId, CREDIT_COSTS.campaign, "campaign_send", `campaign_send:${lead.id}:${step.id}`);
           } catch (err) {
             if (err instanceof InsufficientCreditsError) {
               await prisma.campaign.update({ where: { id: campaignId }, data: { status: "paused" } });
@@ -518,7 +520,7 @@ async function executeCampaignInner(campaignId: string) {
         // Paid subscribers send for free.
         if (campaign.user?.plan === "free") {
           try {
-            await spendCredits(campaign.userId, CREDIT_COSTS.campaign, "campaign_send", lead.id);
+            await spendCredits(campaign.userId, CREDIT_COSTS.campaign, "campaign_send", `campaign_send:${lead.id}:${step.id}`);
           } catch (err) {
             if (err instanceof InsufficientCreditsError) {
               await prisma.campaign.update({ where: { id: campaignId }, data: { status: "paused" } });
@@ -647,7 +649,7 @@ async function processReply(
       type: "incoming",
       status: "received",
       subject: replySubject,
-      bodyHtml: replyBody,
+      bodyHtml: sanitizeHtml(replyBody || ""),
       threadId: log.threadId,
       messageId: replyMessageId || null,
       sentAt: new Date(),
@@ -913,6 +915,9 @@ async function recordGmailSentActivity(account: any): Promise<number> {
 // IMAP accounts (Yahoo, Outlook, custom servers): scan the Sent folder with
 // the same matching/insert core.
 async function recordImapSentActivity(account: any): Promise<number> {
+  // SSRF guard: imapHost/imapPort come from user-configured account settings,
+  // so restrict to mail ports and reject private/reserved/metadata addresses.
+  await assertSafeMailTarget(account.imapHost, account.imapPort || 993, "IMAP");
   const client = new ImapFlow({
     host: account.imapHost,
     port: account.imapPort || 993,
@@ -1023,6 +1028,9 @@ async function recordImapSentActivity(account: any): Promise<number> {
 async function checkImapAccountBounces(account: any): Promise<number> {
   let bounced = 0;
 
+  // SSRF guard: imapHost/imapPort come from user-configured account settings,
+  // so restrict to mail ports and reject private/reserved/metadata addresses.
+  await assertSafeMailTarget(account.imapHost, account.imapPort || 993, "IMAP");
   const client = new ImapFlow({
     host: account.imapHost,
     port: account.imapPort || 993,
@@ -1394,6 +1402,9 @@ async function checkImapAccountReplies(account: any): Promise<number> {
 
   console.log(`[reply] IMAP check for ${account.email}: ${sentLogs.length} pending logs`);
 
+  // SSRF guard: imapHost/imapPort come from user-configured account settings,
+  // so restrict to mail ports and reject private/reserved/metadata addresses.
+  await assertSafeMailTarget(account.imapHost, account.imapPort || 993, "IMAP");
   const client = new ImapFlow({
     host: account.imapHost,
     port: account.imapPort || 993,

@@ -48,6 +48,7 @@ export async function dispatchWebhookEvent(event: WebhookEvent) {
         redirect: "manual",
         headers: { "Content-Type": "application/json", "X-Webhook-Signature": signature, "User-Agent": "Coldpilot-Webhook/1.0" },
         body: payload,
+        signal: AbortSignal.timeout(10_000),
       });
       await prisma.webhook.update({ where: { id: wh.id }, data: { lastStatus: res.status } }).catch(() => {});
     } catch {

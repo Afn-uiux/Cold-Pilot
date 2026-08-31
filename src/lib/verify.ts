@@ -226,6 +226,7 @@ function smtpVerifyViaAccount(targetEmail: string, config: SmtpConfig): Promise<
 function runAccountSmtp(targetEmail: string, config: SmtpConfig, resolve: (v: { valid: boolean; reason: string }) => void) {
     const useTls = config.port === 465;
     let socket: net.Socket;
+    let supportsStartTls = false;
     let resolved = false;
     let buffer = "";
     let step = 0;
@@ -268,11 +269,22 @@ function runAccountSmtp(targetEmail: string, config: SmtpConfig, resolve: (v: { 
           socket.write(`EHLO coldpilot.com\r\n`);
         } else if (step === 1 && code === 250) {
           if (!useTls && /STARTTLS/i.test(line)) {
+            supportsStartTls = true;
             step = 11;
             socket.write("STARTTLS\r\n");
             continue;
           }
           if (line.startsWith("250-")) continue;
+          if (!useTls && !supportsStartTls) {
+            // The server won't encrypt credentials (no implicit TLS on 465,
+            // no STARTTLS offered). Sending AUTH LOGIN would expose them in
+            // plaintext — refuse rather than leak the account password.
+            clearTimeout(timeout);
+            cleanup();
+            socket.write("QUIT\r\n");
+            resolve({ valid: false, reason: "account_refused_plaintext_auth" });
+            return;
+          }
           step = 2;
           socket.write(`AUTH LOGIN\r\n`);
         } else if (step === 11 && code === 220) {

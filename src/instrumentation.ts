@@ -1,6 +1,11 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  // Fail closed on insecure secrets before any background work or request
+  // handling starts. In production this aborts boot; in dev it warns.
+  const { assertSecureEnv } = await import("@/lib/env-guard");
+  assertSecureEnv();
+
   const { prisma } = await import("@/lib/prisma");
   const { executeCampaign, checkForReplies, sendDailySummaries } = await import("@/engine/campaign");
   const { reconcileWarmupSchedules, processDueWarmupSends, processSeedInboxes, processSeedInboxEngagement, processSeedSends, saveHealthLog } = await import("@/engine/warmup");

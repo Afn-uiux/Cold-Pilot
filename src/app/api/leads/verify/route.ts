@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
 
+import crypto from "crypto";
 import { auth } from "@/lib/auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
@@ -7,6 +8,7 @@ import { NextResponse } from "next/server";
 import { verifyEmail, type SmtpConfig } from "@/lib/verify";
 import { decryptAccount } from "@/lib/crypto";
 import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
+import { rateLimitAsync } from "@/lib/rate-limit";
 import { CREDIT_COSTS } from "@/lib/plans";
 
 export async function POST(req: Request) {
@@ -17,6 +19,18 @@ export async function POST(req: Request) {
   }
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
+
+  // Per-user throttle. Verification fans out to external SMTP servers (port 25)
+  // and spends credits, so an unthrottled loop is both an SMTP-probe amplifier
+  // and a way to burn a victim's balance. Each request already batches up to
+  // hundreds of leads, so a modest request rate is plenty for the UI.
+  const rl = await rateLimitAsync(`verify:${userId}`, { max: 20, windowMs: 60_000 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many verification requests. Please wait a moment and try again." },
+      { status: 429 }
+    );
+  }
 
   const body = await req.json();
   const { leadIds, campaignId } = body;
@@ -40,7 +54,11 @@ export async function POST(req: Request) {
 
   const creditCost = leads.length * CREDIT_COSTS.verification;
   try {
-    await spendCredits(userId, creditCost, "verification", campaignId || leadIds?.[0]);
+    // Unique per-call refId. Keying idempotency on campaignId/leadId meant the
+    // second (and every later) verification of the same campaign matched an
+    // existing charge and ran FOR FREE. Verification is an explicit,
+    // user-initiated action, so each request is its own billable event.
+    await spendCredits(userId, creditCost, "verification", `verify:${crypto.randomUUID()}`);
   } catch (err) {
     if (err instanceof InsufficientCreditsError) {
       return NextResponse.json(

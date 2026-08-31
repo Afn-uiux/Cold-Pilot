@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { assertSafeMailTarget } from "@/lib/ssrf";
 
 interface SendResult {
   success: boolean;
@@ -25,6 +26,8 @@ export async function sendWarmupEmail(
   await randomDelay(5, 30);
 
   try {
+    // SSRF guard: smtpHost/smtpPort come from user-configured account settings.
+    await assertSafeMailTarget(smtpHost, smtpPort, "SMTP");
     const transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,

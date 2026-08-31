@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { auth } from "@/lib/auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
+import { assertPublicHttpsUrl } from "@/lib/ssrf-guard";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 
@@ -29,6 +30,15 @@ export async function POST(req: NextRequest) {
   const { url, events } = await req.json();
   if (!url) return NextResponse.json({ error: "URL required" }, { status: 400 });
 
+  // Validate the destination at write time (https-only, public host, no
+  // private/metadata addresses). Delivery re-validates too, but rejecting here
+  // stops a hostile URL from ever being stored.
+  try {
+    await assertPublicHttpsUrl(String(url));
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Invalid webhook URL" }, { status: 400 });
+  }
+
   const secret = crypto.randomBytes(16).toString("hex");
 
   const webhook = await prisma.webhook.create({
@@ -54,6 +64,14 @@ export async function PATCH(req: NextRequest) {
   const { id, url, events, active } = await req.json();
   const wh = await prisma.webhook.findFirst({ where: { id, userId: session.user.id } });
   if (!wh) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (url !== undefined) {
+    try {
+      await assertPublicHttpsUrl(String(url));
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Invalid webhook URL" }, { status: 400 });
+    }
+  }
 
   await prisma.webhook.update({
     where: { id },

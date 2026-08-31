@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
 import { assertLeadCapacity, PlanLimitError, spendCredits, InsufficientCreditsError } from "@/lib/credits";
-import { assertPublicHttpsUrl } from "@/lib/ssrf-guard";
+import { fetchPublicText, readResponseTextCapped } from "@/lib/ssrf-guard";
 import { CREDIT_COSTS } from "@/lib/plans";
 
 const KNOWN_FIELDS = [
@@ -280,7 +280,7 @@ export async function POST(req: Request) {
                 signal: AbortSignal.timeout(30000),
               });
               if (!r.ok) continue;
-              const text = await r.text();
+              const text = await readResponseTextCapped(r, 10 * 1024 * 1024);
               if (text.trimStart().startsWith("<!")) continue;
               csvText = text;
               break;
@@ -310,19 +310,14 @@ export async function POST(req: Request) {
           rowsSkippedNoEmail = allRows.filter(l => !l.email || !l.email.includes("@")).length;
           leads = allRows.filter(l => l.email && l.email.includes("@"));
         } else {
-          let parsed: URL;
+          // SSRF-safe fetch: validates the URL, re-validates every redirect
+          // hop against the private-address guard, and caps the body size.
+          let text: string;
           try {
-            parsed = await assertPublicHttpsUrl(url);
+            text = await fetchPublicText(url);
           } catch (err) {
-            return NextResponse.json({ error: err instanceof Error ? err.message : "Invalid URL" }, { status: 400 });
+            return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to fetch the file. Make sure the URL is a public CSV." }, { status: 400 });
           }
-          const res = await fetch(parsed, {
-            redirect: "follow",
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-            signal: AbortSignal.timeout(30000),
-          });
-          if (!res.ok) return NextResponse.json({ error: `Server returned ${res.status}. Make sure the link is a public CSV file.` }, { status: 400 });
-          const text = await res.text();
           const firstLineGuess2 = text.split(/\r?\n/)[0] || "";
           const delimGuess2 = detectDelimiter(firstLineGuess2);
           const lines = splitCsvLines(text, delimGuess2);

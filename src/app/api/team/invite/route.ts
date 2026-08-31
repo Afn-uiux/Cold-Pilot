@@ -19,8 +19,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Valid email required" }, { status: 400 });
   }
 
-  // For now, just log the invite — full team management requires more infrastructure
+  // Team management is not yet implemented — return 501 so callers know
+  // the invitation was NOT sent rather than silently pretending it was.
   console.log(`[team] Invite requested by ${session.user.id} for ${email}`);
 
-  return NextResponse.json({ success: true, message: `Invitation sent to ${email}` });
+  return NextResponse.json({ success: false, message: "Team invites are not yet implemented." }, { status: 501 });
 }

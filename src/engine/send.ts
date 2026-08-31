@@ -4,6 +4,7 @@ import { categorizeBounce } from "@/lib/bounce";
 import { decryptAccount } from "@/lib/crypto";
 import { canSendFromAccount } from "@/lib/send-gate";
 import { signRedirect, signUnsubscribe } from "@/lib/track-sign";
+import { assertSafeSocketTarget, isAllowedSocketPort } from "@/lib/ssrf";
 
 interface SendOptions {
   to: string;
@@ -37,6 +38,29 @@ function stripHtml(html: string): string {
     .replace(/&quot;/g, '"')
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+// Strip CR/LF and control characters from a value destined for an email
+// header. Without this, a subject/name/recipient containing a newline followed
+// by "Bcc: ..." smuggles extra headers into the raw MIME we hand to the Gmail
+// API (header injection). nodemailer validates its own headers, but the
+// raw-MIME path does not, so every externally-influenced header value must pass
+// through here. Implemented as a codepoint scan (rather than a control-char
+// regex) so CR/LF/TAB fold to a single space while all other C0 controls and
+// DEL are dropped, leaving multi-byte UTF-8 (names, subjects) intact.
+function headerSafe(value: string): string {
+  let out = "";
+  for (const ch of String(value ?? "")) {
+    const code = ch.codePointAt(0)!;
+    if (code === 0x0d || code === 0x0a || code === 0x09) {
+      out += " "; // CR / LF / TAB -> space (fold, don't glue words together)
+    } else if (code < 0x20 || code === 0x7f) {
+      continue; // drop remaining C0 controls + DEL
+    } else {
+      out += ch;
+    }
+  }
+  return out.replace(/\s+/g, " ").trim();
 }
 
 function wrapInEmailDocument(html: string): string {
@@ -241,9 +265,14 @@ async function sendViaGmailApi(
   const domain = account.email.split("@").pop() || "coldpilot.local";
   const generatedMessageId = normalizeMessageId(`${Date.now()}.${Math.random().toString(36).slice(2)}@${domain}`);
 
+  // Every externally-influenced header value below is run through headerSafe()
+  // before it enters the raw MIME string. The Gmail API takes a caller-assembled
+  // RFC822 message (unlike nodemailer, which validates its own headers), so an
+  // un-sanitized CR/LF in fromName/to/subject/threading headers would inject
+  // arbitrary extra headers (e.g. Bcc) or a fake body. See headerSafe() above.
   const headers = [
-    `From: ${fromName} <${account.email}>`,
-    `To: ${to}`,
+    `From: ${headerSafe(fromName)} <${headerSafe(account.email)}>`,
+    `To: ${headerSafe(to)}`,
     "MIME-Version: 1.0",
     `Message-ID: ${generatedMessageId}`,
   ];
@@ -274,14 +303,14 @@ async function sendViaGmailApi(
   }
 
   headers.push(`Content-Type: ${contentType}`);
-  headers.push(`Subject: ${subject}`);
+  headers.push(`Subject: ${headerSafe(subject)}`);
   if (inReplyTo) {
-    headers.push(`In-Reply-To: ${normalizeMessageId(inReplyTo)}`);
+    headers.push(`In-Reply-To: ${headerSafe(normalizeMessageId(inReplyTo))}`);
     const refChain = (references || inReplyTo).split(/\s+/).filter(Boolean).map(normalizeMessageId).join(" ");
-    headers.push(`References: ${refChain}`);
+    headers.push(`References: ${headerSafe(refChain)}`);
   }
   if (listUnsubscribe) {
-    headers.push(`List-Unsubscribe: <${listUnsubscribe}>`);
+    headers.push(`List-Unsubscribe: <${headerSafe(listUnsubscribe)}>`);
     headers.push(`List-Unsubscribe-Post: List-Unsubscribe=One-Click`);
   }
 
@@ -306,10 +335,25 @@ async function sendViaSmtp(
   fromName: string, inReplyTo?: string | null, references?: string | null,
   listUnsubscribe?: string | null, isPlainText?: boolean
 ): Promise<string> {
+  // SSRF guard: the SMTP host/port come from user-configured account settings,
+  // so a hostile account could point them at an internal service (169.254.x,
+  // 127.0.0.1, a metadata endpoint) and use this authenticated send as a
+  // blind port-probe / connect primitive. Restrict to known mail ports and
+  // reject any host that resolves into a private/reserved range. (Residual
+  // TOCTOU: nodemailer re-resolves at connect — see assertSafeSocketTarget.)
+  const smtpPort = Number(account.smtpPort);
+  if (!isAllowedSocketPort(smtpPort)) {
+    throw new Error(`SMTP port ${account.smtpPort} is not allowed`);
+  }
+  const targetErr = await assertSafeSocketTarget(account.smtpHost!, smtpPort);
+  if (targetErr) {
+    throw new Error(`SMTP host not allowed: ${targetErr}`);
+  }
+
   const transporter = nodemailer.createTransport({
     host: account.smtpHost!,
-    port: account.smtpPort!,
-    secure: account.smtpPort === 465,
+    port: smtpPort,
+    secure: smtpPort === 465,
     auth: {
       user: account.smtpUser!,
       pass: account.smtpPass!,

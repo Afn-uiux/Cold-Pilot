@@ -7,7 +7,11 @@ const TAG_LENGTH = 16;
 function getKey(): Buffer {
   const key = process.env.ENCRYPTION_KEY;
   if (!key) throw new Error("ENCRYPTION_KEY env variable is not set");
-  return Buffer.from(key, "hex");
+  const buf = Buffer.from(key, "hex");
+  if (buf.length !== 32) {
+    throw new Error(`ENCRYPTION_KEY must be 64 hex chars (32 bytes), got ${buf.length} bytes`);
+  }
+  return buf;
 }
 
 export function encrypt(plaintext: string): string {
@@ -28,13 +32,14 @@ export function decrypt(encoded: string): string {
   const encrypted = buf.subarray(IV_LENGTH + TAG_LENGTH);
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(tag);
-  return decipher.update(encrypted) + decipher.final("utf8");
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }
 
 const CREDENTIAL_FIELDS = [
   "smtpPass",
   "imapPass",
   "gmailToken",
+  "gmailSecret",
   "microsoftToken",
   "microsoftRefreshToken",
 ] as const;

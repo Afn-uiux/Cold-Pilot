@@ -27,29 +27,45 @@ setInterval(() => {
 /**
  * Get the client IP for rate-limiting / abuse purposes.
  *
- * SECURITY: `X-Forwarded-For`/`X-Real-IP` are client-controlled and must NOT
- * be trusted for security decisions unless the request provably came from a
- * known reverse proxy (which this app does not trust by default). We therefore
- * fall back to the socket remote address supplied by Next/Node when no trusted
- * proxy is configured.
+ * SECURITY: `X-Forwarded-For` is a client-appendable list — the LEFTMOST entry
+ * is fully attacker-controlled, so trusting it lets anyone mint a fresh "IP"
+ * per request and defeat every per-IP limit. We therefore:
+ *   1. Prefer `cf-connecting-ip` (Cloudflare sets it and overwrites any client
+ *      copy — trustworthy as long as the origin only accepts Cloudflare traffic).
+ *   2. Otherwise take the RIGHTMOST XFF hop — the one appended by our own proxy
+ *      — optionally stepping back TRUSTED_PROXY_HOPS entries for multi-proxy
+ *      chains. Never the leftmost.
+ *   3. Fall back to `x-real-ip` (last value), then to a placeholder.
  *
- * `forwarded`/`req` accept a Headers-like object so this works in both edge
- * (proxy.ts) and node (route handlers) runtimes.
+ * In non-production without an explicit TRUST_PROXY we return a constant, since
+ * there is no trusted proxy boundary to derive a real client IP from.
+ *
+ * NOTE: cf-connecting-ip / XFF are only meaningful if the origin refuses direct
+ * connections that bypass the proxy (firewall to Cloudflare/LB IPs). Enforce
+ * that at the infrastructure layer.
  */
 export function getClientIp(
   forwarded: { get(name: string): string | null } | null | undefined
 ): string {
-  // If the deployment explicitly trusts an upstream proxy, honour the first
-  // XFF entry. Otherwise use the socket address (unavailable in some edge
-  // contexts, where we fall back to a stable per-process placeholder).
-  const trustProxy = process.env.TRUST_PROXY === "true";
-  if (trustProxy && forwarded) {
-    const xff = forwarded.get("x-forwarded-for");
-    if (xff) return xff.split(",")[0].trim() || "unknown";
+  const trustProxy = process.env.NODE_ENV === "production" || process.env.TRUST_PROXY === "true";
+  if (!forwarded || !trustProxy) return "unknown";
+
+  const cf = forwarded.get("cf-connecting-ip");
+  if (cf && cf.trim()) return cf.trim();
+
+  const xff = forwarded.get("x-forwarded-for");
+  if (xff) {
+    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parts.length) {
+      const hops = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS) || 1);
+      return parts[Math.max(0, parts.length - hops)] || "unknown";
+    }
   }
-  return process.env.NODE_ENV === "production"
-    ? (forwarded?.get("x-real-ip")?.split(",")[0]?.trim() || "unknown")
-    : "unknown";
+
+  const real = forwarded.get("x-real-ip");
+  if (real) return real.split(",").map((s) => s.trim()).filter(Boolean).pop() || "unknown";
+
+  return "unknown";
 }
 
 let redis: any = null;

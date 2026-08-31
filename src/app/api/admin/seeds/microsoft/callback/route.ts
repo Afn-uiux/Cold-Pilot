@@ -119,13 +119,14 @@ export async function GET(req: NextRequest) {
 
 function htmlPage(result: { success: boolean; error?: string }) {
   const payload = JSON.stringify({ source: "seed-microsoft", ...result });
+  const origin = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
   const html = `<!DOCTYPE html>
 <html>
 <head><title>Seed Connect</title></head>
 <body>
 <script>
   if (window.opener) {
-    window.opener.postMessage(${payload}, "*");
+    window.opener.postMessage(${payload}, ${JSON.stringify(origin)});
   }
   window.close();
 </script>

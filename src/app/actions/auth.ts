@@ -6,7 +6,8 @@ import { TRIAL_MS } from "@/lib/trial";
 import { signIn } from "@/lib/auth";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { sendEmailSafe } from "@/lib/email/send";
-import { computeSignupRisk } from "@/lib/fraud";
+import { computeSignupRisk, voidTrial } from "@/lib/fraud";
+import crypto from "crypto";
 
 export async function signup(formData: FormData) {
   const name = formData.get("name") as string;
@@ -53,10 +54,16 @@ export async function signup(formData: FormData) {
     },
   });
 
-  // Risk gate: never blocks, only flags for admin review. The pattern rule
-  // (mailbox-reuse void + fresh sibling from the same device) lands here.
+  // Risk gate: blocks on a hard blocklist hit (a device/IP that was
+  // previously banned via killUser), otherwise flags for admin review.
   const risk = await computeSignupRisk({ userId: user.id, email, fingerprint, ip });
-  if (risk.score > 0 || risk.status === "flagged") {
+  if (risk.flags.includes("blocked_device") || risk.flags.includes("blocked_ip")) {
+    await voidTrial(user.id, "blocklist_hit");
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { riskStatus: "banned", riskScore: risk.score, riskFlags: JSON.stringify(risk.flags) },
+    });
+  } else if (risk.score > 0 || risk.status === "flagged") {
     await prisma.user.update({
       where: { id: user.id },
       data: { riskScore: risk.score, riskFlags: JSON.stringify(risk.flags), riskStatus: risk.status },
@@ -71,10 +78,28 @@ export async function signup(formData: FormData) {
   });
 
   sendEmailSafe(email, "welcome");
+  await sendVerificationEmail(email);
 
   await signIn("credentials", { email, password, redirectTo: "/dashboard" });
 
   return { success: true };
+}
+
+// Fires the one-click email-verification link. Signup credits are gated on
+// email verification, so this must run at signup rather than waiting for the
+// user to discover the verify endpoint. Fire-and-forget; silent on failure.
+async function sendVerificationEmail(email: string): Promise<void> {
+  try {
+    const token = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
+    await prisma.verificationToken.create({
+      data: { identifier: email, token, expires },
+    });
+    const verifyUrl = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/auth/verify?token=${token}`;
+    await sendEmailSafe(email, "email-verification", { verifyUrl });
+  } catch (err) {
+    console.error("[signup] Failed to send verification email:", err);
+  }
 }
 
 export async function login(formData: FormData) {
