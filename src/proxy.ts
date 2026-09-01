@@ -86,22 +86,19 @@ export async function proxy(request: NextRequest) {
   const isAuthPath = authPaths.some((p) => pathname.startsWith(p));
   const isProtectedPath = protectedPaths.some((p) => pathname.startsWith(p));
 
+  // Decode the session cookie, but treat failure as "no session" — NEVER as a
+  // reason to redirect. An undecodable cookie combined with a same-URL redirect
+  // (/auth/login -> /auth/login) is an infinite loop if the browser refuses the
+  // cookie-clearing Set-Cookie (attribute/prefix mismatch), which surfaces as
+  // ERR_TOO_MANY_REDIRECTS. Falling through just renders the page; the stale
+  // cookie is overwritten on the next successful sign-in.
+  let sessionToken: unknown = null;
   if (sessionCookie) {
     try {
-      const token = await decode({ token: sessionCookie, secret, salt: cookieName });
-      if (!token) {
-        const loginUrl = new URL("/auth/login", request.url);
-        const res = NextResponse.redirect(loginUrl);
-        clearSessionCookies(res, cookieName);
-        applySecurityHeaders(res, cspHeader);
-        return res;
-      }
+      sessionToken = await decode({ token: sessionCookie, secret, salt: cookieName });
+      console.log(`[proxy-debug] ${pathname} cookie=${cookieName} decode=${sessionToken ? "ok" : "null"} secretLen=${secret?.length}`);
     } catch {
-      const loginUrl = new URL("/auth/login", request.url);
-      const res = NextResponse.redirect(loginUrl);
-      clearSessionCookies(res, cookieName);
-      applySecurityHeaders(res, cspHeader);
-      return res;
+      sessionToken = null;
     }
   }
 
@@ -115,16 +112,19 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if (sessionCookie && isAuthPath) {
-    const res = NextResponse.redirect(new URL("/dashboard", request.url));
-    applySecurityHeaders(res, cspHeader);
-    return res;
-  }
+  // NOTE: do NOT redirect authed users from /auth/login to /dashboard here.
+  // The dashboard layout re-validates sessions against the DB (UserSession
+  // row), which this edge proxy cannot do — if the JWT decodes but its sid is
+  // gone (DB restore, revocation), redirecting to /dashboard only bounces the
+  // browser straight back here, producing ERR_TOO_MANY_REDIRECTS. The layout
+  // is the single source of truth: a stale cookie just renders the login page
+  // and signing in again mints a fresh session.
 
-  if (!sessionCookie && isProtectedPath) {
+  if (!sessionToken && isProtectedPath) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     const res = NextResponse.redirect(loginUrl);
+    clearSessionCookies(res, cookieName);
     applySecurityHeaders(res, cspHeader);
     return res;
   }

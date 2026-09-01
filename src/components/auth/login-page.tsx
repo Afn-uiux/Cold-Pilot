@@ -4,9 +4,14 @@ import { useState, useEffect, useTransition } from "react";
 import { signIn } from "next-auth/react";
 import { login, demoLogin } from "@/app/actions/auth";
 import Link from "next/link";
+import Logo from "@/components/logo";
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
+  const [verifyRequired, setVerifyRequired] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState("");
+  const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
+  const [verifyLoading, setVerifyLoading] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -17,6 +22,10 @@ export default function LoginPage() {
       else if (err === "missing") setError("Email and password are required");
       else if (err === "rate_limited") setError("Too many attempts. Try again in a few minutes.");
       else setError("Login failed");
+    }
+    if (params.get("verify") === "required") {
+      window.history.replaceState({}, "", window.location.pathname);
+      setVerifyRequired(true);
     }
   }, []);
   const [showPassword, setShowPassword] = useState(false);
@@ -31,14 +40,39 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setVerifyMsg(null);
     setLoading(true);
     const form = new FormData(e.currentTarget);
     const result = await login(form);
     setLoading(false);
+    if (result?.error === "VERIFY_EMAIL_REQUIRED") {
+      setVerifyRequired(true);
+      setVerifyEmail((form.get("email") as string) || "");
+      return;
+    }
     if (result?.error) {
       setError(result.error);
     } else {
       window.location.href = "/dashboard";
+    }
+  }
+
+  async function handleResendVerify() {
+    if (!verifyEmail) return;
+    setVerifyLoading(true);
+    setVerifyMsg(null);
+    try {
+      const res = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verifyEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setVerifyMsg(data.message || "Verification email sent.");
+    } catch {
+      setVerifyMsg("Something went wrong. Please try again.");
+    } finally {
+      setVerifyLoading(false);
     }
   }
 
@@ -71,8 +105,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#F8FAFC", fontFamily: "'Geist', system-ui, sans-serif" }}>
       <header style={{ padding: "24px clamp(20px,4vw,40px)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Link href="/" style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 20, letterSpacing: "-0.01em", color: "#0F1929", textDecoration: "none" }}>
-          Coldpilot
+        <Link href="/" style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 20, letterSpacing: "-0.01em", color: "#0F1929", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+          <Logo height={22} />
         </Link>
         <Link href="/auth/signup" style={{ fontSize: 14, color: "#5A6B87", textDecoration: "none", transition: "color 0.15s" }}
           onMouseEnter={e => (e.target as HTMLElement).style.color = "#0F1929"}
@@ -97,6 +131,30 @@ export default function LoginPage() {
           </h1>
           <p style={{ marginTop: 12, fontSize: 15, color: "#5A6B87", lineHeight: 1.6 }}>Pick up where you left off.</p>
 
+          {verifyRequired && (
+            <div style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 14, borderRadius: 8, background: "rgba(46,125,50,0.06)" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-10 5L2 7" /></svg>
+                <div style={{ fontSize: 14, color: "#0F1929", lineHeight: 1.5 }}>
+                  <strong>Verify your email to continue.</strong>
+                  <p style={{ fontSize: 13, color: "#5A6B87", margin: "4px 0 0" }}>
+                    We sent a one-time verification link to{verifyEmail ? <> <strong>{verifyEmail}</strong></> : " your inbox"}. The link is valid for 24 hours. You&apos;ll be able to log in once your email is verified.
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={handleResendVerify} disabled={verifyLoading}
+                style={{ width: "100%", padding: 12, fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: "#fff", background: "#2563EB", border: "none", borderRadius: 6, cursor: "pointer", opacity: verifyLoading ? 0.7 : 1 }}>
+                {verifyLoading ? "Sending..." : "Resend verification email"}
+              </button>
+              {verifyMsg && (
+                <div style={{ fontSize: 13, color: "#2E7D32", background: "rgba(46,125,50,0.06)", padding: "10px 14px", borderRadius: 6 }}>{verifyMsg}</div>
+              )}
+              <p style={{ fontSize: 12, color: "#8A9BB5" }}>Wrong email? <Link href="/auth/signup" style={{ color: "#0F1929", textDecoration: "none" }}>Register with a different address</Link>.</p>
+            </div>
+          )}
+
+          {!verifyRequired && (
+          <>
           <form onSubmit={handleSubmit} action="/api/auth/login" method="POST" style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 24 }}>
             {error && (
               <div style={{ fontSize: 13, color: "#C62828", background: "rgba(198,40,40,0.06)", padding: "10px 14px", borderRadius: 6 }}>{error}</div>
@@ -143,21 +201,9 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div>
-              <label style={{ display: "block", fontSize: 13, color: "#5A6B87", marginBottom: 8 }} htmlFor="code">2FA code (if enabled)</label>
-              <input id="code" name="code" type="text" inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code"
-                style={{
-                  width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929",
-                  background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)",
-                  padding: "10px 0", outline: "none", borderRadius: 0
-                }}
-                onFocus={e => e.target.style.borderBottomColor = "#0F1929"}
-                onBlur={e => e.target.style.borderBottomColor = "rgba(15,25,41,0.08)"} />
-            </div>
-
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: -8 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#5A6B87", cursor: "pointer" }}>
-                <input type="checkbox" name="remember" style={{ width: 14, height: 14, accentColor: "#0F1929" }} />
+                <input type="checkbox" name="remember" style={{ width: 14, height: 14, accentColor: "#2563EB" }} />
                 Remember me
               </label>
             </div>
@@ -199,6 +245,8 @@ export default function LoginPage() {
             No account?{" "}
             <Link href="/auth/signup" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.08)", paddingBottom: 1, textDecoration: "none" }}>Sign up free</Link>
           </p>
+          </>
+          )}
         </div>
       </main>
 
@@ -219,14 +267,14 @@ export default function LoginPage() {
                   <button type="button" onClick={() => setResetOpen(false)}
                     style={{ padding: "8px 16px", fontSize: 13, color: "#5A6B87", background: "none", border: "1px solid rgba(15,25,41,0.08)", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
                   <button type="submit" disabled={resetLoading}
-                    style={{ padding: "8px 16px", fontSize: 13, color: "#fff", background: "#0F1929", border: "none", borderRadius: 6, cursor: "pointer" }}>{resetLoading ? "Sending..." : "Send reset link"}</button>
+                    style={{ padding: "8px 16px", fontSize: 13, color: "#fff", background: "#2563EB", border: "none", borderRadius: 6, cursor: "pointer" }}>{resetLoading ? "Sending..." : "Send reset link"}</button>
                 </div>
               </form>
             )}
             {resetSent && (
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button type="button" onClick={() => { setResetOpen(false); setResetSent(false); setResetMsg(null); }}
-                  style={{ padding: "8px 16px", fontSize: 13, color: "#fff", background: "#0F1929", border: "none", borderRadius: 6, cursor: "pointer" }}>Done</button>
+                  style={{ padding: "8px 16px", fontSize: 13, color: "#fff", background: "#2563EB", border: "none", borderRadius: 6, cursor: "pointer" }}>Done</button>
               </div>
             )}
           </div>
