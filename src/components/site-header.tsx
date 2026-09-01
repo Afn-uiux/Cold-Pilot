@@ -1,56 +1,68 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import Logo from "@/components/logo";
+import { IconTarget } from "@/components/icon-target";
+import type { AnimatedIconHandle } from "@/lib/use-icon-animation";
 import { Menu01Icon } from "@/components/icons/menu-01";
 import { Cancel01Icon } from "@/components/icons/cancel-01";
+import { FlameIcon } from "@/components/icons/flame";
+import { RefreshIcon } from "@/components/icons/refresh";
+import { MailOpenIcon } from "@/components/icons/mail-open";
+import { MagicWand01Icon } from "@/components/icons/magic-wand-01";
+import { Shield02Icon } from "@/components/icons/shield-02";
+import { TrendUpIcon } from "@/components/icons/trend-up";
+import { RocketIcon } from "@/components/icons/rocket";
+import { BriefcaseIcon } from "@/components/icons/briefcase";
+import { UserGroupIcon } from "@/components/icons/user-group";
+import { Search01Icon } from "@/components/icons/search-01";
+import { StarIcon } from "@/components/icons/star";
+import { PlusSignIcon } from "@/components/icons/plus-sign";
 
 const products = [
-  { icon: "flame", href: "/warmup", title: "Warmup", desc: "New inboxes send a slow, human-looking pattern for two weeks so providers learn to trust the address before you launch." },
-  { icon: "refresh", href: "/rotation", title: "Rotation", desc: "Connect as many inboxes as you want. Sends spread across all of them so no single address carries the volume." },
-  { icon: "reply", href: "/reply-detection", title: "Reply detection", desc: "The moment a lead replies, books, or bounces, their sequence stops. No awkward follow-up after they've answered." },
-  { icon: "tag", href: "/personalization", title: "Personalization", desc: "Pull first name, company, or any custom field into the subject line and body — no manual find-and-replace." },
-  { icon: "shield", href: "/deliverability", title: "Deliverability", desc: "A spam-score check runs before every send, so you catch a flagged domain before your leads do." },
-  { icon: "chart", href: "/analytics", title: "Analytics", desc: "Opens, replies, and bounces on one screen. Just what you need to know if the sequence is working." },
+  { icon: <FlameIcon size={15} />, href: "/warmup", title: "Warmup", desc: "New inboxes send a slow, human-looking pattern for two weeks so providers learn to trust the address before you launch." },
+  { icon: <RefreshIcon size={15} />, href: "/rotation", title: "Rotation", desc: "Connect as many inboxes as you want. Sends spread across all of them so no single address carries the volume." },
+  { icon: <MailOpenIcon size={15} />, href: "/reply-detection", title: "Reply detection", desc: "The moment a lead replies, books, or bounces, their sequence stops. No awkward follow-up after they've answered." },
+  { icon: <MagicWand01Icon size={15} />, href: "/personalization", title: "Personalization", desc: "Pull first name, company, or any custom field into the subject line and body — no manual find-and-replace." },
+  { icon: <Shield02Icon size={15} />, href: "/deliverability", title: "Deliverability", desc: "A spam-score check runs before every send, so you catch a flagged domain before your leads do." },
+  { icon: <TrendUpIcon size={15} />, href: "/analytics", title: "Analytics", desc: "Opens, replies, and bounces on one screen. Just what you need to know if the sequence is working." },
 ];
 
 const useCases = [
-  { icon: "rocket", href: "/use-cases/founders", title: "Founders", desc: "Run intro sequences without burning founder@." },
-  { icon: "briefcase", href: "/use-cases/agencies", title: "Agencies", desc: "Outbound for many clients on many domains." },
-  { icon: "users", href: "/use-cases/sales", title: "Sales teams", desc: "Distribute sends across reps, surface positives." },
-  { icon: "search", href: "/use-cases/recruiters", title: "Recruiters", desc: "Candidate outreach from personal mailboxes." },
-  { icon: "star", href: "/use-cases/fundraising", title: "Fundraising", desc: "A focused sequence that lands in the inbox." },
-  { icon: "plus", href: "/use-cases", title: "And many more", desc: "Freelancers, growth, e-commerce, consultants — and everyone else sending cold email." },
+  { icon: <RocketIcon size={15} />, href: "/use-cases/founders", title: "Founders", desc: "Run intro sequences without burning founder@." },
+  { icon: <BriefcaseIcon size={15} />, href: "/use-cases/agencies", title: "Agencies", desc: "Outbound for many clients on many domains." },
+  { icon: <UserGroupIcon size={15} />, href: "/use-cases/sales", title: "Sales teams", desc: "Distribute sends across reps, surface positives." },
+  { icon: <Search01Icon size={15} />, href: "/use-cases/recruiters", title: "Recruiters", desc: "Candidate outreach from personal mailboxes." },
+  { icon: <StarIcon size={15} />, href: "/use-cases/fundraising", title: "Fundraising", desc: "A focused sequence that lands in the inbox." },
+  { icon: <PlusSignIcon size={15} />, href: "/use-cases", title: "And many more", desc: "Freelancers, growth, e-commerce, consultants — and everyone else sending cold email." },
 ];
-
-const iconPaths: Record<string, string> = {
-  flame: "M12 2c-1 3-4 4-4 9a4 4 0 0 0 8 0c0-2-1-3-1-3s.5 2-1 3c-2 1-2-1-2-3 0-2 2-3 0-6Z",
-  refresh: "M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5",
-  reply: "M9 17 4 12l5-5M4 12h11a5 5 0 0 1 5 5v2",
-  tag: "M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.83zM7 7h.01",
-  shield: "M12 2 3 6v6c0 5 4 8 9 10 5-2 9-5 9-10V6l-9-4Z",
-  chart: "M3 3v18h18M7 16v-4M12 16V8M17 16v-7",
-  rocket: "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09zM12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2zM9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5",
-  briefcase: "M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16M22 7v13a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7M2 7h20",
-  users: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
-  search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35",
-  star: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
-  plus: "M12 5v14M5 12h14",
-};
-
-function Icon({ name, size = 15 }: { name: string; size?: number }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d={iconPaths[name] ?? ""} />
-    </svg>
-  );
-}
 
 function Caret() {
   return (
     <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
       <path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+function MegaItem({ item }: { item: { icon: ReactNode; href: string; title: string; desc: string } }) {
+  const iconRef = useRef<AnimatedIconHandle>(null);
+  return (
+    <Link
+      href={item.href}
+      className="sh-item"
+      role="menuitem"
+      onMouseEnter={() => iconRef.current?.startAnimation()}
+      onClick={() => iconRef.current?.startAnimation()}
+    >
+      <div className="sh-item-head">
+        <span className="sh-item-ic"><IconTarget triggerRef={iconRef} className="flex items-center">{item.icon}</IconTarget></span>
+        <span className="sh-item-title">{item.title}</span>
+      </div>
+      <p>{item.desc}</p>
+    </Link>
   );
 }
 
@@ -90,7 +102,7 @@ export default function SiteHeader() {
     <>
       <header className="sh" id="sh-header">
         <div className="sh-inner">
-          <Link href="/" className="sh-logo">Coldpilot</Link>
+          <Link href="/" className="sh-logo"><Logo height={22} /></Link>
 
           <nav className="sh-nav">
             <div className="sh-mega" data-mega>
@@ -109,13 +121,7 @@ export default function SiteHeader() {
                     </div>
                     <div className="sh-panel-items">
                       {products.map((p) => (
-                        <Link key={p.href} href={p.href} className="sh-item" role="menuitem">
-                          <div className="sh-item-head">
-                            <span className="sh-item-ic"><Icon name={p.icon} /></span>
-                            <span className="sh-item-title">{p.title}</span>
-                          </div>
-                          <p>{p.desc}</p>
-                        </Link>
+                        <MegaItem key={p.href} item={p} />
                       ))}
                     </div>
                   </div>
@@ -145,13 +151,7 @@ export default function SiteHeader() {
                     </div>
                     <div className="sh-panel-items">
                       {useCases.map((p) => (
-                        <Link key={p.href} href={p.href} className="sh-item" role="menuitem">
-                          <div className="sh-item-head">
-                            <span className="sh-item-ic"><Icon name={p.icon} /></span>
-                            <span className="sh-item-title">{p.title}</span>
-                          </div>
-                          <p>{p.desc}</p>
-                        </Link>
+                        <MegaItem key={p.href} item={p} />
                       ))}
                     </div>
                   </div>

@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRef } from "react";
 import { usePathname } from "next/navigation";
+import Logo from "@/components/logo";
 import { Home01Icon } from "@/components/icons/home-01";
 import { UserGroupIcon } from "@/components/icons/user-group";
 import { InboxIcon } from "@/components/icons/inbox";
 import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
 import { IconTarget } from "@/components/icon-target";
+import type { AnimatedIconHandle } from "@/lib/use-icon-animation";
 
 const LINKS = [
   { href: "/admin", label: "Overview", icon: "home" },
@@ -23,7 +26,7 @@ export default function AdminSidebar() {
       style={{ width: 200, background: "var(--color-cream)", borderRight: "1px solid var(--color-border)", padding: "28px 0" }}
     >
       <div className="font-medium text-lg tracking-tight px-6 mb-9">
-        <Link href="/admin">Coldpilot</Link>
+        <Link href="/admin" className="flex items-center"><Logo height={18} /></Link>
         <span className="text-[10px] tracking-widest uppercase text-muted-2 ml-2">Admin</span>
       </div>
 
@@ -33,19 +36,13 @@ export default function AdminSidebar() {
         {LINKS.map((link) => {
           const isActive = pathname === link.href || (link.href !== "/admin" && pathname.startsWith(link.href));
           return (
-            <Link
+            <AdminNavLink
               key={link.href}
               href={link.href}
-              className={`flex items-center gap-3 px-6 py-2.5 text-sm relative transition-colors ${
-                isActive ? "text-blue-accent" : "text-muted hover:text-blue-accent"
-              }`}
-            >
-              {isActive && (
-                <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-accent rounded-r-sm" />
-              )}
-              <IconTarget className="flex items-center"><NavIcon name={link.icon} /></IconTarget>
-              {link.label}
-            </Link>
+              label={link.label}
+              icon={<NavIcon name={link.icon} />}
+              isActive={isActive}
+            />
           );
         })}
       </nav>
@@ -60,6 +57,35 @@ export default function AdminSidebar() {
         </Link>
       </div>
     </aside>
+  );
+}
+
+function AdminNavLink({
+  href,
+  label,
+  icon,
+  isActive,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  isActive: boolean;
+}) {
+  const iconRef = useRef<AnimatedIconHandle>(null);
+  return (
+    <Link
+      href={href}
+      onMouseEnter={() => iconRef.current?.startAnimation()}
+      className={`flex items-center gap-3 px-6 py-2.5 text-sm relative transition-colors ${
+        isActive ? "text-blue-accent" : "text-muted hover:text-blue-accent"
+      }`}
+    >
+      {isActive && (
+        <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-accent rounded-r-sm" />
+      )}
+      <IconTarget triggerRef={iconRef} className="flex items-center">{icon}</IconTarget>
+      {label}
+    </Link>
   );
 }
 

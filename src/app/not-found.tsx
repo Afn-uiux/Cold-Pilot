@@ -39,7 +39,7 @@ export default function NotFound() {
           fontSize: 14,
           fontWeight: 500,
           color: "#fff",
-          background: "#0F1929",
+          background: "#2563EB",
           borderRadius: 8,
           textDecoration: "none",
           transition: "opacity 0.15s",

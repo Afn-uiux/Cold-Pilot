@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
+import Logo from "@/components/logo";
 import { FlashIcon } from "@/components/icons/flash";
 import { SmileIcon } from "@/components/icons/smile";
 import { Search01Icon } from "@/components/icons/search-01";
@@ -245,7 +246,7 @@ export default function OnboardingWizard() {
           <nav className="bg-white border-b border-border py-4 px-6 md:px-12 flex items-center">
             <div className="flex items-center gap-2 text-blue-accent font-semibold text-lg">
               <Icon name="bolt" className="w-5 h-5" />
-              <span>Coldpilot</span>
+              <Logo height={18} />
             </div>
           </nav>
 

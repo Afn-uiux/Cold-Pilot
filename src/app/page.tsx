@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { PLANS } from "@/lib/plans";
 import { currencyFromHeaders, formatPrice, type Currency } from "@/lib/currency";
 import SiteHeader from "@/components/site-header";
+import Logo from "@/components/logo";
 import { FlameIcon } from "@/components/icons/flame";
 import { RefreshIcon } from "@/components/icons/refresh";
 import { Message01Icon } from "@/components/icons/message-01";
@@ -17,7 +18,7 @@ import { GridViewIcon } from "@/components/icons/grid-view";
 import { Edit02Icon } from "@/components/icons/edit-02";
 import { SentIcon } from "@/components/icons/sent";
 import { ChevronRightIcon } from "@/components/icons/chevron-right";
-import { IconTarget } from "@/components/icon-target";
+import { IconHover, IconHoverLink, StepItem } from "@/components/icon-hover";
 
 export default async function Home() {
   const session = await auth();
@@ -29,7 +30,7 @@ export default async function Home() {
     <div className="landing-root">
       <style>{`
         .landing-root{--cream:#FAFAF8;--cream-2:#F0EFEB;--ink:#0F0D14;--muted:#6B6578;--muted-2:#9B94A8;--border:rgba(15,13,20,0.08);--blue:#2563EB;--blue-hover:#1D4ED8}
-        .landing-root{font-family:'Geist',system-ui,sans-serif;background:var(--cream);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh}
+        .landing-root{font-family:'Geist',system-ui,sans-serif;background:var(--cream);color:var(--ink);-webkit-font-smoothing:antialiased;overflow:clip;min-height:100vh}
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         a{color:inherit;text-decoration:none}
         .wrap{max-width:1080px;margin:0 auto;padding:0 clamp(20px,4vw,40px)}
@@ -184,12 +185,13 @@ export default async function Home() {
             <div className="feat-row reveal">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <IconTarget className="inline-flex items-center"><FlameIcon size={15} /></IconTarget>
-                  Warmup
+                  <IconHover icon={<FlameIcon size={15} />}>
+                    Warmup
+                  </IconHover>
                 </span>
                 <h3>Inbox warm-up</h3>
                 <p>New inboxes send a slow, human-looking pattern for two weeks so mailbox providers learn to trust the address before your campaign starts.</p>
-                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
+                <IconHover href="#pricing" className="feat-link" icon={<ChevronRightIcon size={13} />} iconPosition="end">Get started</IconHover>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -214,12 +216,13 @@ export default async function Home() {
             <div className="feat-row reveal" data-side="left">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <IconTarget className="inline-flex items-center"><RefreshIcon size={15} /></IconTarget>
-                  Rotation
+                  <IconHover icon={<RefreshIcon size={15} />}>
+                    Rotation
+                  </IconHover>
                 </span>
                 <h3>Multi-inbox rotation</h3>
                 <p>Connect as many inboxes as you want. Sends spread across all of them so no single address carries the volume — or the risk.</p>
-                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
+                <IconHover href="#pricing" className="feat-link" icon={<ChevronRightIcon size={13} />} iconPosition="end">Get started</IconHover>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -242,12 +245,13 @@ export default async function Home() {
             <div className="feat-row reveal">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <IconTarget className="inline-flex items-center"><Message01Icon size={15} /></IconTarget>
-                  Detection
+                  <IconHover icon={<Message01Icon size={15} />}>
+                    Detection
+                  </IconHover>
                 </span>
                 <h3>Reply detection</h3>
                 <p>The moment a lead replies, books, or bounces, their sequence stops. No awkward follow-up after they've already answered.</p>
-                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
+                <IconHover href="#pricing" className="feat-link" icon={<ChevronRightIcon size={13} />} iconPosition="end">Get started</IconHover>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -267,12 +271,13 @@ export default async function Home() {
             <div className="feat-row reveal" data-side="left">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <IconTarget className="inline-flex items-center"><Settings01Icon size={15} /></IconTarget>
-                  Personalization
+                  <IconHover icon={<Settings01Icon size={15} />}>
+                    Personalization
+                  </IconHover>
                 </span>
                 <h3>Personalization tokens</h3>
                 <p>Pull first name, company, or any custom field into the subject line and body — no manual find-and-replace.</p>
-                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
+                <IconHover href="#pricing" className="feat-link" icon={<ChevronRightIcon size={13} />} iconPosition="end">Get started</IconHover>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -291,12 +296,13 @@ export default async function Home() {
             <div className="feat-row reveal">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <IconTarget className="inline-flex items-center"><Shield02Icon size={15} /></IconTarget>
-                  Deliverability
+                  <IconHover icon={<Shield02Icon size={15} />}>
+                    Deliverability
+                  </IconHover>
                 </span>
                 <h3>Deliverability monitor</h3>
                 <p>A spam-score check runs before every send, so you catch a flagged domain or spammy subject line before your leads do.</p>
-                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
+                <IconHover href="#pricing" className="feat-link" icon={<ChevronRightIcon size={13} />} iconPosition="end">Get started</IconHover>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -315,12 +321,13 @@ export default async function Home() {
             <div className="feat-row reveal" data-side="left">
               <div className="feat-text">
                 <span className="feat-eyebrow">
-                  <IconTarget className="inline-flex items-center"><TrendUpIcon size={15} /></IconTarget>
-                  Analytics
+                  <IconHover icon={<TrendUpIcon size={15} />}>
+                    Analytics
+                  </IconHover>
                 </span>
                 <h3>Plain analytics</h3>
                 <p>Opens, replies, and bounces on one screen. Just what you need to know if the sequence is working.</p>
-                <a href="#pricing" className="feat-link">Get started<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></a>
+                <IconHover href="#pricing" className="feat-link" icon={<ChevronRightIcon size={13} />} iconPosition="end">Get started</IconHover>
               </div>
               <div className="feat-illust">
                 <svg viewBox="0 0 300 210" fill="none">
@@ -369,22 +376,18 @@ export default async function Home() {
             <h2>From cold list to running sequence, same afternoon</h2>
           </div>
           <ol className="steps">
-            <li className="step">
-              <div className="step-illust"><IconTarget><Link01Icon size={24} /></IconTarget></div>
-              <div><h3>Connect your inbox</h3><p>Link Gmail or Outlook. Warm-up starts immediately, even before your first sequence.</p></div>
-            </li>
-            <li className="step">
-              <div className="step-illust"><IconTarget><GridViewIcon size={24} /></IconTarget></div>
-              <div><h3>Import your leads</h3><p>Upload a CSV or paste a list. Map columns once and you're set.</p></div>
-            </li>
-            <li className="step">
-              <div className="step-illust"><IconTarget><Edit02Icon size={24} /></IconTarget></div>
-              <div><h3>Write your sequence</h3><p>First email, follow-ups, delays. Tokens pull from your lead list.</p></div>
-            </li>
-            <li className="step">
-              <div className="step-illust"><IconTarget><SentIcon size={24} /></IconTarget></div>
-              <div><h3>Launch and track</h3><p>Sends rotate across connected inboxes automatically. Watch replies come in.</p></div>
-            </li>
+            <StepItem icon={<Link01Icon size={24} />} title="Connect your inbox">
+              Link Gmail or Outlook. Warm-up starts immediately, even before your first sequence.
+            </StepItem>
+            <StepItem icon={<GridViewIcon size={24} />} title="Import your leads">
+              Upload a CSV or paste a list. Map columns once and you're set.
+            </StepItem>
+            <StepItem icon={<Edit02Icon size={24} />} title="Write your sequence">
+              First email, follow-ups, delays. Tokens pull from your lead list.
+            </StepItem>
+            <StepItem icon={<SentIcon size={24} />} title="Launch and track">
+              Sends rotate across connected inboxes automatically. Watch replies come in.
+            </StepItem>
           </ol>
           <div className="how-aside">
             <div className="how-stat"><div className="val">142</div><div className="key">sent today</div></div>
@@ -426,7 +429,7 @@ export default async function Home() {
                 <li className="compare-row"><div><div className="name">Pro</div><div className="desc">Unlimited inboxes · 30,000 leads · AI included</div></div><div className="cost">{formatPrice(PLANS.pro.price, currency)}</div></li>
                 <li className="compare-row"><div><div className="name">Agency</div><div className="desc">Unlimited inboxes · 150,000 leads · white-label &amp; API</div></div><div className="cost">{formatPrice(PLANS.agency.price, currency)}</div></li>
               </ul>
-              <div className="compare-note">AI included in every paid plan, and every account starts with 1,000 free credits. See the full <Link href="/pricing" className="feat-link" style={{display:"inline-flex",alignItems:"center",gap:4}}>pricing<IconTarget className="inline-flex items-center"><ChevronRightIcon size={13} /></IconTarget></Link>.</div>
+              <div className="compare-note">AI included in every paid plan, and every account starts with 1,000 free credits. See the full <IconHoverLink href="/pricing" className="feat-link" icon={<ChevronRightIcon size={13} />}>pricing</IconHoverLink>.</div>
             </div>
           </div>
         </div>
@@ -434,8 +437,8 @@ export default async function Home() {
 
       <div className="wrap">
         <div className="quote-block">
-          <blockquote>I built Coldpilot because every tool wanted <em style={{fontStyle:"italic"}}>{formatPrice(70500, currency)} to start</em> and another charge for leads before I'd sent a single email.</blockquote>
-          <p className="quote-attr">— Builder's note</p>
+          <blockquote>Cold email shouldn't require a sales team, a big budget, or a spreadsheet of workarounds. I built Coldpilot so a solo founder can connect an inbox and start a sequence the same afternoon.</blockquote>
+          <p className="quote-attr">— Founder's note</p>
         </div>
       </div>
 
@@ -454,7 +457,7 @@ export default async function Home() {
       <footer>
         <div className="wrap">
           <div className="foot-top">
-            <div className="foot-brand"><div className="logo">Coldpilot</div><p>Cold email for solo founders. One flat price, nothing bolted on.</p></div>
+            <div className="foot-brand"><div className="logo"><Logo height={22} /></div><p>Cold email for solo founders. One flat price, nothing bolted on.</p></div>
             <div className="foot-links">
               <div className="foot-col"><h4>Product</h4><ul><li><a href="#product">Features</a></li><li><a href="#how">How it works</a></li><li><Link href="/pricing">Pricing</Link></li></ul></div>
               <div className="foot-col"><h4>Company</h4><ul><li><Link href="/about">About</Link></li><li><Link href="/contact">Contact</Link></li></ul></div>

@@ -54,7 +54,7 @@ export async function sendTransactionalEmail({ to, template, data }: SendEmailOp
   });
 
   await transporter.sendMail({
-    from: process.env.EMAIL_FROM || "Coldpilot <notifications@coldpilot.io>",
+    from: process.env.EMAIL_FROM || "Coldpilot <hello@mail.usecoldpilot.com>",
     to,
     subject,
     html,

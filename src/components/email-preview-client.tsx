@@ -37,12 +37,12 @@ export default function EmailPreviewClient({ templates, htmlMap }: Props) {
           <div style={{ padding: "16px 16px 8px" }}>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               <button onClick={() => setFilter("all")}
-                style={{ padding: "5px 10px", fontSize: 11, fontWeight: 500, borderRadius: 6, border: "1px solid", borderColor: filter === "all" ? "#0F1929" : "#E8E5E0", background: filter === "all" ? "#0F1929" : "transparent", color: filter === "all" ? "#fff" : "#5A6B87", cursor: "pointer", fontFamily: "inherit" }}>
+                style={{ padding: "5px 10px", fontSize: 11, fontWeight: 500, borderRadius: 6, border: "1px solid", borderColor: filter === "all" ? "#2563EB" : "#E8E5E0", background: filter === "all" ? "#2563EB" : "transparent", color: filter === "all" ? "#fff" : "#5A6B87", cursor: "pointer", fontFamily: "inherit" }}>
                 All
               </button>
               {CATEGORIES.map(cat => (
                 <button key={cat} onClick={() => setFilter(cat)}
-                  style={{ padding: "5px 10px", fontSize: 11, fontWeight: 500, borderRadius: 6, border: "1px solid", borderColor: filter === cat ? "#0F1929" : "#E8E5E0", background: filter === cat ? "#0F1929" : "transparent", color: filter === cat ? "#fff" : "#5A6B87", cursor: "pointer", fontFamily: "inherit" }}>
+                  style={{ padding: "5px 10px", fontSize: 11, fontWeight: 500, borderRadius: 6, border: "1px solid", borderColor: filter === cat ? "#2563EB" : "#E8E5E0", background: filter === cat ? "#2563EB" : "transparent", color: filter === cat ? "#fff" : "#5A6B87", cursor: "pointer", fontFamily: "inherit" }}>
                   {cat}
                 </button>
               ))}
@@ -72,7 +72,7 @@ export default function EmailPreviewClient({ templates, htmlMap }: Props) {
               <p style={{ fontSize: 12, color: "#8A9BB5", marginTop: 4 }}>{template?.category}</p>
             </div>
             <button onClick={() => setShowHtml(v => !v)}
-              style={{ padding: "6px 14px", fontSize: 12, fontWeight: 500, borderRadius: 6, border: "1px solid #E8E5E0", background: showHtml ? "#0F1929" : "#fff", color: showHtml ? "#fff" : "#5A6B87", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>
+              style={{ padding: "6px 14px", fontSize: 12, fontWeight: 500, borderRadius: 6, border: "1px solid #E8E5E0", background: showHtml ? "#2563EB" : "#fff", color: showHtml ? "#fff" : "#5A6B87", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>
               {showHtml ? "Preview" : "HTML"}
             </button>
           </div>
@@ -91,7 +91,7 @@ export default function EmailPreviewClient({ templates, htmlMap }: Props) {
                     <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#22C55E" }} />
                   </div>
                   <div style={{ flex: 1, background: "#1F2937", borderRadius: 4, padding: "4px 12px", fontSize: 11, color: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}>
-                    {`mailto:notifications@coldpilot.io — ${template?.subject}`}
+                    {`mailto:hello@mail.usecoldpilot.com — ${template?.subject}`}
                   </div>
                 </div>
                 <iframe srcDoc={html} style={{ width: "100%", height: 700, border: "none" }} title={template?.subject} />

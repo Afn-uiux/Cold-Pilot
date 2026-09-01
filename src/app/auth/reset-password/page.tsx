@@ -56,7 +56,7 @@ function ResetPasswordContent() {
                 placeholder="New password (min 6 chars)"
                 style={{ width: "100%", fontFamily: "inherit", fontSize: 15, color: "#0F1929", background: "transparent", border: "none", borderBottom: "1px solid rgba(15,25,41,0.08)", padding: "10px 0", outline: "none" }}
               />
-              <button type="submit" style={{ padding: "10px 24px", fontSize: 14, fontWeight: 500, color: "#fff", background: "#0F1929", border: "none", borderRadius: 8, cursor: "pointer" }}>
+              <button type="submit" style={{ padding: "10px 24px", fontSize: 14, fontWeight: 500, color: "#fff", background: "#2563EB", border: "none", borderRadius: 8, cursor: "pointer" }}>
                 Reset password
               </button>
             </form>
@@ -75,7 +75,7 @@ function ResetPasswordContent() {
             </div>
             <h1 style={{ fontSize: 24, fontWeight: 400, color: "#0F1929", marginBottom: 8 }}>Password reset</h1>
             <p style={{ fontSize: 15, color: "#5A6B87", marginBottom: 24 }}>{message}</p>
-            <Link href="/auth/login" style={{ display: "inline-block", padding: "10px 24px", fontSize: 14, fontWeight: 500, color: "#fff", background: "#0F1929", borderRadius: 8, textDecoration: "none" }}>Back to login</Link>
+            <Link href="/auth/login" style={{ display: "inline-block", padding: "10px 24px", fontSize: 14, fontWeight: 500, color: "#fff", background: "#2563EB", borderRadius: 8, textDecoration: "none" }}>Back to login</Link>
           </>
         )}
         {status === "error" && (
@@ -85,7 +85,7 @@ function ResetPasswordContent() {
             </div>
             <h1 style={{ fontSize: 24, fontWeight: 400, color: "#0F1929", marginBottom: 8 }}>Reset failed</h1>
             <p style={{ fontSize: 15, color: "#5A6B87", marginBottom: 24 }}>{message}</p>
-            <Link href="/auth/login" style={{ display: "inline-block", padding: "10px 24px", fontSize: 14, fontWeight: 500, color: "#fff", background: "#0F1929", borderRadius: 8, textDecoration: "none" }}>Back to login</Link>
+            <Link href="/auth/login" style={{ display: "inline-block", padding: "10px 24px", fontSize: 14, fontWeight: 500, color: "#fff", background: "#2563EB", borderRadius: 8, textDecoration: "none" }}>Back to login</Link>
           </>
         )}
       </div>

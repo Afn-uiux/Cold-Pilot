@@ -156,4 +156,4 @@ Proprietary. All rights reserved.
 
 ## Built by
 
-[Coldpilot](mailto:hello@coldpilot.io) — built for the inbox, not the spam folder.
+[Coldpilot](mailto:hello@mail.usecoldpilot.com) — built for the inbox, not the spam folder.

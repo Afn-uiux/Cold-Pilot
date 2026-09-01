@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Logo from "@/components/logo";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Home01Icon } from "@/components/icons/home-01";
@@ -15,6 +16,7 @@ import { Logout01Icon } from "@/components/icons/logout-01";
 import { Menu01Icon } from "@/components/icons/menu-01";
 import { Cancel01Icon } from "@/components/icons/cancel-01";
 import { IconTarget } from "@/components/icon-target";
+import type { AnimatedIconHandle } from "@/lib/use-icon-animation";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: "home" },
@@ -73,7 +75,7 @@ export default function Sidebar({ user }: { user: any }) {
         style={{ width: 200, borderRight: "1px solid var(--color-border)", padding: "28px 0" }}
       >
         <div className="font-medium text-lg tracking-tight px-6 mb-9 flex items-center justify-between">
-          <Link href="/dashboard" onClick={() => setMobileOpen(false)}>Coldpilot</Link>
+          <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="leading-none"><Logo height={18} /></Link>
           <button type="button" onClick={() => setMobileOpen(false)} className="lg:hidden text-muted hover:text-blue-accent [&>div]:pointer-events-none">
             <IconTarget className="flex items-center"><Cancel01Icon size={16} /></IconTarget>
           </button>
@@ -85,45 +87,29 @@ export default function Sidebar({ user }: { user: any }) {
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
             return (
-              <Link
+              <NavLink
                 key={item.href}
                 href={item.href}
+                label={item.label}
+                icon={<NavIcon name={item.icon} />}
+                isActive={isActive}
+                badge={item.href === "/dashboard/inbox" && unreadCount > 0 ? (unreadCount > 99 ? "99+" : unreadCount) : null}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-6 py-2.5 text-sm relative transition-colors ${
-                  isActive ? "text-blue-accent" : "text-muted hover:text-blue-accent"
-                }`}
-              >
-                {isActive && (
-                  <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-accent rounded-r-sm" />
-                )}
-                <IconTarget className="flex items-center"><NavIcon name={item.icon} /></IconTarget>
-                {item.label}
-                {item.href === "/dashboard/inbox" && unreadCount > 0 && (
-                  <span className="ml-auto flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-blue-accent text-white text-[10px] font-medium leading-none">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                )}
-              </Link>
+              />
             );
           })}
           {(user as any).role === "admin" && (() => {
             const item = adminItem;
             const isActive = pathname === item.href || pathname.startsWith(item.href);
             return (
-              <Link
+              <NavLink
                 key={item.href}
                 href={item.href}
+                label={item.label}
+                icon={<NavIcon name={item.icon} />}
+                isActive={isActive}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-6 py-2.5 text-sm relative transition-colors ${
-                  isActive ? "text-blue-accent" : "text-muted hover:text-blue-accent"
-                }`}
-              >
-                {isActive && (
-                  <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-accent rounded-r-sm" />
-                )}
-                <IconTarget className="flex items-center"><NavIcon name={item.icon} /></IconTarget>
-                {item.label}
-              </Link>
+              />
             );
           })()}
         </nav>
@@ -154,4 +140,43 @@ function NavIcon({ name }: { name: string }) {
     case "gear": return <Settings01Icon size={size} />;
     case "shield": return <Shield02Icon size={size} />;
   }
+}
+
+function NavLink({
+  href,
+  label,
+  icon,
+  isActive,
+  badge,
+  onClick,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  isActive: boolean;
+  badge?: string | number | null;
+  onClick?: () => void;
+}) {
+  const iconRef = useRef<AnimatedIconHandle>(null);
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      onMouseEnter={() => iconRef.current?.startAnimation()}
+      className={`flex items-center gap-3 px-6 py-2.5 text-sm relative transition-colors ${
+        isActive ? "text-blue-accent" : "text-muted hover:text-blue-accent"
+      }`}
+    >
+      {isActive && (
+        <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-accent rounded-r-sm" />
+      )}
+      <IconTarget triggerRef={iconRef} className="flex items-center">{icon}</IconTarget>
+      {label}
+      {badge && (
+        <span className="ml-auto flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-blue-accent text-white text-[10px] font-medium leading-none">
+          {badge}
+        </span>
+      )}
+    </Link>
+  );
 }

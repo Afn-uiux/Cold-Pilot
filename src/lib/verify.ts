@@ -145,11 +145,11 @@ function openSmtpSocket(email: string, mxHost: string, resolve: (v: { valid: boo
 
         if (step === 0) {
           step = 1;
-          socket.write(`EHLO verify.coldpilot.com\r\n`);
+          socket.write(`EHLO verify.usecoldpilot.com\r\n`);
         } else if (step === 1 && (code === 250 || code === 220)) {
           if (line.startsWith("250-")) continue;
           step = 2;
-          socket.write(`MAIL FROM:<verify@coldpilot.com>\r\n`);
+          socket.write(`MAIL FROM:<verify@usecoldpilot.com>\r\n`);
         } else if (step === 2 && (code === 250 || code === 220)) {
           step = 3;
           socket.write(`RCPT TO:<${email}>\r\n`);
@@ -266,7 +266,7 @@ function runAccountSmtp(targetEmail: string, config: SmtpConfig, resolve: (v: { 
 
         if (step === 0) {
           step = 1;
-          socket.write(`EHLO coldpilot.com\r\n`);
+          socket.write(`EHLO usecoldpilot.com\r\n`);
         } else if (step === 1 && code === 250) {
           if (!useTls && /STARTTLS/i.test(line)) {
             supportsStartTls = true;
@@ -291,7 +291,7 @@ function runAccountSmtp(targetEmail: string, config: SmtpConfig, resolve: (v: { 
           const secureSocket = tls.connect({ socket, rejectUnauthorized: true }, () => {
             step = 1;
             buffer = "";
-            socket.write(`EHLO coldpilot.com\r\n`);
+            socket.write(`EHLO usecoldpilot.com\r\n`);
           });
           secureSocket.on("data", (d: Buffer) => {
             buffer += d.toString();

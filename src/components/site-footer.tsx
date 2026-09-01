@@ -1,11 +1,12 @@
 import Link from "next/link";
+import Logo from "@/components/logo";
 
 export default function SiteFooter() {
   return (
     <footer className="sf">
       <div className="sf-inner">
         <div className="sf-top">
-          <div className="sf-brand"><div className="sf-logo">Coldpilot</div><p>Cold email for solo founders. One flat price, nothing bolted on.</p></div>
+          <div className="sf-brand"><div className="sf-logo"><Logo height={22} /></div><p>Cold email for solo founders. One flat price, nothing bolted on.</p></div>
           <div className="sf-links">
             <div className="sf-col"><h4>Product</h4><ul>
               <li><Link href="/warmup">Warmup</Link></li>

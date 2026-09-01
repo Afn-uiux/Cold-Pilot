@@ -29,6 +29,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!user || !user.password) return null;
         if (user.deletedAt) return null;
 
+        // No login until the email is verified. This is enforced here (not just
+        // in the UI) so an unverified user can never mint a session, even via the
+        // API route. The login action separately distinguishes this case to show
+        // a "verify your email" + resend state instead of a generic failure.
+        if (!user.emailVerified) return null;
+
         const isValid = await bcrypt.compare(
           credentials.password as string,
           user.password

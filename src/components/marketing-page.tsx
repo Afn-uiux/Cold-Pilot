@@ -40,7 +40,7 @@ export default function MarketingPage({
       </section>
       <SiteFooter />
       <style>{`
-        .mp{--cream:#FAFAF8;--ink:#0F0D14;--muted:#6B6578;--muted-2:#9B94A8;--border:rgba(15,13,20,0.08);--blue:#2563EB;--blue-hover:#1D4ED8;font-family:'Geist',system-ui,sans-serif;background:var(--cream);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh}
+        .mp{--cream:#FAFAF8;--ink:#0F0D14;--muted:#6B6578;--muted-2:#9B94A8;--border:rgba(15,13,20,0.08);--blue:#2563EB;--blue-hover:#1D4ED8;font-family:'Geist',system-ui,sans-serif;background:var(--cream);color:var(--ink);-webkit-font-smoothing:antialiased;overflow:clip;min-height:100vh}
         .mp .wrap{max-width:1080px;margin:0 auto;padding:0 clamp(20px,4vw,40px)}
         .mp-hero{padding:clamp(64px,10vw,110px) 0;border-bottom:1px solid var(--border);background-image:linear-gradient(to right,rgba(15,13,20,0.03) 1px,transparent 1px),linear-gradient(to bottom,rgba(15,13,20,0.03) 1px,transparent 1px);background-size:32px 32px}
         .mp-hero-inner{max-width:640px;margin:0 auto;text-align:center}

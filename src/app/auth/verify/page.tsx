@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
@@ -49,7 +49,7 @@ function VerifyContent() {
             </div>
             <h1 style={{ fontSize: 24, fontWeight: 400, color: "#0F1929", marginBottom: 8 }}>Email verified</h1>
             <p style={{ fontSize: 15, color: "#5A6B87", marginBottom: 24 }}>{message}</p>
-            <Link href="/dashboard" style={{ display: "inline-block", padding: "10px 24px", fontSize: 14, fontWeight: 500, color: "#fff", background: "#0F1929", borderRadius: 8, textDecoration: "none" }}>Go to Dashboard</Link>
+            <Link href="/auth/login" style={{ display: "inline-block", padding: "10px 24px", fontSize: 14, fontWeight: 500, color: "#fff", background: "#2563EB", borderRadius: 8, textDecoration: "none" }}>Go to log in</Link>
           </>
         )}
         {status === "error" && (
@@ -58,8 +58,13 @@ function VerifyContent() {
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
             </div>
             <h1 style={{ fontSize: 24, fontWeight: 400, color: "#0F1929", marginBottom: 8 }}>Verification failed</h1>
-            <p style={{ fontSize: 15, color: "#5A6B87", marginBottom: 24 }}>{message}</p>
-            <Link href="/auth/login" style={{ display: "inline-block", padding: "10px 24px", fontSize: 14, fontWeight: 500, color: "#fff", background: "#0F1929", borderRadius: 8, textDecoration: "none" }}>Back to Login</Link>
+            <p style={{ fontSize: 15, color: "#5A6B87", marginBottom: 24 }}>
+              {message === "Token expired" ? "This link has expired. Verification links are valid for 24 hours." : message}
+            </p>
+            <Link href="/auth/login" style={{ display: "inline-block", padding: "10px 24px", fontSize: 14, fontWeight: 500, color: "#fff", background: "#2563EB", borderRadius: 8, textDecoration: "none" }}>Back to Login</Link>
+            <p style={{ marginTop: 16, fontSize: 13, color: "#5A6B87" }}>
+              Log in with your email and password to resend a fresh verification link.
+            </p>
           </>
         )}
       </div>

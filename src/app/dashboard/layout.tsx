@@ -18,9 +18,13 @@ export default async function DashboardLayout({
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { completedOnboarding: true },
+    select: { completedOnboarding: true, emailVerified: true },
   });
   const needsOnboarding = !user?.completedOnboarding;
+
+  // No progress until the email is verified. Redundant with the login block,
+  // but guards any session minted before this change or via a stray path.
+  if (!user?.emailVerified) redirect("/auth/login?verify=required");
 
   if (needsOnboarding) {
     return (

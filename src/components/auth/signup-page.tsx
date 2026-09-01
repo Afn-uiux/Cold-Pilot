@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { signup } from "@/app/actions/auth";
 import Link from "next/link";
+import Logo from "@/components/logo";
 import { PLANS } from "@/lib/plans";
 import { formatPrice } from "@/lib/currency";
 import { useCurrency } from "@/lib/currency-client";
@@ -57,6 +58,8 @@ async function computeFingerprint(): Promise<string> {
 
 export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
+  const [signedUp, setSignedUp] = useState(false);
+  const [signedUpEmail, setSignedUpEmail] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [password, setPassword] = useState("");
@@ -91,11 +94,12 @@ export default function SignupPage() {
     setLoading(false);
     if (result?.error) {
       setError(result.error);
+    } else if (result?.verificationRequired) {
+      // Account created but not verified yet: no login until the email is
+      // confirmed, so show a check-your-inbox state instead of entering the app.
+      setSignedUp(true);
+      setSignedUpEmail((form.get("email") as string) || "");
     } else {
-      // Fresh signups redirect via the server action's signIn. This fallback
-      // covers edge paths (e.g. an email that already has an account) so the
-      // form still lands somewhere instead of silently hanging — the proxy then
-      // gates /dashboard and shows login if there is no session.
       window.location.href = "/dashboard";
     }
   }
@@ -103,8 +107,8 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#F8FAFC", fontFamily: "'Geist', system-ui, sans-serif" }}>
       <header style={{ padding: "24px clamp(20px,4vw,40px)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Link href="/" style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 20, letterSpacing: "-0.01em", color: "#0F1929", textDecoration: "none" }}>
-          Coldpilot
+        <Link href="/" style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 20, letterSpacing: "-0.01em", color: "#0F1929", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+          <Logo height={22} />
         </Link>
         <Link href="/auth/login" style={{ fontSize: 14, color: "#5A6B87", textDecoration: "none" }}
           onMouseEnter={e => (e.target as HTMLElement).style.color = "#0F1929"}
@@ -124,6 +128,26 @@ export default function SignupPage() {
           </h1>
           <p style={{ marginTop: 12, fontSize: 15, color: "#5A6B87", lineHeight: 1.6 }}>{formatPrice(PLANS.starter.price, currency)}/mo flat. No credit card to start.</p>
 
+          {signedUp && (
+            <div style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 14, borderRadius: 8, background: "rgba(46,125,50,0.06)" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                <div style={{ fontSize: 14, color: "#0F1929", lineHeight: 1.5 }}>
+                  <strong>Check your inbox to verify.</strong>
+                  <p style={{ fontSize: 13, color: "#5A6B87", margin: "4px 0 0" }}>
+                    We sent a one-time verification link to{signedUpEmail ? <> <strong>{signedUpEmail}</strong></> : " your email"}. It&apos;s valid for 24 hours — click it, then log in to get started.
+                  </p>
+                </div>
+              </div>
+              <Link href="/auth/login" style={{ display: "block", textAlign: "center", padding: 12, fontSize: 14, fontWeight: 500, color: "#fff", background: "#2563EB", borderRadius: 6, textDecoration: "none" }}>
+                Go to log in
+              </Link>
+              <p style={{ fontSize: 12, color: "#8A9BB5", textAlign: "center" }}>Didn&apos;t get it? Log in with your email and password and use the &quot;resend&quot; option.</p>
+            </div>
+          )}
+
+          {!signedUp && (
+          <>
           <form onSubmit={handleSubmit} style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 24 }}>
             <input type="hidden" name="fingerprint" value={fingerprint} />
             {error && (
@@ -216,6 +240,8 @@ export default function SignupPage() {
             Already have an account?{" "}
             <Link href="/auth/login" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.08)", paddingBottom: 1, textDecoration: "none" }}>Log in</Link>
           </p>
+          </>
+          )}
         </div>
       </main>
     </div>

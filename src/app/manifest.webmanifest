@@ -1,0 +1,23 @@
+{
+  "name": "Coldpilot — Cold email that lands in the inbox",
+  "short_name": "Coldpilot",
+  "description": "Send campaigns that land in inboxes, not spam folders. Warm-up, rotation, reply detection — all in one place.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAF8",
+  "theme_color": "#2563EB",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

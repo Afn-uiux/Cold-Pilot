@@ -7,6 +7,7 @@ import { signIn } from "@/lib/auth";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { sendEmailSafe } from "@/lib/email/send";
 import { computeSignupRisk, voidTrial } from "@/lib/fraud";
+import { VERIFY_TOKEN_TTL_MS } from "@/lib/verification";
 import crypto from "crypto";
 
 export async function signup(formData: FormData) {
@@ -80,9 +81,9 @@ export async function signup(formData: FormData) {
   sendEmailSafe(email, "welcome");
   await sendVerificationEmail(email);
 
-  await signIn("credentials", { email, password, redirectTo: "/dashboard" });
-
-  return { success: true };
+  // No auto-login: login is hard-blocked until the email is verified, so the
+  // signup page shows a "check your inbox to verify, then log in" state.
+  return { success: true, verificationRequired: true };
 }
 
 // Fires the one-click email-verification link. Signup credits are gated on
@@ -91,7 +92,7 @@ export async function signup(formData: FormData) {
 async function sendVerificationEmail(email: string): Promise<void> {
   try {
     const token = crypto.randomBytes(32).toString("hex");
-    const expires = new Date(Date.now() + 15 * 60 * 1000);
+    const expires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
     await prisma.verificationToken.create({
       data: { identifier: email, token, expires },
     });
@@ -122,6 +123,15 @@ export async function login(formData: FormData) {
     return { error: `Too many attempts. Try again in ${minutes} minute${minutes > 1 ? "s" : ""}.` };
   }
 
+  // Distinguish "email not verified yet" from a bad password, so the login
+  // page can show a "check your inbox / resend" state instead of a generic
+  // invalid-credentials error. Login is hard-blocked for unverified accounts
+  // inside authorize(); this only decides what message the user sees.
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing && !existing.emailVerified) {
+    return { error: "VERIFY_EMAIL_REQUIRED" };
+  }
+
   try {
     await signIn("credentials", {
       email,
@@ -146,7 +156,7 @@ export async function demoLogin() {
   if (process.env.NODE_ENV === "production") {
     return { error: "Demo login is disabled in production" };
   }
-  const email = "demo@coldpilot.io";
+  const email = "demo@usecoldpilot.com";
   const password = "demo123456";
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -157,7 +167,13 @@ export async function demoLogin() {
         name: "Demo User",
         email,
         password: hashedPassword,
+        emailVerified: new Date(),
       },
+    });
+  } else if (!existing.emailVerified) {
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: { emailVerified: new Date() },
     });
   }
 

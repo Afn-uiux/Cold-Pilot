@@ -22,13 +22,13 @@
 ::-webkit-scrollbar-thumb:hover { background: transparent !important; }
 
 * { scrollbar-width: none !important; }
-html, body { scrollbar-width: none !important; overflow-x: hidden; }
+html, body { scrollbar-width: none !important; overflow-x: clip; }
 body {
   font-family: 'Geist', system-ui, sans-serif;
   background: var(--color-cream);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 ::selection { background: var(--color-blue-accent); color: #fff; }
 
@@ -139,7 +139,7 @@ tbody tr:hover { background: var(--color-cream-2); }
 @media (max-width: 900px) { .responsive-stack { grid-template-columns: 1fr; } }
 
 @media (max-width: 640px) {
-  html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+  html, body { width: 100%; max-width: 100%; overflow-x: clip; }
   button, a, input, select, textarea { max-width: 100%; }
   .btn { min-height: 40px; white-space: normal; line-height: 1.2; text-align: center; }
   .table-wrap table { font-size: 13px; }

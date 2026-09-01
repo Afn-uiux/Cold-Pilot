@@ -1,11 +1,12 @@
 import Link from "next/link";
+import Logo from "@/components/logo";
 
 export default function PrivacyPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#F8FAFC", fontFamily: "'Geist', system-ui, sans-serif" }}>
       <header style={{ padding: "24px clamp(20px,4vw,40px)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Link href="/" style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 20, letterSpacing: "-0.01em", color: "#0F1929", textDecoration: "none" }}>
-          Coldpilot
+        <Link href="/" style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 20, letterSpacing: "-0.01em", color: "#0F1929", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+          <Logo height={22} />
         </Link>
         <Link href="/" style={{ fontSize: 14, color: "#5A6B87", textDecoration: "none" }}>Back to home</Link>
       </header>
@@ -36,7 +37,7 @@ export default function PrivacyPage() {
           <p style={{ marginBottom: 16 }}>Gmail data is used only for providing and improving the Coldpilot service. You can disconnect your Gmail account at any time from your dashboard. Data may be retained while your account is active or as required for legal/security purposes, and is deleted when you close your account or remove the connected mailbox.</p>
 
           <h2 style={{ fontSize: 20, fontWeight: 500, marginTop: 32, marginBottom: 12, color: "#0F1929" }}>7. Contact</h2>
-          <p>For questions about this privacy policy, contact us at <a href="mailto:hello@usecoldpilot.com" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.15)" }}>hello@usecoldpilot.com</a>.</p>
+          <p>For questions about this privacy policy, contact us at <a href="mailto:hello@mail.usecoldpilot.com" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.15)" }}>hello@mail.usecoldpilot.com</a>.</p>
         </div>
       </main>
     </div>

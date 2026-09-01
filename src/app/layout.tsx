@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Coldpilot — Cold email that lands in the inbox",
     description: "Send campaigns that land in inboxes, not spam folders.",
-    url: "https://coldpilot.io",
+    url: "https://usecoldpilot.com",
     siteName: "Coldpilot",
     type: "website",
   },
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     title: "Coldpilot — Cold email that lands in the inbox",
     description: "Send campaigns that land in inboxes, not spam folders.",
   },
-  metadataBase: new URL("https://coldpilot.io"),
+  metadataBase: new URL("https://usecoldpilot.com"),
 };
 
 export default function RootLayout({

@@ -3,12 +3,26 @@ export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
+import { VERIFY_TOKEN_TTL_MS } from "@/lib/verification";
+import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
   const { email } = await req.json();
   if (!email) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
+  }
+
+  // Throttle verification resends — per source IP AND per targeted email,
+  // mirroring the password-reset request route. Without this an attacker
+  // could repeatedly trigger verification emails as a spam/abuse vector.
+  const ip = getClientIp(req.headers as unknown as { get(name: string): string | null });
+  const [ipLimit, emailLimit] = await Promise.all([
+    rateLimitAsync(`verify-resend:ip:${ip}`, { max: 5, windowMs: 60_000 }),
+    rateLimitAsync(`verify-resend:email:${email.toLowerCase()}`, { max: 3, windowMs: 60_000 }),
+  ]);
+  if (!ipLimit.ok || !emailLimit.ok) {
+    return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 });
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
@@ -18,7 +32,7 @@ export async function POST(req: Request) {
   }
 
   const token = crypto.randomBytes(32).toString("hex");
-  const expires = new Date(Date.now() + 15 * 60 * 1000);
+  const expires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
 
   await prisma.verificationToken.create({
     data: { identifier: email, token, expires },

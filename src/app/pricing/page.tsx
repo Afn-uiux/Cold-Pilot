@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import SiteHeader from "@/components/site-header";
+import Logo from "@/components/logo";
 import { CREDIT_PACKS } from "@/lib/plans";
 import { formatPrice } from "@/lib/currency";
 import { useCurrency } from "@/lib/currency-client";
@@ -128,7 +129,7 @@ export default function PricingPage() {
     <div className="pricing-root">
       <style>{`
         .pricing-root{--cream:#FAFAF8;--cream-2:#F0EFEB;--ink:#0F0D14;--muted:#6B6578;--muted-2:#9B94A8;--border:rgba(15,13,20,0.08);--blue:#2563EB;--blue-hover:#1D4ED8}
-        .pricing-root{font-family:'Geist',system-ui,sans-serif;background:var(--cream);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh}
+        .pricing-root{font-family:'Geist',system-ui,sans-serif;background:var(--cream);color:var(--ink);-webkit-font-smoothing:antialiased;overflow:clip;min-height:100vh}
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         a{color:inherit;text-decoration:none}
         p,h1,h2,h3{color:var(--ink);line-height:1.7}
@@ -391,7 +392,7 @@ export default function PricingPage() {
       <footer>
         <div className="wrap">
           <div className="foot-top">
-            <div className="foot-brand"><div className="logo">Coldpilot</div><p>Cold email for solo founders. Pro features at half the price.</p></div>
+            <div className="foot-brand"><div className="logo"><Logo height={22} /></div><p>Cold email for solo founders. Pro features at half the price.</p></div>
             <div className="foot-links">
               <div className="foot-col"><h4>Product</h4><ul><li><a href="/#product">Features</a></li><li><a href="/#how">How it works</a></li><li><Link href="/pricing">Pricing</Link></li></ul></div>
               <div className="foot-col"><h4>Company</h4><ul><li><Link href="/about">About</Link></li><li><Link href="/contact">Contact</Link></li></ul></div>

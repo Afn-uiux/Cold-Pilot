@@ -9,7 +9,7 @@ export default function ContactPage() {
         <p style={{ fontSize: 13, color: "#8A9BB5", marginBottom: 40 }}>Get in touch with the Coldpilot team</p>
 
         <div style={{ fontSize: 15, color: "#374151", lineHeight: 1.8 }}>
-          <p style={{ marginBottom: 24 }}>Email us at <a href="mailto:hello@coldpilot.io" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.15)" }}>hello@coldpilot.io</a> and we&apos;ll get back to you within one business day.</p>
+          <p style={{ marginBottom: 24 }}>Email us at <a href="mailto:hello@mail.usecoldpilot.com" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.15)" }}>hello@mail.usecoldpilot.com</a> and we&apos;ll get back to you within one business day.</p>
 
           <h2 style={{ fontSize: 20, fontWeight: 500, marginTop: 32, marginBottom: 12, color: "#0F1929" }}>What we can help with</h2>
           <p style={{ marginBottom: 16 }}><strong>Account &amp; billing.</strong> Questions about plans, credit packs, or invoices.</p>
@@ -18,7 +18,7 @@ export default function ContactPage() {
 
           <h2 style={{ fontSize: 20, fontWeight: 500, marginTop: 32, marginBottom: 12, color: "#0F1929" }}>Send us a message</h2>
           <form
-            action="mailto:hello@coldpilot.io"
+            action="mailto:hello@mail.usecoldpilot.com"
             method="post"
             encType="text/plain"
             style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}
@@ -46,7 +46,7 @@ export default function ContactPage() {
             />
             <button
               type="submit"
-              style={{ alignSelf: "flex-start", padding: "11px 22px", borderRadius: 8, border: "none", background: "#0F1929", color: "#fff", fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" }}
+              style={{ alignSelf: "flex-start", padding: "11px 22px", borderRadius: 8, border: "none", background: "#2563EB", color: "#fff", fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" }}
             >
               Send message
             </button>

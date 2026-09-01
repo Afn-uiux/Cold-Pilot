@@ -30,7 +30,7 @@ export default function AboutPage() {
 
           <h2 style={{ fontSize: 20, fontWeight: 500, marginTop: 32, marginBottom: 12, color: "#0F1929" }}>Built by</h2>
           <p style={{ marginBottom: 16 }}>Coldpilot is built by a studio focused on making sales tools that work the way they should, without the bloat or the pricing games.</p>
-          <p style={{ marginBottom: 16 }}>Questions? Reach out at <a href="mailto:hello@coldpilot.io" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.15)" }}>hello@coldpilot.io</a>.</p>
+          <p style={{ marginBottom: 16 }}>Questions? Reach out at <a href="mailto:hello@mail.usecoldpilot.com" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.15)" }}>hello@mail.usecoldpilot.com</a>.</p>
         </div>
       </main>
     </div>

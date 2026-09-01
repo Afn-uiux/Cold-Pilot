@@ -96,7 +96,6 @@ export async function proxy(request: NextRequest) {
   if (sessionCookie) {
     try {
       sessionToken = await decode({ token: sessionCookie, secret, salt: cookieName });
-      console.log(`[proxy-debug] ${pathname} cookie=${cookieName} decode=${sessionToken ? "ok" : "null"} secretLen=${secret?.length}`);
     } catch {
       sessionToken = null;
     }
