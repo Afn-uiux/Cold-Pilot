@@ -574,7 +574,7 @@ model CreditTransaction {
   userId    String
   amount    Float
   reason    String
-  refId     String?
+  refId     String?   @unique
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
