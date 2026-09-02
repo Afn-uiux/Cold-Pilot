@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, forwardRef } from "react";
 import Link from "next/link";
 import Logo from "@/components/logo";
 import { usePathname } from "next/navigation";
@@ -129,18 +129,19 @@ export default function Sidebar({ user }: { user: any }) {
   );
 }
 
-function NavIcon({ name }: { name: string }) {
+const NavIcon = forwardRef<AnimatedIconHandle, { name: string }>(({ name }, ref) => {
   const size = 16;
   switch (name) {
-    case "home": return <Home01Icon size={size} />;
-    case "mail": return <Mail01Icon size={size} />;
-    case "chart": return <SentIcon size={size} />;
-    case "users": return <UserGroupIcon size={size} />;
-    case "inbox": return <InboxIcon size={size} />;
-    case "gear": return <Settings01Icon size={size} />;
-    case "shield": return <Shield02Icon size={size} />;
+    case "home": return <Home01Icon ref={ref} size={size} />;
+    case "mail": return <Mail01Icon ref={ref} size={size} />;
+    case "chart": return <SentIcon ref={ref} size={size} />;
+    case "users": return <UserGroupIcon ref={ref} size={size} />;
+    case "inbox": return <InboxIcon ref={ref} size={size} />;
+    case "gear": return <Settings01Icon ref={ref} size={size} />;
+    case "shield": return <Shield02Icon ref={ref} size={size} />;
   }
-}
+});
+NavIcon.displayName = "NavIcon";
 
 function NavLink({
   href,
@@ -161,8 +162,10 @@ function NavLink({
   return (
     <Link
       href={href}
-      onClick={onClick}
-      onMouseEnter={() => iconRef.current?.startAnimation()}
+      onClick={() => {
+        iconRef.current?.startAnimation();
+        onClick?.();
+      }}
       className={`flex items-center gap-3 px-6 py-2.5 text-sm relative transition-colors ${
         isActive ? "text-blue-accent" : "text-muted hover:text-blue-accent"
       }`}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef } from "react";
+import { forwardRef, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Logo from "@/components/logo";
 import { Home01Icon } from "@/components/icons/home-01";
@@ -89,11 +89,12 @@ function AdminNavLink({
   );
 }
 
-function NavIcon({ name }: { name: string }) {
+const NavIcon = forwardRef<AnimatedIconHandle, { name: string }>(({ name }, ref) => {
   switch (name) {
-    case "home": return <Home01Icon size={16} />;
-    case "users": return <UserGroupIcon size={16} />;
-    case "inbox": return <InboxIcon size={16} />;
+    case "home": return <Home01Icon ref={ref} size={16} />;
+    case "users": return <UserGroupIcon ref={ref} size={16} />;
+    case "inbox": return <InboxIcon ref={ref} size={16} />;
     default: return null;
   }
-}
+});
+NavIcon.displayName = "NavIcon";
