@@ -15,7 +15,6 @@ export default async function AdminDashboardPage() {
     totalLeads,
     totalEmailsSent,
     totalWarmupEmails,
-    recentUsers,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { updatedAt: { gte: sevenDaysAgo } } }),
@@ -24,19 +23,20 @@ export default async function AdminDashboardPage() {
     prisma.lead.count({ where: { deletedAt: null } }),
     prisma.emailLog.count(),
     prisma.warmupLog.count({ where: { status: "sent" } }),
-    prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        _count: { select: { campaigns: true, leads: true, emailAccounts: true } },
-      },
-    }),
   ]);
+
+  const recentUsers = await prisma.user.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      createdAt: true,
+      _count: { select: { campaigns: true, leads: true, emailAccounts: true } },
+    },
+  });
 
   return (
     <div>
