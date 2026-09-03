@@ -7,6 +7,7 @@ import { addCredits } from "@/lib/credits";
 import { CREDIT_PACKS, PLANS, type PlanId } from "@/lib/plans";
 import { Prisma } from "@prisma/client";
 import { USD_NAIRA_RATE } from "@/lib/currency";
+import { isBillingEnabled } from "@/lib/billing-gate";
 
 // Maps a Bachs subscription status to whether the user should keep plan access.
 // `trialing` and `active` grant access; anything else (past_due, unpaid,
@@ -84,6 +85,13 @@ function resolvePlanId(
 }
 
 export async function POST(req: NextRequest) {
+  // Billing is dormant until BILLING_ENABLED is set. When disabled we return
+  // 200 without doing anything (and without firing any provider retries), so an
+  // event can never be fulfilled while the integration is in sandbox.
+  if (!isBillingEnabled()) {
+    return NextResponse.json({ disabled: true });
+  }
+
   // Always read the raw body BEFORE parsing so signature verification sees the
   // exact bytes Bachs signed.
   const rawBody = Buffer.from(await req.arrayBuffer());

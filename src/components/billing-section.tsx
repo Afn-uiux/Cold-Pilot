@@ -10,6 +10,7 @@ type BillingState = {
   creditBalance: number;
   aiEnabled: boolean;
   billingCurrency: "NGN" | "USD";
+  billingEnabled: boolean;
 } | null;
 
 type Notice = { type: "success" | "cancelled" | "error"; text: string } | null;
@@ -31,6 +32,7 @@ export default function BillingSection() {
           creditBalance: typeof data.creditBalance === "number" ? data.creditBalance : 0,
           aiEnabled: !!data.aiEnabled,
           billingCurrency: data.billingCurrency === "USD" ? "USD" : "NGN",
+          billingEnabled: data.billingEnabled !== false,
         });
       })
       .catch(() => {});
@@ -137,6 +139,14 @@ export default function BillingSection() {
         </div>
       </div>
 
+      {!state.billingEnabled && (
+        <div className="card">
+          <div className="card-header"><h3>Plans &amp; credits</h3></div>
+          <p className="text-sm text-muted">Payments aren&apos;t available yet. You can keep using your free trial and current balance for now — check back soon.</p>
+        </div>
+      )}
+
+      {state.billingEnabled && (<>
       <div className="card">
         <div className="card-header flex flex-wrap items-center justify-between gap-3">
           <h3>Upgrade plan</h3>
@@ -209,6 +219,8 @@ export default function BillingSection() {
           ))}
         </div>
       </div>
+      </>)}
+
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getCreditState } from "@/lib/credits";
 import { getTrialStatus } from "@/lib/trial";
+import { isBillingEnabled } from "@/lib/billing-gate";
 import bcrypt from "bcryptjs";
 
 export async function GET() {
@@ -27,6 +28,7 @@ export async function GET() {
     email: user.email,
     plan: user.plan,
     billingCurrency: user.billingCurrency,
+    billingEnabled: isBillingEnabled(),
     creditBalance: credits?.balance ?? 0,
     aiEnabled: credits?.aiEnabled ?? false,
     trial,

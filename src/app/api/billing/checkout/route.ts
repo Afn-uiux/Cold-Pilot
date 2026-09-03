@@ -8,10 +8,20 @@ import { createCheckoutSession } from "@/lib/bachs";
 import { CREDIT_PACKS, PLANS, type PlanId } from "@/lib/plans";
 import { trialGuard } from "@/lib/trial";
 import { currencyFromHeaders, type Currency } from "@/lib/currency";
+import { isBillingEnabled } from "@/lib/billing-gate";
 
 const PUBLIC_URL = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
 
 export async function POST(req: NextRequest) {
+  // Billing is dormant until BILLING_ENABLED is set. Keep the feature behind
+  // the flag so a sandbox/integration state can never mint a live checkout.
+  if (!isBillingEnabled()) {
+    return NextResponse.json(
+      { error: "Payments aren't available yet. Please check back soon." },
+      { status: 501 }
+    );
+  }
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

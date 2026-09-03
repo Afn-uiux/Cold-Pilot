@@ -5,18 +5,24 @@ import Link from "next/link";
 
 export default function TrialBanner() {
   const [trial, setTrial] = useState<{ active: boolean; expired: boolean; daysLeft: number; endsAt: string | null } | null>(null);
+  const [billingEnabled, setBillingEnabled] = useState(true);
 
   useEffect(() => {
     let active = true;
     fetch("/api/user")
       .then(r => r.json())
       .then(data => {
-        if (!active || !data.trial) return;
-        setTrial(data.trial);
+        if (!active) return;
+        setBillingEnabled(data.billingEnabled !== false);
+        if (data.trial) setTrial(data.trial);
       })
       .catch(() => {});
     return () => { active = false; };
   }, []);
+
+  const upgradeCta = billingEnabled ? (
+    <Link href="/dashboard/settings?tab=Billing" className="btn btn-primary btn-sm">Upgrade now</Link>
+  ) : null;
 
   if (!trial) return null;
 
@@ -28,7 +34,7 @@ export default function TrialBanner() {
             <p className="text-sm font-medium">Your 14-day trial has ended</p>
             <p className="text-xs text-muted mt-0.5">Your data is safe and still visible — upgrade to keep sending, importing, verifying, and using AI.</p>
           </div>
-          <Link href="/dashboard/settings?tab=Billing" className="btn btn-primary btn-sm">Upgrade now</Link>
+          {upgradeCta}
         </div>
       </div>
     );
@@ -42,7 +48,7 @@ export default function TrialBanner() {
             <p className="text-sm font-medium">{trial.daysLeft === 0 ? "Last day of your trial" : `${trial.daysLeft} day${trial.daysLeft === 1 ? "" : "s"} left in your trial`}</p>
             <p className="text-xs text-muted mt-0.5">After day 14 you&apos;ll be able to view your data but not use the service.</p>
           </div>
-          <Link href="/dashboard/settings?tab=Billing" className="btn btn-primary btn-sm">Upgrade now</Link>
+          {upgradeCta}
         </div>
       </div>
     );

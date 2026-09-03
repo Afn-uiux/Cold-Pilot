@@ -117,7 +117,7 @@ export default function Sidebar({ user }: { user: any }) {
         <div className="pt-3 border-t border-border px-6">
           <button
             type="button"
-            onClick={() => signOut({ redirect: false }).finally(() => { window.location.href = "/auth/login"; })}
+            onClick={() => signOut({ callbackUrl: "/auth/login" })}
             className="flex items-center gap-3 py-2.5 text-sm text-muted hover:text-blue-accent transition-colors w-full text-left"
           >
             <IconTarget className="flex items-center"><Logout01Icon size={16} /></IconTarget>
