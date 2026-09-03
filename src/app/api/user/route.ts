@@ -15,7 +15,7 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { name: true, email: true, plan: true, trialEndsAt: true, trialVoided: true },
+    select: { name: true, email: true, plan: true, trialEndsAt: true, trialVoided: true, billingCurrency: true },
   });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -26,6 +26,7 @@ export async function GET() {
     name: user.name,
     email: user.email,
     plan: user.plan,
+    billingCurrency: user.billingCurrency,
     creditBalance: credits?.balance ?? 0,
     aiEnabled: credits?.aiEnabled ?? false,
     trial,
@@ -38,7 +39,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { name, email, password } = await req.json();
+  const { name, email, password, billingCurrency } = await req.json();
 
   // Changing the account email is a high-sensitivity action: it can be used to
   // hijack another address or repoint the login identifier. Require the user's
@@ -63,11 +64,22 @@ export async function PATCH(req: Request) {
   const data: any = {};
   if (name !== undefined) data.name = name;
   if (email !== undefined && typeof email === "string" && email.trim()) data.email = email.trim();
+  if (billingCurrency === "NGN" || billingCurrency === "USD") data.billingCurrency = billingCurrency;
 
   const updated = await prisma.user.update({
     where: { id: session.user.id },
     data,
   });
 
-  return NextResponse.json({ name: updated.name, email: updated.email });
+  // Mirror the currency override into the client cookie so prices re-render in
+  // the chosen currency immediately (same cookie name the proxy stamps).
+  const res = NextResponse.json({
+    name: updated.name,
+    email: updated.email,
+    billingCurrency: updated.billingCurrency,
+  });
+  if (billingCurrency === "NGN" || billingCurrency === "USD") {
+    res.cookies.set("cc", billingCurrency, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 30, httpOnly: false });
+  }
+  return res;
 }

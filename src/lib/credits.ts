@@ -106,19 +106,16 @@ export async function spendCredits(
   if (!Number.isFinite(amount) || amount <= 0) return;
 
   // Fast path: an already-recorded refId means this exact charge settled
-  // earlier, so there is nothing to do. (The transaction below is what actually
-  // makes concurrent duplicates safe — this just avoids opening one needlessly.)
+  // earlier, so there is nothing to do. Callers that need strong idempotency
+  // under concurrent delivery (e.g. payment webhooks) deduplicate before
+  // calling in, so this is a best-effort short-circuit, not the only guard.
   if (refId) {
-    const existing = await prisma.creditTransaction.findUnique({ where: { refId } });
+    const existing = await prisma.creditTransaction.findFirst({ where: { refId } });
     if (existing) return;
   }
 
   try {
-    // Decrement and ledger-write in ONE transaction so they cannot diverge. If
-    // two requests race with the same refId, both may pass the check above, but
-    // only one create() can win the unique(refId) constraint — the loser throws
-    // P2002 and its whole transaction (including the decrement) rolls back, so
-    // the balance is debited exactly once.
+    // Decrement and ledger-write in ONE transaction so they cannot diverge.
     await prisma.$transaction(async (tx) => {
       const result = await tx.user.updateMany({
         where: { id: userId, creditBalance: { gte: amount } },
@@ -156,14 +153,12 @@ export async function addCredits(
   if (!Number.isFinite(amount) || amount <= 0) return;
 
   if (refId) {
-    const existing = await prisma.creditTransaction.findUnique({ where: { refId } });
+    const existing = await prisma.creditTransaction.findFirst({ where: { refId } });
     if (existing) return;
   }
 
   try {
-    // Same atomic + idempotent shape as spendCredits: increment and ledger-write
-    // together, and let the unique(refId) constraint collapse a duplicate grant
-    // (e.g. a retried payment webhook) into a single credit.
+    // Increment and ledger-write in ONE transaction so they cannot diverge.
     await prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: userId },

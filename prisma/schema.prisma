@@ -20,10 +20,13 @@ model User {
   onboardingWebsite   String?
   onboardingGoals     String?
   totpSecret          String?
-  plan                String   @default("free")
-  creditBalance       Float    @default(0)
-  signupCreditsGranted Boolean @default(false)
-  trialEndsAt         DateTime?
+    plan                String   @default("free")
+    billingCurrency     String   @default("NGN")
+    creditBalance       Float    @default(0)
+    signupCreditsGranted Boolean @default(false)
+    trialEndsAt         DateTime?
+    bachsCustomerId     String?
+    bachsSubscriptionId String?
   deletedAt           DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -574,15 +577,27 @@ model CreditTransaction {
   userId    String
   amount    Float
   reason    String
-  refId     String?   @unique
+    refId     String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-}
-
-// Platform-owned warmup seed inboxes (the backbone of the warmup network).
+    @@index([userId])
+  }
+  
+  // Deduplication ledger for inbound payment webhooks. Bachs delivers events
+  // at-least-once, so the same event id may arrive more than once. Recording
+  // processed ids here makes fulfilment idempotent even if the inbound webhook
+  // is replayed or retried.
+  model BachsWebhookEvent {
+    id        String   @id
+    type      String
+    processedAt DateTime @default(now())
+  
+    @@index([processedAt])
+  }
+  
+  // Platform-owned warmup seed inboxes (the backbone of the warmup network).
 // These are inboxes operated by the platform that user mailboxes warm against.
 // The user-facing receivers also participate (see EmailAccount.warmupEnabled),
 // but this model holds the operator-owned pool that is always available.
