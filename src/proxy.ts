@@ -32,23 +32,25 @@ function buildCsp(nonce: string): string {
 }
 
 function applySecurityHeaders(res: NextResponse, csp: string) {
-  res.headers.set("Content-Security-Policy", csp);
+  // Bypass the strict CSP in dev: the nonce-based policy can block Next 16's
+  // HMR/hydration inline scripts when accessed through the Cloudflare tunnel,
+  // which silently breaks interactive UI (buttons, links stop working). Real
+  // security headers still apply in production where this doesn't happen.
+  if (process.env.NODE_ENV !== "development") {
+    res.headers.set("Content-Security-Policy", csp);
+  }
   res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), usb=(), autoplay=(), encrypted-media=(), payment=()");
   res.headers.delete("X-Powered-By");
 }
 
 function getCookieName(request: NextRequest): string {
-  // Cookie naming must not branch purely on a client-supplied
-  // `x-forwarded-proto` header: an attacker could spoof it to make the proxy
-  // look for/clear the wrong (__Secure- vs plain) session cookie. Only trust an
-  // explicit proxy boundary (production always runs behind a TLS-terminating
-  // proxy; dev/self-hosted must set TRUST_PROXY=true before the header is used).
-  const proto = request.headers.get("x-forwarded-proto") || "http";
-  const trustProxy = process.env.NODE_ENV === "production" || process.env.TRUST_PROXY === "true";
-  if (process.env.NODE_ENV === "production" || (trustProxy && proto === "https")) {
-    return "__Secure-authjs.session-token";
-  }
-  return "authjs.session-token";
+  // Mirrors the cookie name NextAuth mints (see src/lib/auth.ts): the plain
+  // name in development (localhost / Cloudflare tunnel testing), and the
+  // __Secure- prefixed name in production. The proxy must read exactly the
+  // cookie the session is minted under or login/dashboard silently breaks.
+  return process.env.NODE_ENV === "production"
+    ? "__Secure-authjs.session-token"
+    : "authjs.session-token";
 }
 
 function clearSessionCookies(res: NextResponse, cookieName: string) {

@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Allow the app to be loaded over a Cloudflare quick-tunnel (used for local
+  // testing of open/click link tracking) without the dev server blocking the
+  // HMR websocket and other dev resources as cross-origin. Without this,
+  // hydration silently fails through the tunnel and buttons/links go dead.
+  allowedDevOrigins: ["*.trycloudflare.com"],
   async headers() {
     return [
       {

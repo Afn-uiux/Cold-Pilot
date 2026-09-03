@@ -133,12 +133,16 @@ export async function login(formData: FormData) {
   }
 
   try {
-    await signIn("credentials", {
+    const result = await signIn("credentials", {
       email,
       password,
       ...(code ? { code } : {}),
       redirect: false,
     });
+    if (result?.error) {
+      console.error("[LOGIN ERROR]", result.error);
+      return { error: "Invalid email or password" };
+    }
     return { success: true };
   } catch (e: any) {
     console.error("[LOGIN ERROR]", e?.name, e?.message, e?.code);

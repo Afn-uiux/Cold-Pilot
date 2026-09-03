@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const code = (formData.get("code") as string) || undefined;
 
     if (!email || !password) {
-      return NextResponse.redirect(new URL("/auth/login?error=missing", req.url));
+      return NextResponse.redirect(new URL("/auth/login?error=missing", getBaseUrl(req)));
     }
 
     // Brute-force / password-spray protection. The page-level limiter in
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       rateLimitAsync(`login:email:${emailKey}`, { max: 5, windowMs: 60_000 }),
     ]);
     if (!ipLimit.ok || !emailLimit.ok) {
-      return NextResponse.redirect(new URL("/auth/login?error=throttled", req.url));
+      return NextResponse.redirect(new URL("/auth/login?error=throttled", getBaseUrl(req)));
     }
 
     const result = await signIn("credentials", {
@@ -37,11 +37,19 @@ export async function POST(req: NextRequest) {
     });
 
     if (result?.error) {
-      return NextResponse.redirect(new URL("/auth/login?error=invalid", req.url));
+      return NextResponse.redirect(new URL("/auth/login?error=invalid", getBaseUrl(req)));
     }
 
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(new URL("/dashboard", getBaseUrl(req)));
   } catch {
-    return NextResponse.redirect(new URL("/auth/login?error=failed", req.url));
+    return NextResponse.redirect(new URL("/auth/login?error=failed", getBaseUrl(req)));
   }
+}
+
+// Redirect to the host the request actually arrived on (accounts for the
+// Cloudflare tunnel) instead of always using the server's localhost origin.
+function getBaseUrl(req: NextRequest): string {
+  const host = req.headers.get("host") ?? "localhost:3000";
+  const proto = req.headers.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
 }

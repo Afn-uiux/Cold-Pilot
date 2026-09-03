@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { signIn } from "next-auth/react";
-import { login, demoLogin } from "@/app/actions/auth";
+import { demoLogin } from "@/app/actions/auth";
 import Link from "next/link";
 import Logo from "@/components/logo";
 
@@ -36,26 +36,6 @@ export default function LoginPage() {
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    setVerifyMsg(null);
-    setLoading(true);
-    const form = new FormData(e.currentTarget);
-    const result = await login(form);
-    setLoading(false);
-    if (result?.error === "VERIFY_EMAIL_REQUIRED") {
-      setVerifyRequired(true);
-      setVerifyEmail((form.get("email") as string) || "");
-      return;
-    }
-    if (result?.error) {
-      setError(result.error);
-    } else {
-      window.location.href = "/dashboard";
-    }
-  }
 
   async function handleResendVerify() {
     if (!verifyEmail) return;
@@ -155,7 +135,7 @@ export default function LoginPage() {
 
           {!verifyRequired && (
           <>
-          <form onSubmit={handleSubmit} action="/api/auth/login" method="POST" style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 24 }}>
+          <form action="/api/auth/login" method="POST" style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 24 }}>
             {error && (
               <div style={{ fontSize: 13, color: "#C62828", background: "rgba(198,40,40,0.06)", padding: "10px 14px", borderRadius: 6 }}>{error}</div>
             )}

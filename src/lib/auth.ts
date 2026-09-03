@@ -133,5 +133,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: "jwt",
     maxAge: SESSION_TTL_MS / 1000,
   },
+  // Use a stable, explicit session-cookie name that matches what proxy.ts
+  // reads. In development (localhost / Cloudflare tunnel) the tunnel presents
+  // HTTPS but the origin is localhost, so a __Secure- cookie wouldn't work for
+  // testing; use the plain name there. In production keep the __Secure- prefix
+  // so the browser refuses to send the session over insecure connections.
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === "production" ? "__Secure-authjs.session-token" : "authjs.session-token",
+      options: { httpOnly: true, sameSite: "lax", path: "/" },
+    },
+  },
   trustHost: true,
 });

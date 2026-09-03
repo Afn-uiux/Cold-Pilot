@@ -79,16 +79,48 @@ function wrapInEmailDocument(html: string): string {
 }
 
 function rewriteLinks(html: string, baseUrl: string, leadId: string, campaignStepId?: string): string {
-  return html.replace(
-    /<a\s([^>]*?)href\s*=\s*"(https?:\/\/[^"]+)"/gi,
-    (match, attrs, url) => {
-      if (url.includes(baseUrl.replace(/https?:\/\//, ""))) return match;
-      const stepParam = campaignStepId ? `&stepId=${campaignStepId}` : "";
-      const sig = signRedirect(leadId, campaignStepId, url);
-      const tracked = `${baseUrl}/api/track?id=${leadId}&type=click&redirect=${encodeURIComponent(url)}${stepParam}&sig=${sig}`;
-      return `<a ${attrs}href="${tracked}"`;
-    }
-  );
+  const stepParam = campaignStepId ? `&stepId=${campaignStepId}` : "";
+  const wrap = (url: string): string => {
+    if (url.includes(baseUrl.replace(/https?:\/\//, ""))) return url;
+    const sig = signRedirect(leadId, campaignStepId, url);
+    return `${baseUrl}/api/track?id=${leadId}&type=click&redirect=${encodeURIComponent(url)}${stepParam}&sig=${sig}`;
+  };
+
+  // Extract every <a ...>...</a> element. Explicit links are fully rewritten
+  // (and stored as a placeholder) so their href AND inner text are protected
+  // from the later bare-URL pass. Already-tracked/self links are kept as-is.
+  const anchors = new Map<number, string>();
+  let out = html.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, (full, off) => {
+    const hrefMatch = full.match(/href\s*=\s*"(https?:\/\/[^"]+)"/i);
+    if (!hrefMatch) return full;
+    if (hrefMatch[1].includes(baseUrl.replace(/https?:\/\//, ""))) return full;
+    const tracked = full.replace(
+      /(href\s*=\s*")https?:\/\/[^"]+"/i,
+      (m, p) => `${p}${wrap(hrefMatch[1])}"`
+    );
+    const key = anchors.size;
+    anchors.set(key, tracked);
+    return `\u0000A${key}\u0000`;
+  });
+
+  // Wrap any remaining bare URLs in the plain text between tags. Tokenize all
+  // remaining markup so nothing inside an attribute is matched.
+  const tags: string[] = [];
+  out = out.replace(/<[^>]*>/g, (tag) => {
+    tags.push(tag);
+    return `\u0000${tags.length - 1}\u0000`;
+  });
+
+  out = out.replace(/\u0000[Aa]?\d+\u0000|https?:\/\/[^\s<"')]+|(?<![A-Za-z0-9.@-])(?:[a-z0-9-]+\.)+(?:com|net|org|io|co|me|dev|ai|app)(?:\/[^\s<"')]*)?/gi, (token) => {
+    if (/^\u0000[Aa]?\d+\u0000$/.test(token)) return token;
+    const href = /^https?:\/\//i.test(token) ? token : `https://${token}`;
+    return `<a href="${wrap(href)}" style="color:#2563eb;text-decoration:underline;">${token}</a>`;
+  });
+
+  out = out.replace(/\u0000(\d+)\u0000/g, (_, i) => tags[Number(i)] ?? "");
+  out = out.replace(/\u0000A(\d+)\u0000/g, (_, i) => anchors.get(Number(i)) ?? "");
+
+  return out;
 }
 
 export async function sendEmail(opts: SendOptions) {
