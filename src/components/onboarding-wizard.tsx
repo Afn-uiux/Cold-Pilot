@@ -325,9 +325,11 @@ export default function OnboardingWizard() {
           {step === 1 && (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
-                <IconTarget className="text-blue-accent" aria-hidden>
-                  <AnimatedIcon name="smile" size={64} />
-                </IconTarget>
+                <div className="w-16 h-16 bg-blue-light rounded-full flex items-center justify-center text-blue-accent">
+                  <IconTarget>
+                    <AnimatedIcon name="smile" size={28} />
+                  </IconTarget>
+                </div>
               </div>
               <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-8">How Did You Find Us?</h2>
               <div className="flex flex-wrap justify-center gap-3 mb-8">
@@ -362,9 +364,11 @@ export default function OnboardingWizard() {
           {step === 2 && (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
-                <IconTarget className="text-blue-accent" aria-hidden>
-                  <AnimatedIcon name="sparkles" size={64} />
-                </IconTarget>
+                <div className="w-14 h-14 bg-blue-light rounded-xl flex items-center justify-center text-blue-accent border border-blue-accent/20">
+                  <IconTarget>
+                    <AnimatedIcon name="sparkles" size={24} />
+                  </IconTarget>
+                </div>
               </div>
               <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-2">Hey there, I&apos;m Coldpilot AI</h2>
               <p className="text-muted mb-8 text-sm max-w-lg mx-auto">
@@ -389,9 +393,11 @@ export default function OnboardingWizard() {
           {step === 3 && (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
-                <IconTarget className="text-blue-accent" aria-hidden>
-                  <AnimatedIcon name="search" size={64} />
-                </IconTarget>
+                <div className="w-14 h-14 bg-blue-light rounded-xl flex items-center justify-center text-blue-accent border border-blue-accent/20">
+                  <IconTarget>
+                    <AnimatedIcon name="search" size={24} />
+                  </IconTarget>
+                </div>
               </div>
               <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-2">What&apos;s your company website?</h2>
               <p className="text-muted mb-8 text-sm">This helps me personalize your outreach</p>
@@ -416,9 +422,11 @@ export default function OnboardingWizard() {
           {step === 4 && (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
-                <IconTarget className="text-blue-accent" aria-hidden>
-                  <AnimatedIcon name="target" size={64} />
-                </IconTarget>
+                <div className="w-14 h-14 bg-blue-light rounded-xl flex items-center justify-center text-blue-accent border border-blue-accent/20">
+                  <IconTarget>
+                    <AnimatedIcon name="target" size={24} />
+                  </IconTarget>
+                </div>
               </div>
               <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-1">What are you looking to accomplish?</h2>
               <p className="text-muted mb-8 text-sm">Pick up to three.</p>
@@ -447,9 +455,11 @@ export default function OnboardingWizard() {
           {step === 5 && (
             <div className="text-center">
               <div className="flex justify-center mb-6">
-                <IconTarget className="text-blue-accent" aria-hidden>
-                  <AnimatedIcon name="check" size={64} />
-                </IconTarget>
+                <div className="w-14 h-14 bg-blue-light rounded-full flex items-center justify-center text-blue-accent">
+                  <IconTarget>
+                    <AnimatedIcon name="check" size={24} />
+                  </IconTarget>
+                </div>
               </div>
               <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-2">You&apos;re all set!</h2>
               <p className="text-muted mb-8 text-sm max-w-md mx-auto">
