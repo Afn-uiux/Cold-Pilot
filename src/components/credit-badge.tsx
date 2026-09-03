@@ -61,7 +61,11 @@ export default function CreditBadge() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-border rounded-lg shadow-lg z-50 py-1.5">
+        // Desktop: anchored to the badge's right edge (badge sits on the right
+        // of the header). <=480px the header stacks and the badge lands on the
+        // LEFT edge, so anchor left instead — right-0 pushed the dropdown off
+        // the viewport and it rendered half-clipped on mobile.
+        <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-border rounded-lg shadow-lg z-50 py-1.5 max-[480px]:right-auto max-[480px]:left-0">
           <Link
             href="/dashboard/settings?tab=Billing"
             onClick={() => setOpen(false)}

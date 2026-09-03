@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, forwardRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import Logo from "@/components/logo";
+import { IconTarget } from "@/components/icon-target";
+import type { AnimatedIconHandle } from "@/lib/use-icon-animation";
 import { FlashIcon } from "@/components/icons/flash";
 import { SmileIcon } from "@/components/icons/smile";
 import { Search01Icon } from "@/components/icons/search-01";
@@ -15,6 +17,10 @@ import { CircleCheckIcon } from "@/components/icons/circle-check";
 import { GridViewIcon } from "@/components/icons/grid-view";
 import { CompassIcon } from "@/components/icons/compass";
 import { TrendUpIcon } from "@/components/icons/trend-up";
+import { Shield02Icon } from "@/components/icons/shield-02";
+import { FlameIcon } from "@/components/icons/flame";
+import { SparklesIcon } from "@/components/icons/sparkles";
+import { Target01Icon } from "@/components/icons/target-01";
 
 const SOURCES = [
   "YouTube",
@@ -37,11 +43,11 @@ const SOURCES = [
 
 const GOALS = [
   { label: "Cold email outreach", icon: "paper-plane" },
-  { label: "Email verification", icon: "user" },
+  { label: "Email verification", icon: "shield" },
   { label: "Campaign management", icon: "compass" },
-  { label: "Email analytics", icon: "chart" },
+  { label: "Email analytics", icon: "trend" },
   { label: "AI-powered sequences", icon: "bolt" },
-  { label: "Warmup & deliverability", icon: "trend" },
+  { label: "Warmup & deliverability", icon: "flame" },
   { label: "Unified Coldbox", icon: "envelope" },
 ];
 
@@ -53,35 +59,80 @@ const PROGRESS = [
   { width: "100%", credits: "1,000 of 1,000 credits", sub: "1,000 free Coldpilot credits unlocked" },
 ];
 
-function Icon({ name, className }: { name: string; className?: string }) {
-  switch (name) {
-    case "bolt":
-      return <FlashIcon size={16} className={className} />;
-    case "smile":
-      return <SmileIcon size={16} className={className} />;
-    case "search":
-      return <Search01Icon size={16} className={className} />;
-    case "paper-plane":
-      return <SentIcon size={16} className={className} />;
-    case "user":
-      return <UserGroupIcon size={16} className={className} />;
-    case "envelope":
-      return <Mail01Icon size={16} className={className} />;
-    case "eye":
-      return <EyeIcon size={16} className={className} />;
-    case "check":
-      return <CircleCheckIcon size={16} className={className} />;
-    case "chart":
-      return <GridViewIcon size={16} className={className} />;
-    case "compass":
-      return <CompassIcon size={16} className={className} />;
-    case "trend":
-      return <TrendUpIcon size={16} className={className} />;
-    case "spinner":
-      return <svg className={`animate-spin ${className || ""}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3a9 9 0 1 0 9 9" /></svg>;
-    default:
-      return null;
-  }
+// The animated-icons skill pattern: every glyph is a motion icon exposing an
+// AnimatedIconHandle via ref, and IconTarget fires its draw animation when the
+// surrounding content is hovered/clicked. AnimatedIcon forwards the ref so
+// IconTarget can attach to the real icon through the name map.
+const ICON_COMPONENTS = {
+  bolt: FlashIcon,
+  smile: SmileIcon,
+  search: Search01Icon,
+  "paper-plane": SentIcon,
+  user: UserGroupIcon,
+  envelope: Mail01Icon,
+  eye: EyeIcon,
+  check: CircleCheckIcon,
+  chart: GridViewIcon,
+  compass: CompassIcon,
+  trend: TrendUpIcon,
+  shield: Shield02Icon,
+  flame: FlameIcon,
+  sparkles: SparklesIcon,
+  target: Target01Icon,
+} as const;
+
+const AnimatedIcon = forwardRef<AnimatedIconHandle, { name: string; size?: number }>(
+  function AnimatedIcon({ name, size = 16 }, ref) {
+    const Cmp = ICON_COMPONENTS[name as keyof typeof ICON_COMPONENTS];
+    if (!Cmp) return null;
+    return <Cmp ref={ref} size={size} />;
+  },
+);
+
+function useIconTrigger() {
+  const ref = useRef<AnimatedIconHandle>(null);
+  return { triggerRef: ref, trigger: () => ref.current?.startAnimation() };
+}
+
+function GoalPill({ label, icon, selected, onToggle }: { label: string; icon: string; selected: boolean; onToggle: () => void }) {
+  const { triggerRef, trigger } = useIconTrigger();
+  return (
+    <button
+      onClick={(e) => { trigger(); onToggle(); }}
+      onMouseEnter={trigger}
+      className={`px-4 py-2 border rounded-full text-sm transition-colors inline-flex items-center gap-2 ${
+        selected
+          ? "border-blue-accent bg-blue-light text-blue-accent"
+          : "border-border text-muted hover:bg-cream"
+      }`}
+    >
+      <IconTarget triggerRef={triggerRef} className="inline-flex items-center">
+        <AnimatedIcon name={icon} size={16} />
+      </IconTarget>
+      {label}
+    </button>
+  );
+}
+
+function FeatureRow({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+  const { triggerRef, trigger } = useIconTrigger();
+  return (
+    <div
+      className="flex items-start gap-4 p-4 border border-border rounded-lg bg-white hover:shadow-sm transition cursor-default"
+      onMouseEnter={trigger}
+      onClick={trigger}
+    >
+      <div className="w-10 h-10 bg-blue-accent rounded-lg flex items-center justify-center text-white shrink-0">
+        <IconTarget triggerRef={triggerRef}>
+          <AnimatedIcon name={icon} size={24} />
+        </IconTarget>
+      </div>
+      <div>
+        <h4 className="font-semibold text-ink text-sm">{title}</h4>
+        <p className="text-xs text-muted mt-1">{desc}</p>
+      </div>
+    </div>
+  );
 }
 
 export default function OnboardingWizard() {
@@ -245,7 +296,9 @@ export default function OnboardingWizard() {
           {/* Navbar */}
           <nav className="bg-white border-b border-border py-4 px-6 md:px-12 flex items-center">
             <div className="flex items-center gap-2 text-blue-accent font-semibold text-lg">
-              <Icon name="bolt" className="w-5 h-5" />
+              <IconTarget className="inline-flex items-center">
+                <AnimatedIcon name="bolt" size={18} />
+              </IconTarget>
               <Logo height={18} />
             </div>
           </nav>
@@ -272,9 +325,9 @@ export default function OnboardingWizard() {
           {step === 1 && (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
-                <div className="w-16 h-16 bg-blue-light rounded-full flex items-center justify-center text-blue-accent">
-                  <Icon name="smile" className="w-7 h-7" />
-                </div>
+                <IconTarget className="text-blue-accent" aria-hidden>
+                  <AnimatedIcon name="smile" size={64} />
+                </IconTarget>
               </div>
               <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-8">How Did You Find Us?</h2>
               <div className="flex flex-wrap justify-center gap-3 mb-8">
@@ -309,9 +362,9 @@ export default function OnboardingWizard() {
           {step === 2 && (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
-                <div className="w-14 h-14 bg-blue-light rounded-xl flex items-center justify-center text-blue-accent border border-blue-accent/20">
-                  <Icon name="eye" className="w-6 h-6" />
-                </div>
+                <IconTarget className="text-blue-accent" aria-hidden>
+                  <AnimatedIcon name="sparkles" size={64} />
+                </IconTarget>
               </div>
               <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-2">Hey there, I&apos;m Coldpilot AI</h2>
               <p className="text-muted mb-8 text-sm max-w-lg mx-auto">
@@ -319,19 +372,11 @@ export default function OnboardingWizard() {
               </p>
               <div className="space-y-4 mb-8 text-left max-w-xl mx-auto">
                 {[
-                  { icon: "search", color: "bg-blue-accent", title: "Import & Verify Contacts", desc: "Upload your contact lists and verify emails before sending to protect your deliverability." },
-                  { icon: "bolt", color: "bg-blue-accent", title: "AI-powered Sequences", desc: "Let AI write, optimize, and personalize your email sequences for maximum response rates." },
-                  { icon: "chart", color: "bg-blue-accent", title: "Track & Optimize", desc: "Monitor opens, clicks, and replies in real time. Get insights to improve performance." },
+                  { icon: "search", title: "Import & Verify Contacts", desc: "Upload your contact lists and verify emails before sending to protect your deliverability." },
+                  { icon: "bolt", title: "AI-powered Sequences", desc: "Let AI write, optimize, and personalize your email sequences for maximum response rates." },
+                  { icon: "trend", title: "Track & Optimize", desc: "Monitor opens, clicks, and replies in real time. Get insights to improve performance." },
                 ].map((f) => (
-                  <div key={f.title} className="flex items-start gap-4 p-4 border border-border rounded-lg bg-white hover:shadow-sm transition cursor-default">
-                    <div className={`w-10 h-10 ${f.color} rounded-lg flex items-center justify-center text-white shrink-0`}>
-                      <Icon name={f.icon} />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-ink text-sm">{f.title}</h4>
-                      <p className="text-xs text-muted mt-1">{f.desc}</p>
-                    </div>
-                  </div>
+                  <FeatureRow key={f.title} icon={f.icon} title={f.title} desc={f.desc} />
                 ))}
               </div>
               <button onClick={nextStep} className="btn btn-primary hover:bg-blue-accent-hover w-full md:w-64">
@@ -344,9 +389,9 @@ export default function OnboardingWizard() {
           {step === 3 && (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
-                <div className="w-14 h-14 bg-blue-light rounded-xl flex items-center justify-center text-blue-accent border border-blue-accent/20">
-                  <Icon name="eye" className="w-6 h-6" />
-                </div>
+                <IconTarget className="text-blue-accent" aria-hidden>
+                  <AnimatedIcon name="search" size={64} />
+                </IconTarget>
               </div>
               <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-2">What&apos;s your company website?</h2>
               <p className="text-muted mb-8 text-sm">This helps me personalize your outreach</p>
@@ -371,30 +416,22 @@ export default function OnboardingWizard() {
           {step === 4 && (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
-                <div className="w-14 h-14 bg-blue-light rounded-xl flex items-center justify-center text-blue-accent border border-blue-accent/20">
-                  <Icon name="eye" className="w-6 h-6" />
-                </div>
+                <IconTarget className="text-blue-accent" aria-hidden>
+                  <AnimatedIcon name="target" size={64} />
+                </IconTarget>
               </div>
               <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-1">What are you looking to accomplish?</h2>
               <p className="text-muted mb-8 text-sm">Pick up to three.</p>
               <div className="flex flex-wrap justify-center gap-3 mb-8">
-                {GOALS.map((g) => {
-                  const selected = goals.includes(g.label);
-                  return (
-                    <button
-                      key={g.label}
-                      onClick={() => toggleGoal(g.label)}
-                      className={`px-4 py-2 border rounded-full text-sm transition-colors inline-flex items-center gap-2 ${
-                        selected
-                          ? "border-blue-accent bg-blue-light text-blue-accent"
-                          : "border-border text-muted hover:bg-cream"
-                      }`}
-                    >
-                      <Icon name={g.icon} />
-                      {g.label}
-                    </button>
-                  );
-                })}
+                {GOALS.map((g) => (
+                  <GoalPill
+                    key={g.label}
+                    label={g.label}
+                    icon={g.icon}
+                    selected={goals.includes(g.label)}
+                    onToggle={() => toggleGoal(g.label)}
+                  />
+                ))}
               </div>
               <button
                 onClick={nextStep}
@@ -410,9 +447,9 @@ export default function OnboardingWizard() {
           {step === 5 && (
             <div className="text-center">
               <div className="flex justify-center mb-6">
-                <div className="w-14 h-14 bg-blue-light rounded-full flex items-center justify-center text-blue-accent">
-                  <Icon name="check" className="w-7 h-7" />
-                </div>
+                <IconTarget className="text-blue-accent" aria-hidden>
+                  <AnimatedIcon name="check" size={64} />
+                </IconTarget>
               </div>
               <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-2">You&apos;re all set!</h2>
               <p className="text-muted mb-8 text-sm max-w-md mx-auto">

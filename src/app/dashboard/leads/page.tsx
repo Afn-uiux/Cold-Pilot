@@ -57,7 +57,15 @@ export default function LeadsPage() {
   const [importCampaignId, setImportCampaignId] = useState(urlCampaignId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [verifying, setVerifying] = useState(false);
-  const [verifyMsg, setVerifyMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
+  const [verifyResult, setVerifyResult] = useState<{
+    error?: string;
+    valid?: number;
+    invalid?: number;
+    risky?: number;
+    catch_all?: number;
+    unknown?: number;
+  } | null>(null);
 
   useEffect(() => {
     const leadsUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
@@ -151,34 +159,37 @@ export default function LeadsPage() {
     toast("All leads removed", "success");
   }
 
-  async function refreshLeads() {
-    const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
-    const fresh = await fetch(freshUrl).then(r => r.json());
-    setLeads(Array.isArray(fresh) ? fresh : []);
-  }
-
-  async function runVerify(ids: string[]) {
-    if (ids.length === 0) return;
+  async function handleVerifyAll() {
     setVerifying(true);
-    setVerifyMsg(null);
+    setVerifyResult(null);
+    const idsToVerify = selectedIds.size > 0
+      ? Array.from(selectedIds)
+      : leads.filter(l => !l.verificationStatus || l.verificationStatus === "unverified").map(l => l.id);
+    setVerifyingIds(new Set(idsToVerify));
     try {
+      const leadIds = selectedIds.size > 0 ? Array.from(selectedIds) : undefined;
+      const body = leadIds
+        ? { leadIds }
+        : urlCampaignId ? { campaignId: urlCampaignId } : {};
+      if (!leadIds && !urlCampaignId) {
+        setVerifyResult({ error: "Select leads or filter by a campaign first" });
+        return;
+      }
       const res = await fetch("/api/leads/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadIds: ids }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setVerifyMsg({ type: "error", text: data.error || "Verification failed" });
-        return;
-      }
-      setVerifyMsg({ type: "success", text: `Verified ${data.valid} valid, ${data.invalid} invalid, ${data.risky} risky, ${data.unknown} unknown` });
-      await refreshLeads();
-      setSelectedIds(new Set());
+      const result = await res.json();
+      setVerifyResult(result);
+      const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
+      const fresh = await fetch(freshUrl).then(r => r.json());
+      setLeads(Array.isArray(fresh) ? fresh : []);
     } catch {
-      setVerifyMsg({ type: "error", text: "Verification failed" });
+      setVerifyResult({ error: "Verification failed" });
     } finally {
       setVerifying(false);
+      setVerifyingIds(new Set());
     }
   }
 
@@ -269,15 +280,10 @@ export default function LeadsPage() {
               {selectedIds.size > 0 && (
                 <button onClick={handleRemoveSelected} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Remove selected ({selectedIds.size})</button>
               )}
-              <button onClick={() => setShowConfirmAll(true)} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Remove all</button>
-              {selectedIds.size > 0 && (
-                <button onClick={() => runVerify(Array.from(selectedIds))} disabled={verifying} className="btn btn-ghost btn-sm disabled:opacity-40">
-                  {verifying ? "Verifying..." : `Verify selected (${selectedIds.size})`}
-                </button>
-              )}
-              <button onClick={() => runVerify(leads.map(l => l.id))} disabled={verifying} className="btn btn-ghost btn-sm disabled:opacity-40">
-                {verifying ? "Verifying..." : "Verify all"}
+              <button onClick={handleVerifyAll} disabled={verifying} className="btn btn-ghost btn-sm text-blue-accent hover:text-blue-accent disabled:opacity-40">
+                {verifying ? "Verifying..." : "Verify" + (selectedIds.size > 0 ? ` (${selectedIds.size})` : " All")}
               </button>
+              <button onClick={() => setShowConfirmAll(true)} className="btn btn-ghost btn-sm text-red-600 hover:text-red-600">Remove all</button>
             </>
           )}
           <button onClick={() => { setShowImport(true); setImportResult(null); setCsvFile(null); setLinkUrl(""); }} className="btn btn-primary">+ Import Leads</button>
@@ -294,10 +300,13 @@ export default function LeadsPage() {
           </div>
         </div>
 
-        {verifyMsg && (
-          <div className={`text-sm p-3 rounded-lg mb-4 ${verifyMsg.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-            {verifyMsg.text}
+        {verifyResult && !verifyResult.error && (
+          <div className="text-sm p-3 rounded-lg mb-4 bg-blue-50 text-blue-700">
+            Verified: {verifyResult.valid} valid, {(verifyResult.invalid || 0) + (verifyResult.risky || 0)} do not contact, {verifyResult.catch_all || 0} catch-all, {verifyResult.unknown} unknown
           </div>
+        )}
+        {verifyResult?.error && (
+          <div className="text-sm p-3 rounded-lg mb-4 bg-red-50 text-red-700">{verifyResult.error}</div>
         )}
 
         {loading ? (
@@ -334,7 +343,7 @@ export default function LeadsPage() {
                       </>
                     )}
                     <th>Status</th>
-                    <th>Email Verif</th>
+                    <th>Verification</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -374,8 +383,21 @@ export default function LeadsPage() {
                         )}
                         <td><span className={`badge ${l.status === "replied" ? "active" : l.status === "pending" ? "draft" : ""}`}>{l.status}</span></td>
                         <td>
-                          <span className={`badge ${l.verificationStatus === "valid" ? "active" : l.verificationStatus === "risky" ? "paused" : l.verificationStatus === "invalid" ? "danger" : "draft"}`}>
-                            {l.verificationStatus === "valid" ? "Valid" : l.verificationStatus === "invalid" ? "Invalid" : l.verificationStatus === "risky" ? "Risky" : "Unverified"}
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                            verifyingIds.has(l.id) ? "bg-blue-50 text-blue-400" :
+                            l.verificationStatus === "valid" ? "bg-emerald-100 text-emerald-700" :
+                            (l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "bg-red-100 text-red-700" :
+                            l.verificationStatus === "catch_all" ? "bg-orange-100 text-orange-700" :
+                            l.verificationStatus === "unknown" ? "bg-gray-100 text-gray-500" :
+                            "bg-blue-50 text-blue-400"
+                          }`}>
+                            {verifyingIds.has(l.id) ? "verifying" : (l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "invalid / do not send" : l.verificationStatus || "unverified"}
+                            {verifyingIds.has(l.id) && (
+                              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                            )}
                           </span>
                         </td>
                         <td>
