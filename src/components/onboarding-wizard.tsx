@@ -455,9 +455,9 @@ export default function OnboardingWizard() {
           {step === 5 && (
             <div className="text-center">
               <div className="flex justify-center mb-6">
-                <div className="w-14 h-14 bg-blue-light rounded-full flex items-center justify-center text-blue-accent">
+                <div className="w-16 h-16 bg-blue-light rounded-full flex items-center justify-center text-blue-accent">
                   <IconTarget>
-                    <AnimatedIcon name="check" size={24} />
+                    <AnimatedIcon name="check" size={32} />
                   </IconTarget>
                 </div>
               </div>
