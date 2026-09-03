@@ -6,7 +6,8 @@ const nextConfig: NextConfig = {
   // testing of open/click link tracking) without the dev server blocking the
   // HMR websocket and other dev resources as cross-origin. Without this,
   // hydration silently fails through the tunnel and buttons/links go dead.
-  allowedDevOrigins: ["*.trycloudflare.com"],
+  // Same reason: testing from a phone on the same LAN via the machine's LAN IP.
+  allowedDevOrigins: ["*.trycloudflare.com", "192.168.1.111"],
   async headers() {
     return [
       {
