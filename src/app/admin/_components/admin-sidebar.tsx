@@ -7,6 +7,11 @@ import Logo from "@/components/logo";
 import { Home01Icon } from "@/components/icons/home-01";
 import { UserGroupIcon } from "@/components/icons/user-group";
 import { InboxIcon } from "@/components/icons/inbox";
+import { CircleCheckIcon } from "@/components/icons/circle-check";
+import { Shield02Icon } from "@/components/icons/shield-02";
+import { SentIcon } from "@/components/icons/sent";
+import { TrendUpIcon } from "@/components/icons/trend-up";
+import { Mail01Icon } from "@/components/icons/mail-01";
 import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
 import { IconTarget } from "@/components/icon-target";
 import type { AnimatedIconHandle } from "@/lib/use-icon-animation";
@@ -14,7 +19,12 @@ import type { AnimatedIconHandle } from "@/lib/use-icon-animation";
 const LINKS = [
   { href: "/admin", label: "Overview", icon: "home" },
   { href: "/admin/users", label: "Users", icon: "users" },
+  { href: "/admin/verification", label: "Verification", icon: "verify" },
+  { href: "/admin/deliverability", label: "Deliverability", icon: "shield" },
+  { href: "/admin/sending", label: "Sending", icon: "sent" },
+  { href: "/admin/credits", label: "Credits", icon: "trend" },
   { href: "/admin/seeds", label: "Seeds", icon: "inbox" },
+  { href: "/admin/email-previews", label: "Templates", icon: "mail" },
 ];
 
 export default function AdminSidebar() {
@@ -94,6 +104,11 @@ const NavIcon = forwardRef<AnimatedIconHandle, { name: string }>(({ name }, ref)
     case "home": return <Home01Icon ref={ref} size={16} />;
     case "users": return <UserGroupIcon ref={ref} size={16} />;
     case "inbox": return <InboxIcon ref={ref} size={16} />;
+    case "verify": return <CircleCheckIcon ref={ref} size={16} />;
+    case "shield": return <Shield02Icon ref={ref} size={16} />;
+    case "sent": return <SentIcon ref={ref} size={16} />;
+    case "trend": return <TrendUpIcon ref={ref} size={16} />;
+    case "mail": return <Mail01Icon ref={ref} size={16} />;
     default: return null;
   }
 });

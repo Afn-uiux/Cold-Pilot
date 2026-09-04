@@ -4,6 +4,7 @@ import tls from "tls";
 import { assertSafeSocketTarget, isAllowedSocketPort } from "./ssrf";
 import { isDisposable } from "./disposable";
 import { isTyposquat } from "./typosquat";
+import { checkGlobalIntel } from "./global-intel";
 import { getDomainReputation, isHighBounceDomain, isMediumBounceDomain } from "./domain-reputation";
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
@@ -444,18 +445,39 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
     return { status: "invalid", reason: "invalid_format", provider: "Unknown", format: false };
   }
 
-  if (isDisposable(normalized)) {
-    return { status: "risky", reason: "disposable_email", provider: "Unknown", format: true, disposable: true };
-  }
-
   const domain = extractDomain(normalized);
+  // Typosquat before disposable: lookalike domains (gmial.com, gmail.cmo)
+  // are usually user typos of a real provider, and many sit on disposable
+  // lists too. "You mistyped" (invalid) beats "throwaway" (risky) there —
+  // sending to a typo can only bounce or hit a stranger.
   if (isTyposquat(domain)) {
     return { status: "invalid", reason: "typosquat_domain", provider: "Unknown", format: true };
+  }
+
+  if (isDisposable(domain)) {
+    return { status: "risky", reason: "disposable_email", provider: "Unknown", format: true, disposable: true };
   }
 
   const local = extractLocal(normalized);
   if (ROLE_PREFIXES.includes(local)) {
     return { status: "risky", reason: "role_account", provider: "Unknown", format: true, roleAccount: true };
+  }
+
+  // Shared platform memory: if any user's definitive check already proved
+  // this address dead, resolve instantly — no probe spent, no credit burned,
+  // no reputation risked. The MX lookup below is DNS-only (no port 25) and
+  // just labels the provider for display.
+  const intel = await checkGlobalIntel(normalized);
+  if (intel) {
+    const { mxRecords } = await verifyMX(normalized);
+    return {
+      status: "invalid",
+      reason: "known_bad_global",
+      provider: mxRecords.length > 0 ? detectProvider(mxRecords) : "Unknown",
+      format: true,
+      mxValid: mxRecords.length > 0,
+      smtpValid: false,
+    };
   }
 
   const { valid: mxValid, mxRecords } = await verifyMX(normalized);

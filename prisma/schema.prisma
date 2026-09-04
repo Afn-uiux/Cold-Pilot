@@ -58,6 +58,9 @@ model User {
   accounts      Account[]
   sessions      Session[]
   creditTransactions CreditTransaction[]
+  paymentEvents PaymentEvent[]
+  // No relation to GlobalLeadIntel: the shared registry is keyed by email
+  // across all users, never owned by one.
   mailboxIdentities MailboxIdentity[]
   signupSignals      SignupSignal[]
   userSessions      UserSession[]
@@ -372,6 +375,7 @@ model Lead {
   notes           String?
   customFields    String?
   verificationStatus String?
+  verificationReason String?
   provider           String?
   verifiedAt         DateTime?
   deletedAt       DateTime?
@@ -596,7 +600,53 @@ model CreditTransaction {
   
     @@index([processedAt])
   }
+
+  // Payment history ledger (the "water meter" on the billing pipe). Every
+  // payment-related webhook writes one row here, so the platform remembers
+  // who paid what and when — including lapses (paid March, missed April).
+  // Current state lives on User (plan, subscription ids); the story of how
+  // it got there lives here.
+  model PaymentEvent {
+    id             String   @id @default(cuid())
+    userId         String
+    type           String   // payment_succeeded | subscription_started | subscription_renewed | subscription_past_due | subscription_canceled | plan_downgraded
+    amount         Float?   // major units, null when the event carries no charge
+    currency       String   @default("NGN")
+    plan           String?  // plan the event relates to, if known
+    subscriptionId String?
+    providerEventId String  @unique // Bachs event id: replays can't double-record
+    createdAt      DateTime @default(now())
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@index([type])
+    @@index([createdAt])
+  }
   
+  // Shared bad-lead registry (platform memory). When any user's verification
+  // proves an address dead (mailbox_not_found) or any send hard-bounces, the
+  // email + verdict is recorded here ONCE. Any other user's list containing
+  // the same address then resolves instantly without spending a probe or a
+  // credit. ONLY definitive verdicts are stored — never risky/unknown. Rows
+  // expire (dead addresses get recycled) and expiry refreshes on re-hit.
+  // Privacy: email + verdict only. No names, companies, campaigns, and no
+  // record of which user reported it.
+  model GlobalLeadIntel {
+    id          String   @id @default(cuid())
+    email       String   @unique
+    verdict     String   // invalid (only definitive verdicts are stored)
+    reason      String   // mailbox_not_found | hard_bounce
+    source      String   // verification | bounce
+    hitCount    Int      @default(1)
+    firstSeenAt DateTime @default(now())
+    lastSeenAt  DateTime @default(now())
+    expiresAt   DateTime
+
+    @@index([expiresAt])
+    @@index([reason])
+  }
+
   // Platform-owned warmup seed inboxes (the backbone of the warmup network).
 // These are inboxes operated by the platform that user mailboxes warm against.
 // The user-facing receivers also participate (see EmailAccount.warmupEnabled),

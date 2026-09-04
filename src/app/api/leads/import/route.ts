@@ -8,6 +8,7 @@ import { sendEmailSafe } from "@/lib/email/send";
 import { assertLeadCapacity, PlanLimitError, spendCredits, InsufficientCreditsError } from "@/lib/credits";
 import { fetchPublicText, readResponseTextCapped } from "@/lib/ssrf-guard";
 import { CREDIT_COSTS } from "@/lib/plans";
+import { checkGlobalIntelMany } from "@/lib/global-intel";
 
 const KNOWN_FIELDS = [
   "email", "e-mail", "email address", "mail", "emails", "email addresses", "e mail", "e_mail",
@@ -370,13 +371,19 @@ export async function POST(req: Request) {
     }
 
     const seenEmails = new Set<string>();
-    let imported = 0, errors = 0, skipped = 0, firstError = "";
+    let imported = 0, errors = 0, skipped = 0, knownBad = 0, firstError = "";
     const duplicateEmails: string[] = [];
+    // One shared-registry lookup for the whole batch: known-dead addresses
+    // are stamped invalid at import so they can never enter a campaign as
+    // "unverified" (the send gate blocks invalid).
+    const knownBadSet = await checkGlobalIntelMany(leads.map((l: any) => String(l?.email || "")));
     for (const lead of leads) {
       if (!lead.email || !lead.email.includes("@")) { skipped++; continue; }
       const normalized = lead.email.trim().toLowerCase();
       if (seenEmails.has(normalized)) { duplicateEmails.push(normalized); continue; }
       seenEmails.add(normalized);
+      const isKnownBad = knownBadSet.has(normalized);
+      if (isKnownBad) knownBad++;
 
       try {
         await prisma.lead.create({
@@ -392,7 +399,9 @@ export async function POST(req: Request) {
             location: lead.location || null,
             notes: lead.notes || null,
             customFields: lead.customFields || null,
-            verificationStatus: "unverified",
+            verificationStatus: isKnownBad ? "invalid" : "unverified",
+            verificationReason: isKnownBad ? "known_bad_global" : null,
+            verifiedAt: isKnownBad ? new Date() : null,
             campaignId,
             userId,
           },
@@ -401,7 +410,7 @@ export async function POST(req: Request) {
       } catch (e: any) { errors++; if (!firstError) firstError = e?.message || "Unknown"; }
     }
     const totalParsed = imported + errors + skipped + rowsSkippedNoEmail + duplicateEmails.length;
-    return NextResponse.json({ imported, errors, skipped: skipped + rowsSkippedNoEmail, total: totalParsed, firstError, duplicates: duplicateEmails.length, duplicateEmails });
+    return NextResponse.json({ imported, errors, skipped: skipped + rowsSkippedNoEmail, total: totalParsed, firstError, duplicates: duplicateEmails.length, duplicateEmails, knownBad });
   }
 
   // CSV upload
@@ -432,7 +441,7 @@ export async function POST(req: Request) {
   if (emailIdx === -1) return NextResponse.json({ error: "CSV must have an 'email' column" }, { status: 400 });
 
   const csvSeenEmails = new Set<string>();
-  let imported = 0, errors = 0, skipped = 0, firstError = "";
+  let imported = 0, errors = 0, skipped = 0, knownBad = 0, firstError = "";
   const duplicateEmails: string[] = [];
   const csvRows: { email: string; leadRow: ReturnType<typeof mapRowToLead> }[] = [];
   for (let i = 1; i < lines.length; i++) {
@@ -454,7 +463,14 @@ export async function POST(req: Request) {
     throw err;
   }
 
+  // One shared-registry lookup for the whole file: known-dead addresses are
+  // stamped invalid at import so they can never enter a campaign as
+  // "unverified" (the send gate blocks invalid).
+  const knownBadSet = await checkGlobalIntelMany(csvRows.map((r) => r.email));
+
   for (const { email: normalized, leadRow } of csvRows) {
+    const isKnownBad = knownBadSet.has(normalized);
+    if (isKnownBad) knownBad++;
     try {
       await prisma.lead.create({
         data: {
@@ -469,7 +485,9 @@ export async function POST(req: Request) {
           location: leadRow.location,
           notes: leadRow.notes,
           customFields: leadRow.customFields,
-          verificationStatus: "unverified",
+          verificationStatus: isKnownBad ? "invalid" : "unverified",
+          verificationReason: isKnownBad ? "known_bad_global" : null,
+          verifiedAt: isKnownBad ? new Date() : null,
           campaignId,
           userId,
         },
@@ -485,5 +503,5 @@ export async function POST(req: Request) {
     if (user?.email) sendEmailSafe(user.email, "onboarding-import-leads");
   }
 
-  return NextResponse.json({ imported, errors, skipped, total: lines.length - 1, firstError, duplicates: duplicateEmails.length, duplicateEmails });
+  return NextResponse.json({ imported, errors, skipped, total: lines.length - 1, firstError, duplicates: duplicateEmails.length, duplicateEmails, knownBad });
 }

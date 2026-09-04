@@ -100,6 +100,17 @@ tbody tr:hover { background: var(--color-cream-2); }
 
 .card { border: 1px solid var(--color-border); border-radius: 8px; padding: 24px; }
 .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+/* Compact metric strip: same visual family as .metrics cards, half the
+   height. Used on admin detail pages so tables start immediately. */
+.metrics.compact .metric { padding: 12px 16px; }
+.metrics.compact .metric-value { font-size: 22px; margin-top: 2px; }
+.metrics.compact .metric-change { font-size: 12px; margin-top: 2px; }
+/* Tables sit flush inside cards: the card provides the border, the table
+   provides the rows. */
+.card .table-wrap { border: none; border-radius: 0; overflow-x: auto; margin: 0 -24px -24px; }
+.card .table-wrap thead th { border-top: 1px solid var(--color-border); }
+.card .table-wrap thead th:first-child, .card .table-wrap tbody td:first-child { padding-left: 24px; }
+.card .table-wrap thead th:last-child, .card .table-wrap tbody td:last-child { padding-right: 24px; }
 .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
 .section-head h2 { font-size: 22px; font-weight: 400; letter-spacing: -0.01em; }
 
@@ -148,6 +159,9 @@ tbody tr:hover { background: var(--color-cream-2); }
   .metric { padding: 16px; }
   .metric-value { font-size: 22px; }
   .card { padding: 16px; }
+  .card .table-wrap { margin: 0 -16px -16px; }
+  .card .table-wrap thead th:first-child, .card .table-wrap tbody td:first-child { padding-left: 16px; }
+  .card .table-wrap thead th:last-child, .card .table-wrap tbody td:last-child { padding-right: 16px; }
   .card-header, .section-head { align-items: flex-start; flex-direction: column; }
   .empty-state { padding: 40px 20px; }
   .empty-state h3 { font-size: 18px; }

@@ -17,10 +17,13 @@ export async function GET(req: NextRequest) {
   const search = req.nextUrl.searchParams.get("search") || "";
   const status = req.nextUrl.searchParams.get("status") || "all";
   const flag = req.nextUrl.searchParams.get("flag") || "all";
+  const plan = req.nextUrl.searchParams.get("plan") || "all";
 
   const where: Record<string, unknown> = {};
   if (status === "deleted") where.deletedAt = { not: null };
   else if (status === "active") where.deletedAt = null;
+  if (plan === "free") where.plan = "free";
+  else if (plan === "paid") where.plan = { not: "free" };
 
   const ors: Record<string, unknown>[] = [];
   if (search) {
@@ -53,6 +56,10 @@ export async function GET(req: NextRequest) {
       signupIp: true,
       deviceFingerprint: true,
       reviewedAt: true,
+      plan: true,
+      creditBalance: true,
+      trialEndsAt: true,
+      bachsSubscriptionId: true,
       _count: { select: { campaigns: true, leads: true, emailAccounts: true } },
     },
   });

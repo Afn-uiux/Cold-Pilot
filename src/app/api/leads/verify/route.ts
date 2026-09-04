@@ -6,6 +6,7 @@ import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { verifyEmail, type SmtpConfig } from "@/lib/verify";
+import { DEFINITIVE_VERIFY_REASONS, rememberBadLead } from "@/lib/global-intel";
 import { decryptAccount } from "@/lib/crypto";
 import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
 import { rateLimitAsync } from "@/lib/rate-limit";
@@ -131,8 +132,14 @@ export async function POST(req: Request) {
         const result = await verifyEmail(lead.email, smtpConfig);
         await prisma.lead.update({
           where: { id: lead.id },
-          data: { verificationStatus: result.status, verifiedAt: new Date(), provider: result.provider },
+          data: { verificationStatus: result.status, verificationReason: result.reason, verifiedAt: new Date(), provider: result.provider },
         });
+        // Feed the shared registry: a definitively-dead address proven by one
+        // user's check is instantly known for every other user. Only
+        // definitive verdicts (never risky/unknown) enter the registry.
+        if (result.status === "invalid" && DEFINITIVE_VERIFY_REASONS.has(result.reason)) {
+          await rememberBadLead(lead.email, "mailbox_not_found", "verification");
+        }
         if (result.status === "valid") summary.valid++;
         else if (result.status === "invalid") summary.invalid++;
         else if (result.status === "risky") summary.risky++;

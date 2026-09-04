@@ -137,9 +137,9 @@ export async function POST(req: NextRequest) {
       type === "customer.subscription.created" ||
       type === "customer.subscription.updated"
     ) {
-      await handleSubscriptionState(data as SubscriptionData);
+      await handleSubscriptionState(eventId, type, data as SubscriptionData);
     } else if (type === "customer.subscription.deleted") {
-      await handleSubscriptionCanceled(data as SubscriptionData);
+      await handleSubscriptionCanceled(eventId, data as SubscriptionData);
     }
     // Other events (invoice.*, checkout.completed, etc.) are intentionally
     // ignored; fulfillment keys off the events above.
@@ -149,6 +149,38 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ received: true });
+}
+
+// Payment history ledger (the "water meter"). Every handled billing event
+// writes one row so the platform remembers who paid what and when. This must
+// NEVER break fulfillment: a replay hits the unique providerEventId (P2002,
+// ignored) and any other ledger failure is logged while money movement
+// continues. Current state stays on User; the story lives here.
+async function recordPaymentEvent(data: {
+  userId: string;
+  type: string;
+  amount?: number | null;
+  currency?: string;
+  plan?: string | null;
+  subscriptionId?: string | null;
+  providerEventId: string;
+}): Promise<void> {
+  try {
+    await prisma.paymentEvent.create({
+      data: {
+        userId: data.userId,
+        type: data.type,
+        amount: data.amount ?? null,
+        currency: data.currency ?? "NGN",
+        plan: data.plan ?? null,
+        subscriptionId: data.subscriptionId ?? null,
+        providerEventId: data.providerEventId,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
+    console.error("[bachs-webhook] payment ledger write failed", data.providerEventId, err);
+  }
 }
 
 async function handleCollectionSucceeded(
@@ -186,9 +218,18 @@ async function handleCollectionSucceeded(
   // refId=eventId makes the ledger robust to a replayed webhook even if the
   // dedup row were somehow lost.
   await addCredits(userId, credits, "purchase", eventId);
+
+  await recordPaymentEvent({
+    userId,
+    type: "payment_succeeded",
+    amount: paid,
+    currency,
+    subscriptionId: null,
+    providerEventId: eventId,
+  });
 }
 
-async function handleSubscriptionState(data: SubscriptionData): Promise<void> {
+async function handleSubscriptionState(eventId: string, eventType: string, data: SubscriptionData): Promise<void> {
   const metadata = data.metadata || {};
   const userId = await resolveSubscriptionUser(
     metadata?.userId ? String(metadata.userId) : undefined,
@@ -202,8 +243,9 @@ async function handleSubscriptionState(data: SubscriptionData): Promise<void> {
 
   const customerId = data?.customer?.customer_id;
 
+  const grantsAccess = statusGrantsAccess(data?.status);
   let plan: string;
-  if (statusGrantsAccess(data?.status)) {
+  if (grantsAccess) {
     plan = planId;
   } else {
     // past_due / unpaid / paused: keep the account usable but drop paid-plan
@@ -219,9 +261,24 @@ async function handleSubscriptionState(data: SubscriptionData): Promise<void> {
       ...(customerId ? { bachsCustomerId: customerId } : {}),
     },
   });
+
+  await recordPaymentEvent({
+    userId,
+    type:
+      eventType === "customer.subscription.created"
+        ? "subscription_started"
+        : grantsAccess
+          ? "subscription_renewed"
+          : "subscription_past_due",
+    amount: null,
+    currency: "NGN",
+    plan: planId,
+    subscriptionId,
+    providerEventId: eventId,
+  });
 }
 
-async function handleSubscriptionCanceled(data: SubscriptionData): Promise<void> {
+async function handleSubscriptionCanceled(eventId: string, data: SubscriptionData): Promise<void> {
   const metadata = data.metadata || {};
   const userId = await resolveSubscriptionUser(
     metadata?.userId ? String(metadata.userId) : undefined,
@@ -242,4 +299,14 @@ async function handleSubscriptionCanceled(data: SubscriptionData): Promise<void>
       data: { plan: "free", bachsSubscriptionId: null },
     });
   }
+
+  await recordPaymentEvent({
+    userId,
+    type: "subscription_canceled",
+    amount: null,
+    currency: "NGN",
+    plan: null,
+    subscriptionId,
+    providerEventId: eventId,
+  });
 }

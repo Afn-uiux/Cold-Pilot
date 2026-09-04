@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Search01Icon } from "@/components/icons/search-01";
 
@@ -17,6 +18,10 @@ interface AdminUser {
   trialVoidReason: string | null;
   signupIp: string | null;
   reviewedAt: string | null;
+  plan: string;
+  creditBalance: number;
+  trialEndsAt: string | null;
+  bachsSubscriptionId: string | null;
   _count: { campaigns: number; leads: number; emailAccounts: number };
 }
 
@@ -40,15 +45,16 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("all");
+  const [planFilter, setPlanFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  async function fetchUsers(q: string, t: string) {
+  async function fetchUsers(q: string, t: string, p: string = planFilter) {
     setLoading(true);
     const isFlagged = t === "flagged";
     const status = isFlagged ? "active" : t;
     const flag = isFlagged ? "flagged" : "all";
-    const res = await fetch(`/api/admin/users?search=${encodeURIComponent(q)}&status=${status}&flag=${flag}`);
+    const res = await fetch(`/api/admin/users?search=${encodeURIComponent(q)}&status=${status}&flag=${flag}&plan=${p}`);
     const data = await res.json();
     setUsers(data.users || []);
     setLoading(false);
@@ -69,12 +75,17 @@ export default function AdminUsersPage() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    fetchUsers(search, tab);
+    fetchUsers(search, tab, planFilter);
   }
 
   function changeTab(t: string) {
     setTab(t);
-    fetchUsers(search, t);
+    fetchUsers(search, t, planFilter);
+  }
+
+  function changePlan(p: string) {
+    setPlanFilter(p);
+    fetchUsers(search, tab, p);
   }
 
   async function patchUser(userId: string, body: Record<string, unknown>) {
@@ -137,6 +148,16 @@ export default function AdminUsersPage() {
                 </button>
               ))}
             </div>
+            <select
+              value={planFilter}
+              onChange={(e) => changePlan(e.target.value)}
+              className="btn btn-xs btn-ghost ml-2"
+              aria-label="Filter by plan"
+            >
+              <option value="all">All plans</option>
+              <option value="free">Free</option>
+              <option value="paid">Paid</option>
+            </select>
           </div>
         </form>
 
@@ -146,6 +167,8 @@ export default function AdminUsersPage() {
               <tr>
                 <th>Name</th>
                 <th>Email</th>
+                <th>Plan</th>
+                <th>Credits</th>
                 <th>Risk</th>
                 <th>Campaigns</th>
                 <th>Leads</th>
@@ -158,11 +181,11 @@ export default function AdminUsersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="text-center text-muted-2 py-12">Loading...</td>
+                  <td colSpan={11} className="text-center text-muted-2 py-12">Loading...</td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center text-muted-2 py-12">No users found</td>
+                  <td colSpan={11} className="text-center text-muted-2 py-12">No users found</td>
                 </tr>
               ) : (
                 users.map((u) => {
@@ -170,8 +193,26 @@ export default function AdminUsersPage() {
                   const needsReview = u.riskStatus === "flagged" || u.riskStatus === "banned";
                   return (
                     <tr key={u.id} className={u.deletedAt ? "opacity-70" : ""}>
-                      <td className="font-medium">{u.name || "—"}</td>
-                      <td>{u.email}</td>
+                      <td className="font-medium">
+                        <Link href={`/admin/users/${u.id}`} className="hover:text-blue-accent transition-colors">
+                          {u.name || "—"}
+                        </Link>
+                      </td>
+                      <td>
+                        <Link href={`/admin/users/${u.id}`} className="hover:text-blue-accent transition-colors">
+                          {u.email}
+                        </Link>
+                      </td>
+                      <td>
+                        {(u.plan ?? "free") !== "free" ? (
+                          <span className="text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full whitespace-nowrap">
+                            {u.plan}{u.bachsSubscriptionId ? " · sub" : ""}
+                          </span>
+                        ) : (
+                          <span className="badge draft">free</span>
+                        )}
+                      </td>
+                      <td className="text-muted">{Math.round(u.creditBalance ?? 0)}</td>
                       <td>
                         {needsReview || u.trialVoided ? (
                           <div className="flex flex-col gap-1 items-start">

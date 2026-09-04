@@ -15,6 +15,13 @@ export default async function AdminDashboardPage() {
     totalLeads,
     totalEmailsSent,
     totalWarmupEmails,
+    bounces7d,
+    sent7d,
+    verifiedLeads,
+    suppressions,
+    creditsOutstanding,
+    pausedAccounts,
+    flaggedUsers,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { updatedAt: { gte: sevenDaysAgo } } }),
@@ -23,6 +30,15 @@ export default async function AdminDashboardPage() {
     prisma.lead.count({ where: { deletedAt: null } }),
     prisma.emailLog.count(),
     prisma.warmupLog.count({ where: { status: "sent" } }),
+    prisma.bounceEvent.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+    prisma.emailLog.count({
+      where: { type: "outgoing", status: "sent", sentAt: { gte: sevenDaysAgo } },
+    }),
+    prisma.lead.count({ where: { deletedAt: null, verifiedAt: { not: null } } }),
+    prisma.suppression.count(),
+    prisma.user.aggregate({ _sum: { creditBalance: true } }),
+    prisma.emailAccount.count({ where: { isPaused: true } }),
+    prisma.user.count({ where: { OR: [{ riskStatus: "flagged" }, { riskStatus: "banned" }] } }),
   ]);
 
   const recentUsers = await prisma.user.findMany({
@@ -70,6 +86,37 @@ export default async function AdminDashboardPage() {
           <div className="metric">
             <div className="metric-label">Warmup Emails</div>
             <div className="metric-value">{totalWarmupEmails}</div>
+          </div>
+        </div>
+
+        <div className="metrics mt-8">
+          <div className="metric">
+            <div className="metric-label">Bounce rate · 7d</div>
+            <div className="metric-value">
+              {sent7d > 0 ? ((bounces7d / sent7d) * 100).toFixed(2) : "0.00"}%
+            </div>
+            <div className="metric-change text-muted">{bounces7d} bounces</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Leads verified</div>
+            <div className="metric-value">
+              {totalLeads > 0 ? Math.round((verifiedLeads / totalLeads) * 100) : 0}%
+            </div>
+            <div className="metric-change text-muted">{verifiedLeads} of {totalLeads}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Suppressions</div>
+            <div className="metric-value">{suppressions}</div>
+            <div className="metric-change text-muted">never-send list</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Credits outstanding</div>
+            <div className="metric-value">{Math.round(creditsOutstanding._sum.creditBalance ?? 0)}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Needs attention</div>
+            <div className="metric-value">{pausedAccounts + flaggedUsers}</div>
+            <div className="metric-change text-muted">{pausedAccounts} paused accts · {flaggedUsers} flagged users</div>
           </div>
         </div>
 

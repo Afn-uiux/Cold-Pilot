@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { sendEmailSafe } from "./email/send";
+import { rememberBadLead } from "./global-intel";
 
 const HIGH_BOUNCE_THRESHOLD = 0.3;
 const MEDIUM_BOUNCE_THRESHOLD = 0.15;
@@ -36,6 +37,13 @@ export async function recordBounce(
       leadId,
     },
   });
+
+  // Feed the shared registry on definitive hard bounces only. A hard bounce
+  // is the receiving server stating the address does not exist — safe to
+  // share globally. Soft/temporary bounces stay per-user.
+  if (bounceType === "hard_bounce") {
+    await rememberBadLead(email, "hard_bounce", "bounce");
+  }
 
   const domainStats = await prisma.bounceEvent.aggregate({
     where: { domain },
