@@ -95,10 +95,14 @@ export async function proxy(request: NextRequest) {
     const hasBypass =
       !!bypassToken && request.cookies.get("wp_bypass")?.value === bypassToken;
     if (!hasBypass) {
+      // Static assets (logo, icons, manifest, robots, etc.) must stay public
+      // or the landing/waitlist pages render broken.
+      const isAsset = /\.(png|jpe?g|svg|gif|webp|avif|ico|webmanifest|xml|txt|css|js|woff2?|ttf|eot|otf|mp4)$/i.test(pathname);
       const isPublic =
         pathname === "/" ||
         pathname === "/waitlist" ||
-        pathname.startsWith("/legal/");
+        pathname.startsWith("/legal/") ||
+        isAsset;
       if (!isPublic) {
         const res = NextResponse.redirect(new URL("/waitlist", request.url));
         applySecurityHeaders(res, cspHeader);
