@@ -116,7 +116,11 @@ export async function POST(req: Request) {
     } catch {}
   }
 
-  const BATCH_SIZE = 50;
+  // Each lead opens up to 4 concurrent port-25 sockets (1 probe + 3
+  // catch-all checks). 50-wide batches meant up to 200 simultaneous
+  // outbound SMTP connections — enough to get throttled or blocklisted by
+  // big receivers. 20 keeps bursts polite without slowing small lists.
+  const BATCH_SIZE = 20;
   const summary = { total: leads.length, valid: 0, invalid: 0, risky: 0, unknown: 0 };
 
   for (let i = 0; i < leads.length; i += BATCH_SIZE) {

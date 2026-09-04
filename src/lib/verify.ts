@@ -96,6 +96,13 @@ export async function verifyMX(email: string): Promise<{ valid: boolean; mxRecor
   }
 }
 
+// Identity used for raw port-25 probes. This hostname MUST resolve (A record)
+// to the probing server's IPv4 AND match its reverse DNS (PTR). Receivers
+// reject or heavily penalize probes whose EHLO hostname doesn't resolve,
+// and SPF on the MAIL FROM domain must authorize the probing IP.
+const PROBE_HELO_HOST = "server.usecoldpilot.com";
+const PROBE_MAIL_FROM = "verify@usecoldpilot.com";
+
 function smtpVerify(email: string, mxHost: string): Promise<{ valid: boolean; catchAll: boolean; reason: string }> {
   return new Promise((resolve) => {
     // SSRF guard: the MX host comes from DNS MX records of a user-supplied
@@ -114,7 +121,10 @@ function smtpVerify(email: string, mxHost: string): Promise<{ valid: boolean; ca
 }
 
 function openSmtpSocket(email: string, mxHost: string, resolve: (v: { valid: boolean; catchAll: boolean; reason: string }) => void) {
-    const socket = net.createConnection({ host: mxHost, port: 25 });
+    // Force IPv4: the server's IPv6 has no PTR, so v6 egress would present a
+    // HELO/PTR mismatch and get penalized. The v4 address has matching
+    // forward + reverse DNS (server.usecoldpilot.com <-> 40.160.88.93).
+    const socket = net.createConnection({ host: mxHost, port: 25, family: 4 });
     let buffer = "";
     let resolved = false;
     let step = 0;
@@ -122,6 +132,9 @@ function openSmtpSocket(email: string, mxHost: string, resolve: (v: { valid: boo
     const cleanup = () => {
       if (resolved) return;
       resolved = true;
+      // Be polite: a clean QUIT keeps us off "rude client" throttles that
+      // penalize servers which connect, probe, and vanish without goodbye.
+      try { socket.write("QUIT\r\n"); } catch {}
       try { socket.destroy(); } catch {}
     };
 
@@ -145,11 +158,11 @@ function openSmtpSocket(email: string, mxHost: string, resolve: (v: { valid: boo
 
         if (step === 0) {
           step = 1;
-          socket.write(`EHLO verify.usecoldpilot.com\r\n`);
+          socket.write(`EHLO ${PROBE_HELO_HOST}\r\n`);
         } else if (step === 1 && (code === 250 || code === 220)) {
           if (line.startsWith("250-")) continue;
           step = 2;
-          socket.write(`MAIL FROM:<verify@usecoldpilot.com>\r\n`);
+          socket.write(`MAIL FROM:<${PROBE_MAIL_FROM}>\r\n`);
         } else if (step === 2 && (code === 250 || code === 220)) {
           step = 3;
           socket.write(`RCPT TO:<${email}>\r\n`);
@@ -266,7 +279,7 @@ function runAccountSmtp(targetEmail: string, config: SmtpConfig, resolve: (v: { 
 
         if (step === 0) {
           step = 1;
-          socket.write(`EHLO usecoldpilot.com\r\n`);
+          socket.write(`EHLO ${PROBE_HELO_HOST}\r\n`);
         } else if (step === 1 && code === 250) {
           if (!useTls && /STARTTLS/i.test(line)) {
             supportsStartTls = true;
@@ -291,7 +304,7 @@ function runAccountSmtp(targetEmail: string, config: SmtpConfig, resolve: (v: { 
           const secureSocket = tls.connect({ socket, rejectUnauthorized: true }, () => {
             step = 1;
             buffer = "";
-            socket.write(`EHLO usecoldpilot.com\r\n`);
+            socket.write(`EHLO ${PROBE_HELO_HOST}\r\n`);
           });
           secureSocket.on("data", (d: Buffer) => {
             buffer += d.toString();
@@ -407,6 +420,23 @@ const SMTP_UNREACHABLE_REASONS = new Set([
   "ehlo_rejected_421", "ehlo_rejected_451", "ehlo_rejected_452",
 ]);
 
+// Try each MX in order until one gives a definitive answer. The first MX is
+// sometimes slow, dead, or throttling probers while a secondary answers
+// cleanly — failing the whole check on mx[0] alone caused false "unknown"s.
+async function smtpVerifyWithMxFallback(
+  email: string,
+  mxRecords: string[],
+): Promise<{ result: { valid: boolean; catchAll: boolean; reason: string }; mxHost: string }> {
+  let last = { valid: false, catchAll: false, reason: "mx_valid_smtp_unreachable" };
+  const hosts = mxRecords.slice(0, 3);
+  for (const mxHost of hosts) {
+    const r = await smtpVerify(email, mxHost);
+    last = r;
+    if (r.valid || !SMTP_UNREACHABLE_REASONS.has(r.reason)) return { result: r, mxHost };
+  }
+  return { result: last, mxHost: hosts[0] };
+}
+
 export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promise<VerificationResult> {
   const normalized = email.toLowerCase().trim();
 
@@ -453,7 +483,7 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
     if (accountResult.valid) {
       const isCatchAll = await verifyCatchAll(domain, mxRecords[0]);
       if (isCatchAll) {
-        return { status: "invalid", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
+        return { status: "risky", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
       }
       return { status: "valid", reason: "mailbox_exists", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: false };
     }
@@ -475,12 +505,20 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
     }
   }
 
-  const smtpResult = await smtpVerify(normalized, mxRecords[0]);
+  // Raw port-25 probe with MX fallback. Probes run over IPv4 with an
+  // EHLO hostname that matches our PTR, and MAIL FROM from a domain whose
+  // SPF authorizes the probing IP — otherwise receivers greylist or reject
+  // the probe itself and every answer comes back "unknown".
+  const { result: smtpResult, mxHost: workingMx } = await smtpVerifyWithMxFallback(normalized, mxRecords);
 
   if (smtpResult.valid) {
-    const isCatchAll = await verifyCatchAll(domain, mxRecords[0]);
+    const isCatchAll = await verifyCatchAll(domain, workingMx);
     if (isCatchAll) {
-      return { status: "invalid", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
+      // Accept-all domains (Gmail, Outlook, corporate catch-alls) confirm
+      // nothing: the address may or may not exist. Marking these "invalid"
+      // silently discarded every Gmail lead; marking "valid" would be a lie.
+      // "risky" lets the user decide per campaign.
+      return { status: "risky", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
     }
     return { status: "valid", reason: "mailbox_exists", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: false };
   }
