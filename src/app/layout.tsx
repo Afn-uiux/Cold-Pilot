@@ -42,7 +42,15 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
       </head>
-      <body className="min-h-full">{<Providers>{children}</Providers>}</body>
+      <body className="min-h-full">
+        {<Providers>{children}</Providers>}
+        {/* Cloudflare Web Analytics beacon (manual install; see .env.example). */}
+        <script
+          type="module"
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon='{"token": "c81cc2e1e8a7411a97964b50c4d54d7e"}'
+        />
+      </body>
     </html>
   );
 }

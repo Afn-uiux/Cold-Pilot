@@ -17,7 +17,7 @@ function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV === "development";
   const header = `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""};
+    script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://static.cloudflareinsights.com${isDev ? " 'unsafe-eval'" : ""};
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' data: blob: https:;
     font-src 'self' data: https://fonts.gstatic.com;
