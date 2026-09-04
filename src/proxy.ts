@@ -81,6 +81,32 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
 
   const { pathname } = request.nextUrl;
+
+  // Waitlist mode (WAITLIST_MODE=true): only the landing page, the waitlist
+  // page, and legal pages stay public. Everything else funnels to /waitlist.
+  // Local dev is unaffected unless the flag is set. Note the matcher excludes
+  // /api/*, so the waitlist form endpoint stays reachable by design.
+  //
+  // Operator bypass: a browser holding the wp_bypass cookie (minted at
+  // /api/waitlist/bypass?token=...) skips the gate entirely, so you can still
+  // log in with your existing account while visitors see the waitlist.
+  if (process.env.WAITLIST_MODE === "true") {
+    const bypassToken = process.env.WAITLIST_BYPASS_TOKEN;
+    const hasBypass =
+      !!bypassToken && request.cookies.get("wp_bypass")?.value === bypassToken;
+    if (!hasBypass) {
+      const isPublic =
+        pathname === "/" ||
+        pathname === "/waitlist" ||
+        pathname.startsWith("/legal/");
+      if (!isPublic) {
+        const res = NextResponse.redirect(new URL("/waitlist", request.url));
+        applySecurityHeaders(res, cspHeader);
+        return res;
+      }
+    }
+  }
+
   const cookieName = getCookieName(request);
   const sessionCookie = request.cookies.get(cookieName)?.value
     || request.cookies.get("__Secure-authjs.session-token")?.value

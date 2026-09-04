@@ -643,3 +643,16 @@ model SeedInbox {
   @@index([status])
   @@index([email])
 }
+
+// Anonymous waitlist signups collected while the app is in waitlist mode
+// (WAITLIST_MODE=true). No user account exists yet — just an email to notify
+// at launch. Email is unique so re-submits are idempotent.
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  name      String   @default("")
+  email     String   @unique
+  source    String   @default("waitlist")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

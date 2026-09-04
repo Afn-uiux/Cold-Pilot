@@ -50,6 +50,9 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 
   // Re-engagement
   { id: "we-miss-you", subject: "We miss you", category: "Re-engagement", filename: "reengagement-we-miss-you.html" },
+
+  // Waitlist
+  { id: "waitlist-notify", subject: "New waitlist signup", category: "Waitlist", filename: "waitlist-notify.html" },
 ];
 
 export type EmailTemplateId = (typeof EMAIL_TEMPLATES)[number]["id"];

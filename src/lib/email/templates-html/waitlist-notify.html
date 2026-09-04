@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New waitlist signup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#0F1929;--paper:#FFFFFF;--paper-dim:#F8FAFC;--accent:#2563EB;--muted:#5A6B87;--line:#E8E5E0;}
+  *{box-sizing:border-box;}
+  body{margin:0;padding:0;background:var(--paper-dim);font-family:'Geist',system-ui,-apple-system,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;}
+  .outer{width:100%;padding:40px 16px;}
+  .card{max-width:600px;margin:0 auto;background:var(--paper);border-radius:2px;overflow:hidden;box-shadow:0 1px 2px rgba(15,25,41,0.06);}
+  .topbar{padding:28px 36px 0 36px;}
+  .hero{padding:36px 36px 8px 36px;}
+  p.eyebrow{font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--accent);margin:0 0 14px 0;}
+  h1.headline{font-weight:700;font-size:28px;line-height:1.2;margin:0 0 12px 0;color:var(--ink);}
+  p.lede{font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 20px 0;}
+  .email-box{background:var(--paper-dim);border:1px solid var(--line);border-radius:8px;padding:16px 20px;font-size:16px;font-weight:600;color:var(--ink);}
+  .footer{padding:32px 36px 36px 36px;text-align:center;}
+  p.legal{font-size:12px;color:#8A9BB5;line-height:1.7;margin:0;}
+</style>
+</head>
+<body>
+<div class="outer">
+  <div class="card">
+    <div class="topbar">
+      <img src="https://usecoldpilot.com/coldpilot-logo.png" alt="Coldpilot" style="height:26px;width:auto;display:inline-block;border:0;" />
+    </div>
+
+    <div class="hero">
+      <p class="eyebrow">Waitlist</p>
+      <h1 class="headline">{{name}} just joined the waitlist.</h1>
+      <p class="lede">Total signups so far: {{count}}.</p>
+      <div class="email-box">{{name}}<br><span style="font-weight:400;font-size:14px;color:#5A6B87;">{{email}}</span></div>
+    </div>
+
+    <div class="footer">
+      <p class="legal">Copyright © 2026 Coldpilot, Inc.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>
