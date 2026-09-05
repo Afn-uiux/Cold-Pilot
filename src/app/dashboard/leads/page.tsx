@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import ConfirmModal from "@/components/confirm-modal";
 import Select from "@/components/select";
 import { Search01Icon } from "@/components/icons/search-01";
@@ -35,7 +35,6 @@ function getEmailProvider(email: string) {
 }
 
 export default function LeadsPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const urlCampaignId = searchParams.get("campaignId") || "";
   const { toast } = useToast();
@@ -156,7 +155,7 @@ export default function LeadsPage() {
     setLeads([]);
     setSelectedIds(new Set());
     setShowConfirmAll(false);
-    toast("All leads removed", "success");
+    toast("All leads removed", "info");
   }
 
   async function handleVerifyAll() {
@@ -205,16 +204,27 @@ export default function LeadsPage() {
         body: JSON.stringify({ leads: lines.map(email => ({ email })), campaignId: importCampaignId || undefined }),
       });
       const result = await res.json();
-      setImportResult(result);
       if (result.imported > 0) {
+        setResultAndClose(result);
         const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
         const fresh = await fetch(freshUrl).then(r => r.json());
         setLeads(Array.isArray(fresh) ? fresh : []);
+      } else {
+        setImportResult(result);
       }
     } catch {
       setImportResult({ error: "Import failed" });
     } finally {
       setImporting(false);
+    }
+  }
+
+  function setResultAndClose(result: { imported: number }) {
+    if (result.imported > 0) {
+      setShowImport(false);
+      setImportResult(null);
+    } else {
+      setImportResult(result);
     }
   }
 
@@ -228,11 +238,13 @@ export default function LeadsPage() {
       if (importCampaignId) formData.append("campaignId", importCampaignId);
       const res = await fetch("/api/leads/import", { method: "POST", body: formData });
       const result = await res.json();
-      setImportResult(result);
       if (result.imported > 0) {
+        setResultAndClose(result);
         const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
         const fresh = await fetch(freshUrl).then(r => r.json());
         setLeads(Array.isArray(fresh) ? fresh : []);
+      } else {
+        setImportResult(result);
       }
     } catch {
       setImportResult({ error: "Import failed" });
@@ -252,11 +264,13 @@ export default function LeadsPage() {
         body: JSON.stringify({ url: linkUrl, campaignId: importCampaignId || undefined }),
       });
       const result = await res.json();
-      setImportResult(result);
       if (result.imported > 0) {
+        setResultAndClose(result);
         const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
         const fresh = await fetch(freshUrl).then(r => r.json());
         setLeads(Array.isArray(fresh) ? fresh : []);
+      } else {
+        setImportResult(result);
       }
     } catch (e: any) {
       setImportResult({ error: e?.message || "Failed to import from URL." });
@@ -448,11 +462,6 @@ export default function LeadsPage() {
                       Duplicates: {importResult.duplicateEmails.join(", ")}
                     </div>
                   )}
-                </div>
-              )}
-              {importResult?.imported > 0 && importCampaignId && (
-                <div className="flex gap-2 mb-4">
-                  <button onClick={() => { setShowImport(false); router.push(`/dashboard/campaigns/${importCampaignId}?tab=leads`); }} className="btn btn-primary flex-1">Continue to Leads</button>
                 </div>
               )}
 
