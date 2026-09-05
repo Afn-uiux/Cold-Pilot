@@ -36,6 +36,12 @@ export async function signup(formData: FormData) {
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
+    if (!existing.emailVerified) {
+      // Account already exists but never had its verification link clicked.
+      // Show the check-your-inbox state again, with a resend option, instead
+      // of silently routing into the login flow.
+      return { success: true, verificationRequired: true };
+    }
     // Enumeration-safe: respond identically to a successful signup so an
     // attacker cannot probe which emails are registered. No account is created
     // and nothing is revealed; the legitimate owner just signs in normally.

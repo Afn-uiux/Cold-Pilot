@@ -61,25 +61,38 @@ export default function BackupSection() {
               <th>File</th>
               <th>Size</th>
               <th>Created</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={3} className="text-center text-muted-2 py-8">Loading...</td></tr>
+              <tr><td colSpan={4} className="text-center text-muted-2 py-8">Loading...</td></tr>
             ) : backups.length === 0 ? (
-              <tr><td colSpan={3} className="text-center text-muted-2 py-8">No backups yet</td></tr>
+              <tr><td colSpan={4} className="text-center text-muted-2 py-8">No backups yet</td></tr>
             ) : (
               backups.map((b) => (
                 <tr key={b.name}>
                   <td className="font-medium">{b.name}</td>
                   <td>{b.size}</td>
                   <td className="text-muted">{new Date(b.created).toLocaleString()}</td>
+                  <td>
+                    <a
+                      href={`/api/admin/backup?download=${encodeURIComponent(b.name)}`}
+                      className="btn btn-ghost btn-xs"
+                      download
+                    >
+                      Download
+                    </a>
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+      <p className="text-sm text-muted mt-3">
+        Backups are verified before they're kept. Download one to your PC after big milestones — it's your off-server copy.
+      </p>
     </div>
   );
 }

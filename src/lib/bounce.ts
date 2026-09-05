@@ -13,7 +13,11 @@ export function categorizeBounce(err: any): { type: string; suppress: boolean } 
   if (msg.includes("552") || msg.includes("mailbox full") || msg.includes("over quota") || msg.includes("try again")) return { type: "soft_bounce", suppress: false };
   if (msg.includes("suppressed")) return { type: "suppressed", suppress: false };
   if (msg.includes("550") || msg.includes("554")) return { type: "hard_bounce", suppress: true };
-  return { type: "hard_bounce", suppress: true };
+  // Unknown error text: NEVER assume a hard bounce. Treating an unrecognized
+  // (often transient) failure as permanent burned addresses, fired phantom
+  // bounce notifications, and polluted domain reputation. Unknown failures
+  // roll back to pending for retry via the caller's else-branch.
+  return { type: "unknown_bounce", suppress: false };
 }
 
 export function extractBounceReason(err: any): string {

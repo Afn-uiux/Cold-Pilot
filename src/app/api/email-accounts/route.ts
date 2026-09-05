@@ -223,7 +223,14 @@ export async function POST(req: Request) {
     sendEmailSafe(email, "onboarding-connect-account");
   }
 
-  return NextResponse.json(account);
+  // Never hand ciphertext to the browser: re-read through SAFE_FIELDS so
+  // enc: secrets (smtp/imap passwords, tokens) stay server-side. Ciphertext
+  // in client hands enables offline brute-force and survives key rotation.
+  const safe = await prisma.emailAccount.findUnique({
+    where: { id: account.id },
+    select: SAFE_FIELDS,
+  });
+  return NextResponse.json(safe);
 }
 
 export async function PATCH(req: NextRequest) {

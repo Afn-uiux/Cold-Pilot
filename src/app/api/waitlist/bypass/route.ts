@@ -1,6 +1,8 @@
 export const runtime = "nodejs";
 
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitAsync } from "@/lib/rate-limit";
 
 // Operator bypass for waitlist mode. Visit
 //   /api/waitlist/bypass?token=<WAITLIST_BYPASS_TOKEN>
@@ -16,7 +18,20 @@ export async function GET(req: NextRequest) {
   const secret = process.env.WAITLIST_BYPASS_TOKEN;
   const token = req.nextUrl.searchParams.get("token") ?? "";
 
-  if (!secret || token !== secret) {
+  // Brute-force hygiene on the only secret-guessing vector here.
+  const rl = await rateLimitAsync(`bypass:${req.headers.get("x-forwarded-for") || "ip"}`, {
+    max: 10,
+    windowMs: 60_000,
+  });
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  // Constant-time compare: plain !== leaks prefix info byte-by-byte.
+  const a = Buffer.from(token);
+  const b = Buffer.from(secret || "");
+  const match = a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
+  if (!secret || !match) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 

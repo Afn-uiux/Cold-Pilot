@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
 
+import crypto from "crypto";
 import { auth } from "@/lib/auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +9,10 @@ import { normalizeMessageId } from "@/engine/send";
 import nodemailer from "nodemailer";
 import { decryptAccount } from "@/lib/crypto";
 import { canSendFromAccount } from "@/lib/send-gate";
+import { canSendToLead } from "@/lib/verify";
+import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
+import { CREDIT_COSTS } from "@/lib/plans";
+import { rateLimitAsync } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -20,8 +25,28 @@ export async function POST(req: NextRequest) {
   const { leadId, body } = await req.json();
   if (!leadId || !body?.trim()) return NextResponse.json({ error: "Missing leadId or body" }, { status: 400 });
 
-  const lead = await prisma.lead.findFirst({ where: { id: leadId, userId: session.user.id, deletedAt: null } });
+  const userId = session.user.id;
+
+  // Throttle: replies send real email; without a per-user limit this is an
+  // unthrottled send primitive.
+  const rl = await rateLimitAsync(`reply:${userId}`, { max: 30, windowMs: 60_000 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many replies. Please wait a moment and try again." },
+      { status: 429 }
+    );
+  }
+
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, userId, deletedAt: null } });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+
+  // Never-send list holds everywhere, including manual replies.
+  const suppressed = await prisma.suppression.findUnique({
+    where: { userId_email: { userId, email: lead.email.toLowerCase().trim() } },
+  });
+  if (suppressed) {
+    return NextResponse.json({ error: "This email is suppressed and cannot be contacted." }, { status: 400 });
+  }
 
   // Find an account to reply from — prefer the one used for the last email, then any connected account
   const lastLog = await prisma.emailLog.findFirst({
@@ -42,6 +67,41 @@ export async function POST(req: NextRequest) {
   const gate = await canSendFromAccount(account.id, account.dailySendLimit || 50);
   if (!gate.allowed) {
     return NextResponse.json({ error: `Send blocked: ${gate.reason}` }, { status: 429 });
+  }
+
+  // Verification gate for cold replies (no prior outgoing thread): a reply
+  // with no thread behind it is a cold send by another name, so invalid /
+  // unknown leads are blocked like everywhere else. Established threads
+  // (lastLog exists) are real conversations — never block those.
+  if (!lastLog) {
+    const sendCheck = canSendToLead(lead.verificationStatus, false, false);
+    if (!sendCheck.allowed) {
+      return NextResponse.json(
+        { error: `Send blocked: lead verification is ${lead.verificationStatus || "missing"} (${sendCheck.reason}). Verify the lead first.` },
+        { status: 400 }
+      );
+    }
+  }
+
+  // Metered billing, matching manual + campaign sends: free-plan replies
+  // spend one send credit. Each user click is its own billable event.
+  const sender = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { plan: true },
+  });
+  if (sender?.plan === "free") {
+    try {
+      await spendCredits(userId, CREDIT_COSTS.campaign, "campaign_send", `reply:${crypto.randomUUID()}`);
+    } catch (err) {
+      if (err instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { error: "You're out of credits. Buy more to send emails." },
+          { status: 402 },
+        );
+      }
+      console.error("Reply credit deduction failed:", err);
+      return NextResponse.json({ error: "Failed to process credits. Please try again." }, { status: 500 });
+    }
   }
 
   const htmlBody = body.replace(/\n/g, "<br>");

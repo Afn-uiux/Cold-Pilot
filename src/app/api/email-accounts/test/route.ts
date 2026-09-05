@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { decryptAccount, encryptAccount } from "@/lib/crypto";
 import { assertSafeSocketTarget, isAllowedSocketPort } from "@/lib/ssrf";
+import { rateLimitAsync } from "@/lib/rate-limit";
 
 async function getGoogleAccessToken(refreshToken: string): Promise<string | null> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -68,6 +69,17 @@ export async function POST(req: Request) {
   }
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Throttle: each call opens live SMTP/IMAP connections to third-party
+  // servers with caller-supplied credentials — a probe/credential-stuffing
+  // amplifier without a per-user limit.
+  const rl = await rateLimitAsync(`conntest:${session.user.id}`, { max: 20, windowMs: 60_000 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many connection tests. Please wait a moment and try again." },
+      { status: 429 }
+    );
   }
 
   const body = await req.json();

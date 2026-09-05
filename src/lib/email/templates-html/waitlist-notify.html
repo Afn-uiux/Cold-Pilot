@@ -4,42 +4,36 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>New waitlist signup</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{--ink:#0F1929;--paper:#FFFFFF;--paper-dim:#F8FAFC;--accent:#2563EB;--muted:#5A6B87;--line:#E8E5E0;}
-  *{box-sizing:border-box;}
-  body{margin:0;padding:0;background:var(--paper-dim);font-family:'Geist',system-ui,-apple-system,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;}
-  .outer{width:100%;padding:40px 16px;}
-  .card{max-width:600px;margin:0 auto;background:var(--paper);border-radius:2px;overflow:hidden;box-shadow:0 1px 2px rgba(15,25,41,0.06);}
-  .topbar{padding:28px 36px 0 36px;}
-  .hero{padding:36px 36px 8px 36px;}
-  p.eyebrow{font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--accent);margin:0 0 14px 0;}
-  h1.headline{font-weight:700;font-size:28px;line-height:1.2;margin:0 0 12px 0;color:var(--ink);}
-  p.lede{font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 20px 0;}
-  .email-box{background:var(--paper-dim);border:1px solid var(--line);border-radius:8px;padding:16px 20px;font-size:16px;font-weight:600;color:var(--ink);}
-  .footer{padding:32px 36px 36px 36px;text-align:center;}
-  p.legal{font-size:12px;color:#8A9BB5;line-height:1.7;margin:0;}
+  /* Progressive enhancement only: clients that strip <style> still get the
+     fully inline desktop version below. No CSS variables, no flexbox. */
+  @media (max-width: 620px) {
+    .card-table { width: 100% !important; }
+    .px { padding-left: 22px !important; padding-right: 22px !important; }
+    .headline { font-size: 27px !important; }
+  }
 </style>
 </head>
-<body>
-<div class="outer">
-  <div class="card">
-    <div class="topbar">
-      <img src="https://usecoldpilot.com/coldpilot-logo.png" alt="Coldpilot" style="height:26px;width:auto;display:inline-block;border:0;" />
-    </div>
-
-    <div class="hero">
-      <p class="eyebrow">Waitlist</p>
-      <h1 class="headline">{{name}} just joined the waitlist.</h1>
-      <p class="lede">Total signups so far: {{count}}.</p>
-      <div class="email-box">{{name}}<br><span style="font-weight:400;font-size:14px;color:#5A6B87;">{{email}}</span></div>
-    </div>
-
-    <div class="footer">
-      <p class="legal">Copyright © 2026 Coldpilot, Inc.</p>
-    </div>
-  </div>
-</div>
+  <body style="margin:0;padding:0;background-color:#F8FAFC;color:#0F1929;-webkit-font-smoothing:antialiased;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F8FAFC;">
+<tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" class="card-table" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:#FFFFFF;border-radius:2px;">
+<tr><td class="px" style="padding:28px 36px 0 36px;">
+<img src="https://usecoldpilot.com/coldpilot-logo.png" alt="Coldpilot" width="148" style="height:26px;width:auto;display:block;border:0;" />
+</td></tr>
+<tr><td class="px" style="padding:36px 36px 8px 36px;">
+<p style="font-family:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#2563EB;margin:0 0 14px 0;">Waitlist</p>
+<h1 class="headline" style="font-family:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:700;font-size:28px;line-height:1.2;margin:0 0 12px 0;color:#0F1929;">{{name}} just joined the waitlist.</h1>
+<p style="font-size:15px;line-height:1.6;color:#5A6B87;margin:0 0 20px 0;">Total signups so far: {{count}}.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F8FAFC;border:1px solid #E8E5E0;border-radius:8px;"><tr><td style="padding:16px 20px;font-size:16px;font-weight:600;color:#0F1929;">
+{{name}}<br><span style="font-weight:400;font-size:14px;color:#5A6B87;">{{email}}</span>
+</td></tr></table>
+</td></tr>
+<tr><td class="px" align="center" style="padding:32px 36px 36px 36px;text-align:center;">
+<p style="font-size:12px;color:#8A9BB5;line-height:1.7;margin:0;">&copy; 2026 Coldpilot, Inc.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
 </body>
 </html>

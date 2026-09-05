@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
 
+import crypto from "crypto";
 import { auth } from "@/lib/auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
@@ -83,8 +84,15 @@ export async function POST(req: Request) {
     case "tick": {
       // Global warmup processing must not be triggerable by any authenticated
       // user — that would let a single tenant run (and load) the warmup engine
-      // for every account in the product. Cron-secret only.
-      if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+      // for every account in the product. Cron-secret only, constant-time
+      // compare, fail-closed when the secret is unset.
+      const cronSecret = process.env.CRON_SECRET;
+      const authHeader = req.headers.get("authorization");
+      const expected = cronSecret ? `Bearer ${cronSecret}` : "";
+      const a = Buffer.from(authHeader || "");
+      const b = Buffer.from(expected);
+      const authorized = a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
+      if (!cronSecret || !authorized) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       const { sent, failed } = await processDueWarmupSends();
@@ -93,6 +101,17 @@ export async function POST(req: Request) {
     }
 
     case "health": {
+      // Belt-and-braces ownership check: the handler entry already gates on
+      // (id, userId), this re-asserts it at the point of the state-changing
+      // write so a future refactor of the entry gate can't silently open an
+      // IDOR on another tenant's mailbox health.
+      const account = await prisma.emailAccount.findFirst({
+        where: { id: emailAccountId, userId: session.user.id },
+        select: { id: true },
+      });
+      if (!account) {
+        return NextResponse.json({ error: "Account not found" }, { status: 404 });
+      }
       await saveHealthLog(emailAccountId);
       const updated = await prisma.emailAccount.findUnique({
         where: { id: emailAccountId },

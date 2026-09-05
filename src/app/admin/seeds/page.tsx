@@ -3,6 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import AccountsConnector from "@/components/accounts-connector";
 
+function parseTags(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const t = raw.trim();
+  if (!t) return [];
+  try {
+    if (t.startsWith("[")) {
+      const p = JSON.parse(t);
+      if (Array.isArray(p)) return p.filter((x): x is string => typeof x === "string");
+    }
+  } catch { /* fall through */ }
+  return t.split(",").map((x) => x.trim()).filter(Boolean);
+}
+
 type SeedStats = {
   sentToday: number; sentWeek: number;
   receivedToday: number; receivedWeek: number;
@@ -20,6 +33,8 @@ type Seed = {
   healthState: string;
   lastUsedAt: string | null;
   note: string | null;
+  tags: string;
+  filterTag: string;
   createdAt: string;
   dailyTarget: number;
   warmupBase: number;
@@ -46,11 +61,14 @@ const DEFAULT_SETTINGS: Record<string, number | string> = {
   openRate: 100,
   spamProtection: 100,
   markImportant: 10,
+  tags: "",
+  filterTag: "",
 };
 
 export default function AdminSeedsPage() {
   const [seeds, setSeeds] = useState<Seed[]>([]);
   const [filter, setFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -88,7 +106,16 @@ export default function AdminSeedsPage() {
       openRate: seed.openRate ?? 100,
       spamProtection: seed.spamProtection ?? 100,
       markImportant: seed.markImportant ?? 10,
+      tags: parseTags(seed.tags).join(", "),
+      filterTag: seed.filterTag || "",
     });
+  }
+
+  function regenerateFilterTag() {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let tag = "";
+    for (let i = 0; i < 6; i++) tag += chars[Math.floor(Math.random() * chars.length)];
+    setSettings((s) => ({ ...s, filterTag: tag }));
   }
 
   async function saveSettings() {
@@ -143,7 +170,30 @@ export default function AdminSeedsPage() {
     }
   }
 
-  const visible = seeds.filter(s => filter === "all" || s.status === filter);
+  async function spin(id?: string) {
+    if (!id && !confirm("Deal 2 random tags to every untagged seed from the pool? Curated seeds are untouched.")) return;
+    setBusyId(id ?? "__all");
+    try {
+      const res = await fetch("/api/admin/seeds/spin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(id ? { id } : {}),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Spin failed"); return; }
+      load();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const allTags = [...new Set(seeds.flatMap((s) => parseTags(s.tags)))].sort();
+
+  const visible = seeds.filter(
+    (s) =>
+      (filter === "all" || s.status === filter) &&
+      (tagFilter === "all" || parseTags(s.tags).some((t) => t.toLowerCase() === tagFilter.toLowerCase()))
+  );
   const counts = {
     all: seeds.length,
     active: seeds.filter(s => s.status === "active").length,
@@ -165,17 +215,26 @@ export default function AdminSeedsPage() {
 
   return (
     <div>
-      <header className="px-6 lg:px-10 pt-8 pb-0 flex items-start justify-between">
+      <header className="px-6 lg:px-10 pt-8 pb-0 flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-medium text-[clamp(28px,3.5vw,36px)] tracking-tight leading-tight">Seed Inboxes</h1>
           <p className="text-sm text-muted mt-1.5">Platform-owned warmup network. Seeds engage bidirectionally: send, receive, reply, rescue from spam.</p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="text-sm flex items-center gap-2 px-4 py-2 rounded-full bg-blue-accent text-white hover:opacity-90 transition-opacity"
-        >
-          + Add Seed
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => spin()}
+            disabled={busyId === "__all"}
+            className="text-sm flex items-center gap-2 px-4 py-2 rounded-full border border-border text-muted hover:text-blue-accent hover:border-blue-300 transition-colors disabled:opacity-50"
+          >
+            {busyId === "__all" ? "Spinning..." : "Spin untagged"}
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="text-sm flex items-center gap-2 px-4 py-2 rounded-full bg-blue-accent text-white hover:opacity-90 transition-opacity"
+          >
+            + Add Seed
+          </button>
+        </div>
       </header>
 
       <div className="px-6 lg:px-10 pt-7 pb-16">
@@ -204,6 +263,19 @@ export default function AdminSeedsPage() {
               {s} ({counts[s]})
             </button>
           ))}
+          {allTags.length > 0 && (
+            <select
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              className="text-sm px-3 py-1.5 rounded-full border border-border text-muted bg-transparent"
+              aria-label="Filter by tag"
+            >
+              <option value="all">All tags</option>
+              {allTags.map((t) => (
+                <option key={t} value={t}>#{t}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="border border-border rounded-xl overflow-hidden">
@@ -213,6 +285,7 @@ export default function AdminSeedsPage() {
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Health</th>
+                <th className="px-4 py-3">Tags</th>
                 <th className="px-4 py-3 text-center">Sent <span className="text-muted-2 normal-case">(7d)</span></th>
                 <th className="px-4 py-3 text-center">Recv <span className="text-muted-2 normal-case">(7d)</span></th>
                 <th className="px-4 py-3 text-center">Replied <span className="text-muted-2 normal-case">(7d)</span></th>
@@ -238,6 +311,20 @@ export default function AdminSeedsPage() {
                     <div className={s.healthScore < 70 ? "text-red-600" : s.healthScore < 85 ? "text-amber-600" : "text-green-600"}>{Math.round(s.healthScore)}</div>
                     <div className="text-xs text-muted-2 capitalize">{s.healthState}</div>
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1 max-w-[180px]">
+                      {s.filterTag && (
+                        <span title="Filter tag (tracking code)" className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-blue-accent/10 text-blue-accent border border-blue-accent/30 whitespace-nowrap">{s.filterTag}</span>
+                      )}
+                      {parseTags(s.tags).slice(0, 3).map((t) => (
+                        <span key={t} className="text-[11px] px-2 py-0.5 rounded-full border border-border text-muted whitespace-nowrap">#{t}</span>
+                      ))}
+                      {parseTags(s.tags).length > 3 && (
+                        <span className="text-[11px] text-muted-2">+{parseTags(s.tags).length - 3}</span>
+                      )}
+                      {parseTags(s.tags).length === 0 && <span className="text-xs text-muted-2">—</span>}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-center">{s.stats?.sentWeek ?? 0}</td>
                   <td className="px-4 py-3 text-center">{s.stats?.receivedWeek ?? 0}</td>
                   <td className="px-4 py-3 text-center">{s.stats?.repliedWeek ?? 0}</td>
@@ -250,6 +337,7 @@ export default function AdminSeedsPage() {
                         <button onClick={() => toggle(s.id, s.status)} disabled={busyId === s.id} className={`text-xs px-2.5 py-1 rounded-md text-white hover:opacity-90 disabled:opacity-50 ${s.status === "active" ? "bg-amber-500" : "bg-green-600"}`}>{s.status === "active" ? "Pause" : "Warm"}</button>
                       )}
                       <button onClick={() => startEdit(s)} disabled={busyId === s.id} className="text-xs px-2.5 py-1 rounded-md border border-border text-muted hover:text-blue-accent hover:border-blue-300 transition-colors disabled:opacity-50">Settings</button>
+                      <button onClick={() => spin(s.id)} disabled={busyId === s.id} className="text-xs px-2.5 py-1 rounded-md border border-border text-muted hover:text-blue-accent hover:border-blue-300 transition-colors disabled:opacity-50">{busyId === s.id ? "..." : "Spin"}</button>
                       {s.status !== "quarantined" && (
                         <button onClick={() => quarantine(s.id)} disabled={busyId === s.id} className="text-xs px-2.5 py-1 rounded-md bg-red-600 text-white hover:opacity-90 disabled:opacity-50">Quarantine</button>
                       )}
@@ -259,9 +347,9 @@ export default function AdminSeedsPage() {
                 </tr>
               ))}
               {!loading && visible.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-muted">No seeds yet. Add your first seed inbox above.</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-muted">No seeds yet. Add your first seed inbox above.</td></tr>
               )}
-              {loading && <tr><td colSpan={8} className="px-4 py-10 text-center text-muted">Loading...</td></tr>}
+              {loading && <tr><td colSpan={9} className="px-4 py-10 text-center text-muted">Loading...</td></tr>}
             </tbody>
           </table>
         </div>
@@ -303,6 +391,19 @@ export default function AdminSeedsPage() {
                   <label className="text-xs text-muted-2">End time</label>
                   <input type="time" value={str(settings.scheduleEnd)} onChange={e => setSettings(s => ({ ...s, scheduleEnd: e.target.value }))} className="mt-1 w-full border border-border rounded-lg px-3 py-2 text-sm" />
                 </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-2">Tags (comma-separated — spun into subjects & body ends)</label>
+                <input type="text" value={str(settings.tags)} onChange={e => setSettings(s => ({ ...s, tags: e.target.value }))} placeholder="fintech, lagos, saas" className="mt-1 w-full border border-border rounded-lg px-3 py-2 text-sm" />
+                <p className="text-[11px] text-muted-2 mt-1">One random tag rides each subject line; the full set closes the body. Max 10.</p>
+              </div>
+              <div>
+                <label className="text-xs text-muted-2">Filter tag (auto-generated tracking code, like mailbox filter tags)</label>
+                <div className="mt-1 flex gap-2">
+                  <input type="text" value={str(settings.filterTag)} onChange={e => setSettings(s => ({ ...s, filterTag: e.target.value }))} placeholder="x7k2qd" className="w-full border border-border rounded-lg px-3 py-2 text-sm font-mono" />
+                  <button type="button" onClick={regenerateFilterTag} className="px-3 py-2 rounded-lg border border-border text-sm text-muted hover:text-blue-accent hover:border-blue-300 transition-colors whitespace-nowrap">Regenerate</button>
+                </div>
+                <p className="text-[11px] text-muted-2 mt-1">Rides every subject line and closes the body, so this seed&apos;s mail is filterable in any inbox.</p>
               </div>
               <div>
                 <label className="text-xs text-muted-2">Min wait between sends (minutes)</label>

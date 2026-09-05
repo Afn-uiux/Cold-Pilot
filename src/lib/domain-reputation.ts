@@ -5,6 +5,7 @@ import { rememberBadLead } from "./global-intel";
 const HIGH_BOUNCE_THRESHOLD = 0.3;
 const MEDIUM_BOUNCE_THRESHOLD = 0.15;
 const MIN_SAMPLES_FOR_TRUST = 10;
+const ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export interface DomainReputationResult {
   domain: string;
@@ -54,16 +55,26 @@ export async function recordBounce(
   const existing = await prisma.domainReputation.findUnique({ where: { domain } });
   if (existing) {
     const bounceRate = existing.totalSent > 0 ? totalBounced / existing.totalSent : 1;
+    const now = new Date();
+    // Alert at most once per day per domain (and stamp the send). Previously
+    // every bounce over the threshold fired its own email.
+    const cooldownOk =
+      !existing.lastAlertAt || now.getTime() - existing.lastAlertAt.getTime() >= ALERT_COOLDOWN_MS;
     await prisma.domainReputation.update({
       where: { domain },
       data: {
         totalBounced,
         bounceRate,
-        lastBouncedAt: new Date(),
+        lastBouncedAt: now,
+        ...(cooldownOk &&
+        existing.totalSent >= MIN_SAMPLES_FOR_TRUST &&
+        bounceRate >= MEDIUM_BOUNCE_THRESHOLD
+          ? { lastAlertAt: now }
+          : {}),
       },
     });
     // Send bounce rate alert if crossing threshold
-    if (existing.totalSent >= MIN_SAMPLES_FOR_TRUST && bounceRate >= MEDIUM_BOUNCE_THRESHOLD) {
+    if (cooldownOk && existing.totalSent >= MIN_SAMPLES_FOR_TRUST && bounceRate >= MEDIUM_BOUNCE_THRESHOLD) {
       // Find the user who owns this domain's email accounts
       const account = await prisma.emailAccount.findFirst({
         where: { email: { endsWith: `@${domain}` } },
@@ -126,15 +137,25 @@ export async function getDomainReputation(domain: string): Promise<DomainReputat
     else if (record.bounceRate > 0) riskLevel = "low";
   }
 
-  // Send domain reputation warning if risk level is medium or high
+  // Send domain reputation warning if risk level is medium or high.
+  // Cooldown applies here too: this function runs on EVERY verification, so
+  // an unguarded send meant one email per checked lead on a bad domain.
   if (riskLevel === "medium" || riskLevel === "high") {
-    const account = await prisma.emailAccount.findFirst({
-      where: { email: { endsWith: `@${domain}` } },
-      select: { userId: true },
-    });
-    if (account) {
-      const user = await prisma.user.findUnique({ where: { id: account.userId }, select: { email: true } });
-      if (user?.email) sendEmailSafe(user.email, "domain-reputation-warning");
+    const stale =
+      !record.lastAlertAt || Date.now() - record.lastAlertAt.getTime() >= ALERT_COOLDOWN_MS;
+    if (stale) {
+      const account = await prisma.emailAccount.findFirst({
+        where: { email: { endsWith: `@${domain}` } },
+        select: { userId: true },
+      });
+      if (account) {
+        const user = await prisma.user.findUnique({ where: { id: account.userId }, select: { email: true } });
+        if (user?.email) sendEmailSafe(user.email, "domain-reputation-warning");
+      }
+      await prisma.domainReputation.update({
+        where: { domain },
+        data: { lastAlertAt: new Date() },
+      }).catch(() => {});
     }
   }
 

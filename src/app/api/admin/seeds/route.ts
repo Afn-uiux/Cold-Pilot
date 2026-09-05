@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptAccount } from "@/lib/crypto";
+import { parseSeedTags, stringifySeedTags, generateFilterTag } from "@/lib/seed-tags";
 
 async function requireAdmin() {
   const session = await auth();
@@ -19,6 +20,7 @@ async function requireAdmin() {
 const SAFE_FIELDS = [
   "id", "email", "provider", "smtpHost", "smtpPort", "imapHost", "imapPort",
   "displayName", "status", "healthScore", "healthState", "lastUsedAt", "note",
+  "tags", "filterTag",
   "dailyTarget", "warmupBase", "warmupIncrease", "warmupStartedAt",
   "scheduleStart", "scheduleEnd", "minWaitMinutes",
   "replyRate", "openRate", "spamProtection", "markImportant",
@@ -97,6 +99,21 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ seeds: list });
 }
 
+// Collision-checked tracking code: explicit choice wins, otherwise mint one.
+// Retries minting on the (astronomically unlikely) collision.
+async function uniqueFilterTag(explicit: string | null): Promise<string> {
+  if (explicit) {
+    const clash = await prisma.seedInbox.findFirst({ where: { filterTag: explicit } });
+    if (!clash) return explicit;
+  }
+  for (let i = 0; i < 5; i++) {
+    const tag = generateFilterTag();
+    const clash = await prisma.seedInbox.findFirst({ where: { filterTag: tag } });
+    if (!clash) return tag;
+  }
+  return `${generateFilterTag()}${Date.now().toString(36)}`;
+}
+
 export async function POST(req: NextRequest) {
   const guard = await requireAdmin();
   if (guard.error) return NextResponse.json(guard.error, { status: guard.status });
@@ -104,7 +121,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     email, provider, smtpHost, smtpPort, smtpUser, smtpPass,
-    imapHost, imapPort, imapUser, imapPass, gmailToken, displayName,
+    imapHost, imapPort, imapUser, imapPass, gmailToken, displayName, tags, filterTag,
   } = body;
 
   if (!email || typeof email !== "string") {
@@ -129,6 +146,12 @@ export async function POST(req: NextRequest) {
     imapPass: imapPass || null,
     gmailToken: gmailToken || null,
     displayName: displayName || null,
+    tags: stringifySeedTags(parseSeedTags(tags ?? [])),
+    // Like user mailboxes: every seed gets its own tracking code at link
+    // time (collision-checked), admin-editable afterwards.
+    filterTag: await uniqueFilterTag(
+      typeof filterTag === "string" && filterTag.trim() ? filterTag.trim().slice(0, 30) : null
+    ),
     warmupStartedAt: new Date(),
   };
 
@@ -149,6 +172,10 @@ export async function PATCH(req: NextRequest) {
   const data: Record<string, any> = {};
   if (status) data.status = status; // active | paused | quarantined
   if (note !== undefined) data.note = note;
+  if (body.tags !== undefined) data.tags = stringifySeedTags(parseSeedTags(body.tags));
+  if (body.filterTag !== undefined && typeof body.filterTag === "string" && body.filterTag.trim()) {
+    data.filterTag = await uniqueFilterTag(body.filterTag.trim().slice(0, 30));
+  }
   for (const f of ["dailyTarget", "warmupBase", "warmupIncrease", "replyRate", "openRate", "spamProtection", "markImportant", "minWaitMinutes"]) {
     if (body[f] !== undefined) data[f] = Number(body[f]);
   }

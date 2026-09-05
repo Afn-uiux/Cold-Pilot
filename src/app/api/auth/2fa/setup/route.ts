@@ -35,6 +35,15 @@ export async function POST(req: NextRequest) {
     if (!user.totpSecret || !verifyToken(user.totpSecret, rotateCode)) {
       return NextResponse.json({ error: "Invalid current 2FA code" }, { status: 400 });
     }
+  } else {
+    // Initial enrollment: also require the current password. Without this, a
+    // session thief (stolen cookie, unattended laptop) could generate a secret
+    // into their own authenticator app, confirm it, and lock the real owner
+    // out behind attacker-controlled 2FA. OAuth-only accounts have no
+    // password — for them the verified provider session is the auth.
+    if (user.password && !passwordOk) {
+      return NextResponse.json({ error: "Current password required" }, { status: 403 });
+    }
   }
 
   // Generate new secret

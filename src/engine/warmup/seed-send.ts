@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
 import { sendWarmupEmail } from "./sender";
 import { isEntitledToWarmup, isHealthyPeerReceiver } from "./pool";
+import { parseSeedTags, spinSubjectTag } from "@/lib/seed-tags";
 
 function parseTimeOfDay(str: string): number {
   const p = (str || "09:00").split(":");
@@ -55,12 +56,30 @@ const SEED_BODIES = [
   "Hey,\n\nJust a quick note to keep in touch. No rush on anything — wanted to stay connected.\n\nTalk soon,\n{name}",
 ];
 
-function seedContent(senderName: string): { subject: string; body: string } {
-  const subject = SEED_SUBJECTS[Math.floor(Math.random() * SEED_SUBJECTS.length)];
-  const body = SEED_BODIES[Math.floor(Math.random() * SEED_BODIES.length)].replace(
+function seedContent(senderName: string, tags: string[] = [], filterTag = ""): { subject: string; body: string } {
+  let subject = SEED_SUBJECTS[Math.floor(Math.random() * SEED_SUBJECTS.length)];
+  let body = SEED_BODIES[Math.floor(Math.random() * SEED_BODIES.length)].replace(
     "{name}",
     senderName || "Sincerely",
   );
+  // Spin the seed's tags into the content: one random tag rides the subject
+  // line, the full set closes the body. Every warmup email then carries
+  // unique content (identical bodies at volume are a spam-filter signal).
+  // Seeds without tags send the base templates unchanged.
+  const tagList = parseSeedTags(tags);
+  if (tagList.length > 0) {
+    const subjectTag = spinSubjectTag(tagList);
+    if (subjectTag) subject = `${subject} ${subjectTag}`;
+    body = `${body}\n\n${tagList.join(" ")}`;
+  }
+  // Per-seed tracking code (mirrors EmailAccount.warmupFilterTag): appended
+  // to the subject and stamped on its own final body line so the seed's mail
+  // is findable/filterable in any inbox. Skipped when unset.
+  const code = (filterTag || "").trim();
+  if (code) {
+    subject = `${subject} ${code}`;
+    body = `${body}\n${code}`;
+  }
   return { subject, body };
 }
 
@@ -260,7 +279,11 @@ export async function processSeedSends(): Promise<{ sent: number; failed: number
     const receiver = await pickReceiver(exclude, seeds.length, 15, todayStart);
     if (!receiver) continue;
 
-    const { subject, body } = seedContent(seed.displayName || seed.email);
+    const { subject, body } = seedContent(
+      seed.displayName || seed.email,
+      parseSeedTags((seed as any).tags ?? []),
+      String((seed as any).filterTag ?? ""),
+    );
 
     const result = await sendWarmupEmail(
       seed.email,

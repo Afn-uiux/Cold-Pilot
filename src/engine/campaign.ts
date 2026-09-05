@@ -1109,6 +1109,24 @@ async function checkImapAccountBounces(account: any): Promise<number> {
           continue;
         }
 
+        // Phantom guard: a bounce-looking email mentioning a lead is not
+        // proof WE were mailing them (forwards, threads, newsletters from
+        // postmaster-like senders). Require an actual outgoing send to this
+        // lead in the last 14 days, or the "bounce" is unrelated noise.
+        const recentSend = await prisma.emailLog.findFirst({
+          where: {
+            leadId: lead.id,
+            type: "outgoing",
+            status: "sent",
+            sentAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
+          },
+          select: { id: true },
+        });
+        if (!recentSend) {
+          console.log(`[bounce] IMAP: ${failedRecipient} has no recent outgoing send — ignoring`);
+          continue;
+        }
+
         const alreadySuppressed = await prisma.suppression.findUnique({
           where: { userId_email: { userId: account.userId, email: failedRecipient } },
         });
@@ -1122,13 +1140,21 @@ async function checkImapAccountBounces(account: any): Promise<number> {
         const bounce = categorizeBounce({ message: body.slice(0, 4000) });
         console.log(`[bounce] IMAP matched bounce for ${failedRecipient}: ${bounce.type} (suppress=${bounce.suppress})`);
 
-        if (bounce.suppress) {
-          await prisma.suppression.upsert({
-            where: { userId_email: { userId: account.userId, email: failedRecipient } },
-            update: {},
-            create: { userId: account.userId, email: failedRecipient, reason: bounce.type, type: "bounce" },
-          });
+        // Act ONLY on suppressing verdicts. Non-suppressing results
+        // (soft/connection/auth/unknown) previously fell through into
+        // recordBounce + lead-bounced + notifications — manufacturing phantom
+        // bounces, phantom alerts, and poisoned domain reputation out of
+        // unrelated mailbox noise.
+        if (!bounce.suppress) {
+          console.log(`[bounce] IMAP: ${failedRecipient} non-suppressing (${bounce.type}) — logged only`);
+          continue;
         }
+
+        await prisma.suppression.upsert({
+          where: { userId_email: { userId: account.userId, email: failedRecipient } },
+          update: {},
+          create: { userId: account.userId, email: failedRecipient, reason: bounce.type, type: "bounce" },
+        });
         recordBounce(failedRecipient, null, bounce.type, bounce.type, account.id, lead.id).catch(() => {});
         await prisma.lead.update({ where: { id: lead.id }, data: { status: "bounced" } }).catch(() => {});
         createNotification({

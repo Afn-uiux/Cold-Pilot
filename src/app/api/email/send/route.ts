@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/engine/send";
 import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
 import { CREDIT_COSTS } from "@/lib/plans";
+import { rateLimitAsync } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -16,6 +17,15 @@ export async function POST(req: Request) {
   }
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Throttle: each call sends a real email and spends a credit.
+  const rl = await rateLimitAsync(`send:${session.user.id}`, { max: 30, windowMs: 60_000 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many send requests. Please wait a moment and try again." },
+      { status: 429 }
+    );
   }
 
   const { to, subject, htmlBody, fromName, emailAccountId, leadId, campaignStepId, threadId, inReplyTo } = await req.json();

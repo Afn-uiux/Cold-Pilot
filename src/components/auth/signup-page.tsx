@@ -5,9 +5,6 @@ import { signIn } from "next-auth/react";
 import { signup } from "@/app/actions/auth";
 import Link from "next/link";
 import Logo from "@/components/logo";
-import { PLANS } from "@/lib/plans";
-import { formatPrice } from "@/lib/currency";
-import { useCurrency } from "@/lib/currency-client";
 
 function simpleHash(str: string): string {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -60,12 +57,14 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [signedUp, setSignedUp] = useState(false);
   const [signedUpEmail, setSignedUpEmail] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendDisabled, setResendDisabled] = useState(false);
+  const [resendMsg, setResendMsg] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [fingerprint, setFingerprint] = useState("");
-  const currency = useCurrency();
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +82,31 @@ export default function SignupPage() {
     if (/\d/.test(pw)) score++;
     if (/[^a-zA-Z0-9]/.test(pw)) score++;
     return score;
+  }
+
+  async function handleResend() {
+    if (!signedUpEmail) return;
+    setResending(true);
+    setResendMsg(null);
+    try {
+      const res = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: signedUpEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        setResendMsg("Too many requests — wait a minute before resending.");
+      } else {
+        setResendMsg(data.message || "A fresh verification link is on its way — check your inbox.");
+        setResendDisabled(true);
+        setTimeout(() => setResendDisabled(false), 60000);
+      }
+    } catch {
+      setResendMsg("Something went wrong. Please try again.");
+    } finally {
+      setResending(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -120,29 +144,34 @@ export default function SignupPage() {
       <main style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px clamp(20px,4vw,40px) 80px", position: "relative", overflow: "hidden" }}>
 
         <div style={{ width: "100%", maxWidth: 400, position: "relative", zIndex: 1 }}>
-          <span style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "#8A9BB5", display: "block" }}>
-            Get started
-          </span>
-          <h1 style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: "clamp(32px,5vw,40px)", fontWeight: 400, lineHeight: 1.1, letterSpacing: "-0.02em", marginTop: 16, color: "#0F1929" }}>
-            Create your account
-          </h1>
-          <p style={{ marginTop: 12, fontSize: 15, color: "#5A6B87", lineHeight: 1.6 }}>{formatPrice(PLANS.starter.price, currency)}/mo flat. No credit card to start.</p>
+          {!signedUp && (
+            <>
+            <span style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "#8A9BB5", display: "block" }}>
+              Get started
+            </span>
+            <h1 style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: "clamp(32px,5vw,40px)", fontWeight: 400, lineHeight: 1.1, letterSpacing: "-0.02em", marginTop: 16, color: "#0F1929" }}>
+              Create your account
+            </h1>
+            <p style={{ marginTop: 12, fontSize: 15, color: "#5A6B87", lineHeight: 1.6 }}>Free to start. No credit card needed.</p>
+            </>
+          )}
 
           {signedUp && (
-            <div style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 14, borderRadius: 8, background: "rgba(46,125,50,0.06)" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                <div style={{ fontSize: 14, color: "#0F1929", lineHeight: 1.5 }}>
-                  <strong>Check your inbox to verify.</strong>
-                  <p style={{ fontSize: 13, color: "#5A6B87", margin: "4px 0 0" }}>
-                    We sent a one-time verification link to{signedUpEmail ? <> <strong>{signedUpEmail}</strong></> : " your email"}. It&apos;s valid for 24 hours — click it, then log in to get started.
-                  </p>
-                </div>
+            <div style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+              <img src="/email/verify-hero.png" alt="Verification link sent" width="180" style={{ width: 180, height: "auto", display: "block" }} />
+              <div style={{ padding: 14, borderRadius: 8, background: "rgba(46,125,50,0.06)", textAlign: "center", alignSelf: "stretch" }}>
+                <strong>Check your inbox to verify.</strong>
+                <p style={{ fontSize: 13, color: "#5A6B87", margin: "4px 0 0" }}>
+                  We sent a one-time verification link to{signedUpEmail ? <> <strong>{signedUpEmail}</strong></> : " your email"}. It&apos;s valid for 24 hours — click it, then log in to get started.
+                </p>
               </div>
-              <Link href="/auth/login" style={{ display: "block", textAlign: "center", padding: 12, fontSize: 14, fontWeight: 500, color: "#fff", background: "#2563EB", borderRadius: 6, textDecoration: "none" }}>
-                Go to log in
-              </Link>
-              <p style={{ fontSize: 12, color: "#8A9BB5", textAlign: "center" }}>Didn&apos;t get it? Log in with your email and password and use the &quot;resend&quot; option.</p>
+              {resendMsg && (
+                <div style={{ fontSize: 13, color: "#2E7D32", background: "rgba(46,125,50,0.06)", padding: "10px 14px", borderRadius: 6, textAlign: "center", alignSelf: "stretch" }}>{resendMsg}</div>
+              )}
+              <button type="button" onClick={handleResend} disabled={resending || resendDisabled}
+                style={{ background: "none", border: "none", padding: 0, cursor: resending || resendDisabled ? "default" : "pointer", fontFamily: "inherit", fontSize: 13, color: resendDisabled ? "#8A9BB5" : "#2563EB", textDecoration: "underline" }}>
+                {resending ? "Sending..." : resendDisabled ? "Link sent — check your inbox" : "Didn't get a link? Resend it"}
+              </button>
             </div>
           )}
 

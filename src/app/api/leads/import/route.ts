@@ -9,6 +9,7 @@ import { assertLeadCapacity, PlanLimitError, spendCredits, InsufficientCreditsEr
 import { fetchPublicText, readResponseTextCapped } from "@/lib/ssrf-guard";
 import { CREDIT_COSTS } from "@/lib/plans";
 import { checkGlobalIntelMany } from "@/lib/global-intel";
+import { rateLimitAsync } from "@/lib/rate-limit";
 
 const KNOWN_FIELDS = [
   "email", "e-mail", "email address", "mail", "emails", "email addresses", "e mail", "e_mail",
@@ -240,6 +241,17 @@ export async function POST(req: Request) {
   }
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
+
+  // Throttle: imports fan out to per-lead creates (plus optional URL fetch +
+  // CSV parse). Each request already batches whole lists, so 10/min is plenty.
+  const rl = await rateLimitAsync(`import:${userId}`, { max: 10, windowMs: 60_000 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many imports. Please wait a moment and try again." },
+      { status: 429 }
+    );
+  }
+
   const contentType = req.headers.get("content-type") || "";
 
   // JSON import (from link / paste / bulk)

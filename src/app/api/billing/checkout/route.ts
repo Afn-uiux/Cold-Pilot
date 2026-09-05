@@ -6,7 +6,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { createCheckoutSession } from "@/lib/bachs";
 import { CREDIT_PACKS, PLANS, type PlanId } from "@/lib/plans";
-import { trialGuard } from "@/lib/trial";
 import { currencyFromHeaders, type Currency } from "@/lib/currency";
 import { isBillingEnabled } from "@/lib/billing-gate";
 
@@ -25,8 +24,10 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const blocked = await trialGuard(session.user.id);
-  if (blocked) return blocked;
+  // No trialGuard here on purpose: checkout is how an expired trial gets
+  // resolved (paying restores access), so blocking expired users from the
+  // payment route would trap them with no way out. trialGuard only fires on
+  // TrialExpiredError — bans are enforced elsewhere and unaffected.
 
   let body: { kind?: string; credits?: number; plan?: string };
   try {

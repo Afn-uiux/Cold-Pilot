@@ -145,21 +145,34 @@ async function tick() {
       }
     }
 
-    // Weekly digest — every Monday
-    // DISABLED: transactional senders are for events the user triggered
-    // (verification, reset, notifications tied to their own activity).
-    // Blanket blasts to every account's email — including unverified or
-    // non-existent addresses — burned deliverability. Re-add behind an
-    // explicit opt-in + emailVerified gate if this product decision changes.
+    // Weekly digest — every Monday. Opt-in gate: DIGESTS_ENABLED=1 in the
+    // environment AND the address must be verified (emailVerified set),
+    // so we never blast unverified/nonexistent addresses.
+    if (process.env.DIGESTS_ENABLED === "1" && new Date().getDay() === 1) {
+      try {
+        const { sendWeeklyDigests } = await import("@/engine/digest");
+        const n = await sendWeeklyDigests();
+        if (n > 0) console.log(`[scheduler] weekly digests sent to ${n} user(s)`);
+      } catch (e) {
+        console.error("[scheduler] weekly digest error:", e);
+      }
+    }
 
-    // Monthly summary — 1st of each month
-    // DISABLED: same rationale as the weekly digest. No unsolicited mail
-    // to accounts that may never have verified an address. (Daily summaries
-    // still run — they only post to Slack integrations, never email.)
+    // Monthly summary — 1st of each month. Same DIGESTS_ENABLED + verified gate.
+    if (process.env.DIGESTS_ENABLED === "1" && new Date().getDate() === 1) {
+      try {
+        const { sendMonthlySummaries } = await import("@/engine/digest");
+        const n = await sendMonthlySummaries();
+        if (n > 0) console.log(`[scheduler] monthly summaries sent to ${n} user(s)`);
+      } catch (e) {
+        console.error("[scheduler] monthly summary error:", e);
+      }
+    }
 
     // Re-engagement — users inactive for 14 days
     // DISABLED: same rationale — "we-miss-you" mail to unverified/dead
-    // addresses only harms sender reputation.
+    // addresses only harms sender reputation. Gate behind DIGESTS_ENABLED
+    // semantics (or a proper opt-in) if this product decision changes.
   } catch (e) {
     console.error("[scheduler] tick error:", e);
   }

@@ -113,8 +113,8 @@ export default function LoginPage() {
 
           {verifyRequired && (
             <div style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 16 }}>
+              <img src="/email/verify-hero.png" alt="Verification link sent" width="140" style={{ width: 140, height: "auto", display: "block", margin: "0 auto 4px" }} />
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 14, borderRadius: 8, background: "rgba(46,125,50,0.06)" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-10 5L2 7" /></svg>
                 <div style={{ fontSize: 14, color: "#0F1929", lineHeight: 1.5 }}>
                   <strong>Verify your email to continue.</strong>
                   <p style={{ fontSize: 13, color: "#5A6B87", margin: "4px 0 0" }}>

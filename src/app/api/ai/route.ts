@@ -90,6 +90,11 @@ export async function POST(req: Request) {
   const body = await req.json();
   const { action, text, context } = body;
 
+  // Validate before charging: an unknown action must not burn credits.
+  if (!["spin", "check", "write", "generate-sequence"].includes(action)) {
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  }
+
   try {
     // refId must be unique per operation for idempotent credit ledgering. A
     // fresh UUID makes every AI generation its own transaction (the old static

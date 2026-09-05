@@ -542,8 +542,12 @@ model DomainReputation {
   totalBounced   Int      @default(0)
   bounceRate     Float    @default(0)
   lastBouncedAt  DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  // Throttle for bounce/reputation alert emails: at most one per domain per
+  // day. Without this, every bounce (and every verification touching a bad
+  // domain) fired its own email — a notification storm out of one incident.
+  lastAlertAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model BounceEvent {
@@ -667,7 +671,16 @@ model SeedInbox {
   microsoftToken String?
   microsoftRefreshToken String?
   displayName String?
-  status    String   @default("active") // active | paused | quarantined
+  status    String  @default("active") // active | paused | quarantined
+  // Warmup content tags (JSON array, e.g. ["fintech","lagos"]). The warmup
+  // engine spins one at random into each subject line and appends the set at
+  // the end of the body, so every warmup email carries unique content.
+  tags      String  @default("[]")
+  // Per-seed tracking code, mirroring EmailAccount.warmupFilterTag: unique,
+  // auto-generated at creation, admin-editable. Rides every subject line and
+  // body end so a seed's warmup mail is findable/filterable in any inbox.
+  // Never enters the spin pool (identifiers must not be dealt around).
+  filterTag String  @default("")
   healthScore Float  @default(100)
   healthState String  @default("healthy")
   lastUsedAt DateTime?

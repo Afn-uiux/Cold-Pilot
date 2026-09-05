@@ -410,22 +410,22 @@ export default async function Home() {
           <div className="pricing-layout" id="compare">
             <div className="price-main">
               <span className="label">Coldpilot</span>
-              <div className="amount" style={{fontFamily:"'Geist',system-ui,sans-serif",fontSize:"clamp(56px,10vw,80px)",lineHeight:1,marginTop:16}}>{formatPrice(PLANS.starter.price, currency)}<span style={{fontSize:"clamp(16px,2vw,20px)",fontFamily:"'JetBrains Mono',monospace",color:"var(--muted-2)"}}> /mo</span></div>
-              <p className="desc">Starter — 5,000 leads, unlimited inboxes, and AI email generation. For one person running outreach.</p>
+              <div className="amount" style={{fontFamily:"'Geist',system-ui,sans-serif",fontSize:"clamp(56px,10vw,80px)",lineHeight:1,marginTop:16}}>{formatPrice(PLANS.free.price, currency)}<span style={{fontSize:"clamp(16px,2vw,20px)",fontFamily:"'JetBrains Mono',monospace",color:"var(--muted-2)"}}> /mo</span></div>
+              <p className="desc">Free — 2 inboxes, 300 leads, and 1,000 credits on signup. No credit card needed. Upgrade whenever you&apos;re ready.</p>
               <ul className="price-includes">
-                <li>Unlimited connected inboxes</li>
+                <li>2 connected inboxes</li>
                 <li>Automatic warm-up on every account</li>
-                <li>AI email generation</li>
                 <li>Reply detection and auto-stop</li>
                 <li>Deliverability checks before every send</li>
+                <li>1,000 free credits on signup</li>
               </ul>
               <Link href="/auth/signup" className="btn" style={{marginTop:36,display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",fontSize:14,fontWeight:500,padding:"13px 26px",borderRadius:6,border:"none",cursor:"pointer",background:"var(--blue)",color:"#fff",textDecoration:"none"}}>Start free</Link>
             </div>
             <div>
               <span className="label">Every tier</span>
               <ul className="compare-list" style={{marginTop:16}}>
-                <li className="compare-row"><div><div className="name">Free</div><div className="desc">2 inboxes · 300 leads · 1,000 free credits</div></div><div className="cost">{formatPrice(PLANS.free.price, currency)}</div></li>
-                <li className="compare-row highlight"><div><div className="name">Starter</div><div className="desc">Unlimited inboxes · 5,000 leads · AI included</div></div><div className="cost">{formatPrice(PLANS.starter.price, currency)}</div></li>
+                <li className="compare-row highlight"><div><div className="name">Free</div><div className="desc">2 inboxes · 300 leads · 1,000 free credits</div></div><div className="cost">{formatPrice(PLANS.free.price, currency)}</div></li>
+                <li className="compare-row"><div><div className="name">Starter</div><div className="desc">Unlimited inboxes · 5,000 leads · AI included</div></div><div className="cost">{formatPrice(PLANS.starter.price, currency)}</div></li>
                 <li className="compare-row"><div><div className="name">Pro</div><div className="desc">Unlimited inboxes · 30,000 leads · AI included</div></div><div className="cost">{formatPrice(PLANS.pro.price, currency)}</div></li>
                 <li className="compare-row"><div><div className="name">Agency</div><div className="desc">Unlimited inboxes · 150,000 leads · white-label &amp; API</div></div><div className="cost">{formatPrice(PLANS.agency.price, currency)}</div></li>
               </ul>
