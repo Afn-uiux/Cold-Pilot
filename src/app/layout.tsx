@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import JsonLd from "@/components/seo-jsonld";
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL || "https://usecoldpilot.com";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -15,21 +18,64 @@ export const viewport: Viewport = {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Coldpilot — Cold email that lands in the inbox",
+  title: {
+    default: "Coldpilot — Cold email that lands in the inbox",
+    template: "%s | Coldpilot",
+  },
   description: "Send campaigns that land in inboxes, not spam folders. Warm-up, rotation, reply detection — all in one place.",
+  alternates: {
+    canonical: siteUrl,
+  },
   openGraph: {
     title: "Coldpilot — Cold email that lands in the inbox",
     description: "Send campaigns that land in inboxes, not spam folders.",
-    url: "https://usecoldpilot.com",
+    url: siteUrl,
     siteName: "Coldpilot",
     type: "website",
+    locale: "en_US",
+    images: [
+      {
+        url: `${siteUrl}/opengraph-image.png`,
+        width: 1200,
+        height: 630,
+        alt: "Coldpilot — cold email that lands in the inbox",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Coldpilot — Cold email that lands in the inbox",
     description: "Send campaigns that land in inboxes, not spam folders.",
+    images: [`${siteUrl}/opengraph-image.png`],
   },
-  metadataBase: new URL("https://usecoldpilot.com"),
+  metadataBase: new URL(siteUrl),
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
+
+const orgSchema = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${siteUrl}/#organization`,
+      name: "Coldpilot",
+      url: siteUrl,
+      logo: `${siteUrl}/coldpilot-logo.png`,
+      description:
+        "Cold email that lands in the inbox. Warm-up, rotation, reply detection, verification and analytics in one place.",
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${siteUrl}/#website`,
+      url: siteUrl,
+      name: "Coldpilot",
+      inLanguage: "en",
+      publisher: { "@id": `${siteUrl}/#organization` },
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -43,6 +89,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-full">
+        {<JsonLd data={orgSchema} />}
         {<Providers>{children}</Providers>}
         {/* Cloudflare Web Analytics beacon (manual install; see .env.example). */}
         <script

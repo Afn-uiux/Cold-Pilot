@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { TRIAL_MS } from "@/lib/trial";
 import { signIn } from "@/lib/auth";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { logLoginAttempt } from "@/lib/login-audit";
 import { sendEmailSafe } from "@/lib/email/send";
 import { computeSignupRisk, voidTrial } from "@/lib/fraud";
 import { VERIFY_TOKEN_TTL_MS } from "@/lib/verification";
@@ -121,23 +122,21 @@ export async function login(formData: FormData) {
   const { headers } = await import("next/headers");
   const h = await headers();
   const ip = getClientIp(h as unknown as { get(name: string): string | null });
-  const rateKey = `login:${ip}:${email}`;
+  const ua = h.get("user-agent");
+  const emailKey = email.trim().toLowerCase();
+  const rateKey = `login:${ip}:${emailKey}`;
 
   const { allowed, retryAfterMs } = checkRateLimit(rateKey);
   if (!allowed) {
+    await logLoginAttempt({ email: emailKey, ip, userAgent: ua, success: false, reason: "throttled" });
     const minutes = Math.ceil(retryAfterMs / 60000);
     return { error: `Too many attempts. Try again in ${minutes} minute${minutes > 1 ? "s" : ""}.` };
   }
 
-  // Distinguish "email not verified yet" from a bad password, so the login
-  // page can show a "check your inbox / resend" state instead of a generic
-  // invalid-credentials error. Login is hard-blocked for unverified accounts
-  // inside authorize(); this only decides what message the user sees.
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing && !existing.emailVerified) {
-    return { error: "VERIFY_EMAIL_REQUIRED" };
-  }
-
+  // Every failure returns the same message. In particular we deliberately do
+  // NOT reveal whether an unverified account exists for this email — a
+  // distinct "verify your email" response would let anyone probe which
+  // addresses are registered here.
   try {
     const result = await signIn("credentials", {
       email,
@@ -146,11 +145,14 @@ export async function login(formData: FormData) {
       redirect: false,
     });
     if (result?.error) {
+      await logLoginAttempt({ email: emailKey, ip, userAgent: ua, success: false, reason: "invalid" });
       console.error("[LOGIN ERROR]", result.error);
       return { error: "Invalid email or password" };
     }
+    await logLoginAttempt({ email: emailKey, ip, userAgent: ua, success: true, reason: "success" });
     return { success: true };
   } catch (e: any) {
+    await logLoginAttempt({ email: emailKey, ip, userAgent: ua, success: false, reason: "error" });
     console.error("[LOGIN ERROR]", e?.name, e?.message, e?.code);
     return { error: "Invalid email or password" };
   }

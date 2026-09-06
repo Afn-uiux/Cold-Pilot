@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { categorizeBounce } from "@/lib/bounce";
 import { decryptAccount } from "@/lib/crypto";
 import { canSendFromAccount } from "@/lib/send-gate";
+import { canSendToLead } from "@/lib/verify";
 import { signRedirect, signUnsubscribe } from "@/lib/track-sign";
 import { assertSafeSocketTarget, isAllowedSocketPort } from "@/lib/ssrf";
 
@@ -22,6 +23,10 @@ interface SendOptions {
   clickTracking?: boolean;
   unsubscribeHeader?: boolean;
   plainTextOnly?: boolean;
+  // Mirrors campaign.enableRiskyEmails so the send-time backstop holds to the
+  // same policy as the campaign planner (risky leads are allowed only when the
+  // user opted in; invalid/unknown/catch-all policy lives in canSendToLead).
+  enableRiskyEmails?: boolean;
 }
 
 function stripHtml(html: string): string {
@@ -160,8 +165,13 @@ export async function sendEmail(opts: SendOptions) {
     throw new Error(`Email ${opts.to} is suppressed (${suppressed.reason})`);
   }
 
-  if (lead?.verificationStatus === "invalid" || lead?.verificationStatus === "unknown" || lead?.verificationStatus === "risky") {
-    throw new Error(`Email ${opts.to} blocked: verification status "${lead.verificationStatus}"`);
+  // Send-time verification backstop. Single source of truth is canSendToLead:
+  // only a definitive hard "invalid" is ever blocked outright, and risky is
+  // gated by the user's enableRiskyEmails opt-in (unknown/catch-all soft
+  // flags are allowed through this guard, matching the campaign planner).
+  const sendCheck = canSendToLead(lead?.verificationStatus ?? null, opts.enableRiskyEmails ?? false, false);
+  if (!sendCheck.allowed) {
+    throw new Error(`Email ${opts.to} blocked: verification status "${lead?.verificationStatus ?? "unverified"}" (${sendCheck.reason})`);
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";

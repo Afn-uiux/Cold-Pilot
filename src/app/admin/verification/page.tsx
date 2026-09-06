@@ -13,6 +13,12 @@ function StatusBadge({ status }: { status: string | null }) {
       </span>
     );
   if (status === "risky") return <span className="badge active">risky</span>;
+  if (status === "catch_all")
+    return (
+      <span className="badge bg-orange-50 text-orange-700 border border-orange-200">
+        catch-all
+      </span>
+    );
   if (status === "unknown") return <span className="badge draft">unknown</span>;
   return <span className="badge draft">unverified</span>;
 }

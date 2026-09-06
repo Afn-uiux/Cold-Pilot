@@ -461,7 +461,7 @@ export default async function Home() {
             <div className="foot-links">
               <div className="foot-col"><h4>Product</h4><ul><li><a href="#product">Features</a></li><li><a href="#how">How it works</a></li><li><Link href="/pricing">Pricing</Link></li></ul></div>
               <div className="foot-col"><h4>Company</h4><ul><li><Link href="/about">About</Link></li><li><Link href="/contact">Contact</Link></li></ul></div>
-              <div className="foot-col"><h4>Legal</h4><ul><li><Link href="/legal/privacy">Privacy</Link></li><li><Link href="/legal/terms">Terms</Link></li></ul></div>
+              <div className="foot-col"><h4>Legal</h4><ul><li><Link href="/legal/privacy">Privacy</Link></li><li><Link href="/legal/terms">Terms</Link></li><li><Link href="/legal/acceptable-use">Acceptable Use</Link></li></ul></div>
             </div>
           </div>
           <div className="foot-bottom"><span>&copy; 2026 Coldpilot.</span><span>Made for the inbox, not the spam folder.</span></div>

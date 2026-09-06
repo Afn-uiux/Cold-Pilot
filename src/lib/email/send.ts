@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { getTemplateById, type EmailTemplateId } from "./templates";
 
@@ -6,6 +6,45 @@ interface SendEmailOptions {
   to: string;
   template: EmailTemplateId;
   data?: Record<string, any>;
+}
+
+interface EmbeddedImage {
+  filename: string;
+  path: string;
+  content: Buffer;
+  contentType: string;
+  contentId: string;
+}
+
+const SITE_IMG_SRC_RE = /src="https:\/\/usecoldpilot\.com\/([^"]+)"/g;
+
+// Rewrites <img src="https://usecoldpilot.com/<asset>"> to src="cid:<filename>"
+// so the logo, illustrations, and social icons ship inside the email itself and
+// render even with no internet connection. Returns the matching files to attach.
+function embedSiteImages(html: string) {
+  const images = new Map<string, EmbeddedImage>();
+
+  const embeddedHtml = html.replace(SITE_IMG_SRC_RE, (full, relPath: string) => {
+    const cleanRel = relPath.split("#")[0].split("?")[0];
+    const localPath = join(process.cwd(), "public", cleanRel);
+    if (!existsSync(localPath)) return full;
+
+    const filename = cleanRel.split("/").pop() || cleanRel;
+    let img = images.get(filename);
+    if (!img) {
+      img = {
+        filename,
+        path: localPath,
+        content: readFileSync(localPath),
+        contentType: "image/png",
+        contentId: filename,
+      };
+      images.set(filename, img);
+    }
+    return `src="cid:${filename}"`;
+  });
+
+  return { html: embeddedHtml, images: [...images.values()] };
 }
 
 export function renderEmail(templateId: EmailTemplateId, data?: Record<string, unknown>) {
@@ -26,7 +65,8 @@ export function renderEmail(templateId: EmailTemplateId, data?: Record<string, u
 }
 
 export async function sendTransactionalEmail({ to, template, data }: SendEmailOptions) {
-  const { subject, html } = renderEmail(template, data);
+  const { subject, html: htmlWithRemote } = renderEmail(template, data);
+  const { html, images } = embedSiteImages(htmlWithRemote);
 
   if (process.env.RESEND_API_KEY) {
     const { Resend } = await import("resend");
@@ -37,6 +77,12 @@ export async function sendTransactionalEmail({ to, template, data }: SendEmailOp
       to,
       subject,
       html,
+      attachments: images.map((img) => ({
+        filename: img.filename,
+        content: img.content,
+        contentType: img.contentType,
+        contentId: img.contentId,
+      })),
     });
     return;
   }
@@ -58,6 +104,12 @@ export async function sendTransactionalEmail({ to, template, data }: SendEmailOp
     to,
     subject,
     html,
+    attachments: images.map((img) => ({
+      filename: img.filename,
+      path: img.path,
+      contentType: img.contentType,
+      cid: img.contentId,
+    })),
   });
 }
 

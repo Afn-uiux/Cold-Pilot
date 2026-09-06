@@ -9,6 +9,7 @@ import { UserGroupIcon } from "@/components/icons/user-group";
 import { InboxIcon } from "@/components/icons/inbox";
 import { CircleCheckIcon } from "@/components/icons/circle-check";
 import { Shield02Icon } from "@/components/icons/shield-02";
+import { AlertCircleIcon } from "@/components/icons/alert-circle";
 import { SentIcon } from "@/components/icons/sent";
 import { TrendUpIcon } from "@/components/icons/trend-up";
 import { Mail01Icon } from "@/components/icons/mail-01";
@@ -25,6 +26,7 @@ const LINKS = [
   { href: "/admin/credits", label: "Credits", icon: "trend" },
   { href: "/admin/seeds", label: "Seeds", icon: "inbox" },
   { href: "/admin/email-previews", label: "Templates", icon: "mail" },
+  { href: "/admin/login-attempts", label: "Login attempts", icon: "alert" },
 ];
 
 export default function AdminSidebar() {
@@ -109,6 +111,7 @@ const NavIcon = forwardRef<AnimatedIconHandle, { name: string }>(({ name }, ref)
     case "sent": return <SentIcon ref={ref} size={16} />;
     case "trend": return <TrendUpIcon ref={ref} size={16} />;
     case "mail": return <Mail01Icon ref={ref} size={16} />;
+    case "alert": return <AlertCircleIcon ref={ref} size={16} />;
     default: return null;
   }
 });

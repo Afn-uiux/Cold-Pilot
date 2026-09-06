@@ -35,7 +35,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
-  const res = NextResponse.redirect(new URL("/dashboard", req.url));
+  const res = NextResponse.redirect(
+    new URL("/dashboard", process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL || req.url)
+  );
   res.cookies.set(BYPASS_COOKIE, secret, {
     httpOnly: true,
     sameSite: "lax",

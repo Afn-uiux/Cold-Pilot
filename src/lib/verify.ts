@@ -4,6 +4,7 @@ import tls from "tls";
 import { assertSafeSocketTarget, isAllowedSocketPort } from "./ssrf";
 import { isDisposable } from "./disposable";
 import { isTyposquat } from "./typosquat";
+import { probe550Verdict } from "./verify-providers";
 import { checkGlobalIntel } from "./global-intel";
 import { getDomainReputation, isHighBounceDomain, isMediumBounceDomain } from "./domain-reputation";
 
@@ -19,7 +20,7 @@ const ROLE_PREFIXES = [
   "donotreply","do-not-reply","notifications","notification","alert","alerts",
 ];
 
-export type VerificationStatus = "valid" | "invalid" | "risky" | "unknown";
+export type VerificationStatus = "valid" | "invalid" | "risky" | "unknown" | "catch_all";
 
 export interface SmtpConfig {
   host: string;
@@ -51,7 +52,7 @@ function extractLocal(email: string): string {
 
 const PROVIDER_MX_MAP: [RegExp, string][] = [
   [/google\.|gmail\.|googlemail\./i, "Google"],
-  [/yahoo\.|yahooding/i, "Yahoo"],
+  [/yahoo\.|yahooding|yahoodns\./i, "Yahoo"],
   [/outlook\.|office365\.|microsoft\./i, "Microsoft"],
   [/protonmail\.|proton\.|protonmail.ch/i, "ProtonMail"],
   [/zoho\./i, "Zoho"],
@@ -62,6 +63,35 @@ const PROVIDER_MX_MAP: [RegExp, string][] = [
   [/yandex\./i, "Yandex"],
   [/fastmail\./i, "Fastmail"],
   [/tutanota\.|tutamail\./i, "Tutanota"],
+  [/163\.com/i, "163"],
+  [/126\.com/i, "126"],
+  [/web\.de/i, "Web.de"],
+  [/t-online\./i, "T-Online"],
+  [/freenet\.de/i, "Freenet"],
+  [/free\.fr/i, "Free"],
+  [/orange\.fr/i, "Orange"],
+  [/laposte\.net/i, "La Poste"],
+  [/sfr\.fr/i, "SFR"],
+  [/qq\.com|exmail\.qq\./i, "QQ"],
+  [/naver\./i, "Naver"],
+  [/daum\./i, "Daum"],
+  [/rediffmail\./i, "Rediffmail"],
+  [/indiatimes\./i, "Indiatimes"],
+  [/rambler\./i, "Rambler"],
+  [/uol\.com\.br/i, "UOL"],
+  [/bol\.com\.br/i, "BOL"],
+  [/hey\.com/i, "Hey"],
+  [/hushmail\./i, "Hushmail"],
+  [/startmail\./i, "StartMail"],
+  [/posteo\./i, "Posteo"],
+  [/mailbox\.org/i, "Mailbox.org"],
+  [/netzero\./i, "NetZero"],
+  [/juno\.com/i, "Juno"],
+  [/lycos\./i, "Lycos"],
+  [/excite\./i, "Excite"],
+  [/mailfence\./i, "Mailfence"],
+  [/runbox\./i, "Runbox"],
+  [/countermail\./i, "CounterMail"],
 ];
 
 export function detectProvider(mxRecords: string[]): string {
@@ -421,19 +451,72 @@ const SMTP_UNREACHABLE_REASONS = new Set([
   "ehlo_rejected_421", "ehlo_rejected_451", "ehlo_rejected_452",
 ]);
 
-// Try each MX in order until one gives a definitive answer. The first MX is
-// sometimes slow, dead, or throttling probers while a secondary answers
+// How many total attempts (1 probe + retries) a mail server gets before we
+// give up on it. Greylist/throttle replies come back fast, so retrying them
+// is cheap; timeouts cost a full socket timeout each, so those retry once.
+const SMTP_MAX_ATTEMPTS = 3;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Temp-failure codes where the server actively replied "try again later" —
+// greylist (45x), too-many-connections / rate limit (421), and generic SMTP
+// temp failures (450/451/452). A mailbox that definitively doesn't exist
+// (550/551/553) is returned immediately; retrying it wastes a probe.
+function isCodeBasedTemp(reason: string): boolean {
+  if (reason === "greylisted") return true;
+  return /_(421|450|451|452)$/.test(reason);
+}
+
+// Everything that is NOT a clean answer deserves a retry before we decide:
+// the server is throttling us, greylisting us, or the probe itself died. None
+// of these prove the mailbox is dead, so after retries they must still never
+// be classified as "invalid" — they are soft "unknown" flags.
+function isRetryableReason(reason: string): boolean {
+  if (reason === "timeout" || reason === "connection_error" || reason === "connection_closed") return true;
+  if (reason === "ssrf_blocked") return false;
+  return isCodeBasedTemp(reason);
+}
+
+function retryBackoffMs(reason: string, attempt: number): number {
+  if (reason === "greylisted") return 1500 * attempt;
+  if (reason === "timeout" || reason === "connection_error" || reason === "connection_closed") return 800;
+  return 600 * attempt;
+}
+
+// Try each MX in order until one gives a definitive answer, retrying temp
+// failures (greylist/throttle/timeout) with a short backoff first. The first
+// MX is sometimes slow, dead, or throttling probers while a secondary answers
 // cleanly — failing the whole check on mx[0] alone caused false "unknown"s.
+// A greylister that 45x's the first probe often accepts a polite follow-up a
+// few seconds later, so "fail fast" was mislabeling throttled domains.
 async function smtpVerifyWithMxFallback(
   email: string,
   mxRecords: string[],
 ): Promise<{ result: { valid: boolean; catchAll: boolean; reason: string }; mxHost: string }> {
-  let last = { valid: false, catchAll: false, reason: "mx_valid_smtp_unreachable" };
   const hosts = mxRecords.slice(0, 3);
+  let last = { valid: false, catchAll: false, reason: "mx_valid_smtp_unreachable" };
+  let timeoutRetryBudget = 1;
   for (const mxHost of hosts) {
-    const r = await smtpVerify(email, mxHost);
-    last = r;
-    if (r.valid || !SMTP_UNREACHABLE_REASONS.has(r.reason)) return { result: r, mxHost };
+    for (let attempt = 1; attempt <= SMTP_MAX_ATTEMPTS; attempt++) {
+      const r = await smtpVerify(email, mxHost);
+      last = r;
+      if (r.valid || !isRetryableReason(r.reason)) return { result: r, mxHost };
+      if (isCodeBasedTemp(r.reason)) {
+        if (attempt < SMTP_MAX_ATTEMPTS) await sleep(retryBackoffMs(r.reason, attempt));
+      } else {
+        // timeout / connection drop: retry at most once across all MX hosts —
+        // hanging sockets are expensive, and the MX fallback already covers
+        // a flaky primary.
+        if (timeoutRetryBudget > 0) {
+          timeoutRetryBudget--;
+          await sleep(retryBackoffMs(r.reason, attempt));
+        } else {
+          break;
+        }
+      }
+    }
   }
   return { result: last, mxHost: hosts[0] };
 }
@@ -500,37 +583,44 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
   }
 
   if (smtpConfig) {
-    const accountResult = await smtpVerifyViaAccount(normalized, smtpConfig);
+    let accountResult = await smtpVerifyViaAccount(normalized, smtpConfig);
+
+    // Greylisted = the account's own server said "try again". Retry once or
+    // twice before labeling it unknown — throttles are often transient and a
+    // greylisted mailbox usually verifies cleanly seconds later.
+    for (let attempt = 2; accountResult.reason === "greylisted" && attempt <= SMTP_MAX_ATTEMPTS; attempt++) {
+      await sleep(retryBackoffMs("greylisted", attempt - 1));
+      accountResult = await smtpVerifyViaAccount(normalized, smtpConfig);
+    }
 
     if (accountResult.valid) {
       const isCatchAll = await verifyCatchAll(domain, mxRecords[0]);
       if (isCatchAll) {
-        return { status: "risky", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
+        return { status: "catch_all", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
       }
       return { status: "valid", reason: "mailbox_exists", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: false };
     }
 
-    if (accountResult.reason === "mailbox_not_found" || accountResult.reason === "mailbox_full_or_rejected") {
-      return { status: "invalid", reason: accountResult.reason, provider, format: true, mxValid: true, smtpValid: false };
+    // Hard invalid: the server explicitly confirmed the mailbox doesn't exist.
+    if (accountResult.reason === "mailbox_not_found") {
+      return { status: "invalid", reason: "mailbox_not_found", provider, format: true, mxValid: true, smtpValid: false };
     }
 
-    if (accountResult.reason === "greylisted") {
-      return { status: "unknown", reason: "greylisted", provider, format: true, mxValid: true, smtpValid: false };
-    }
-
-    if (accountResult.reason === "account_auth_failed" || accountResult.reason === "account_connection_error" || accountResult.reason === "account_connection_closed" || accountResult.reason === "account_smtp_timeout" || accountResult.reason === "account_tls_error" || accountResult.reason === "account_tls_closed") {
-      // Account SMTP failed — fall back to raw port 25
-    } else if (accountResult.reason === "mailbox_not_found" || accountResult.reason === "mailbox_full_or_rejected") {
-      return { status: "invalid", reason: accountResult.reason, provider, format: true, mxValid: true, smtpValid: false };
-    } else {
+    // Soft / no clean answer (mailbox full or generic 55x, greylisted): not a
+    // confirmed rejection, so flag it instead of blocking.
+    if (accountResult.reason === "mailbox_full_or_rejected" || accountResult.reason === "greylisted") {
       return { status: "unknown", reason: accountResult.reason, provider, format: true, mxValid: true, smtpValid: false };
     }
+
+    // Account auth/connection/misc failure — fall back to raw port 25 below.
   }
 
   // Raw port-25 probe with MX fallback. Probes run over IPv4 with an
   // EHLO hostname that matches our PTR, and MAIL FROM from a domain whose
   // SPF authorizes the probing IP — otherwise receivers greylist or reject
-  // the probe itself and every answer comes back "unknown".
+  // the probe itself. Temp failures (greylist/throttle/timeout) are retried
+  // briefly before we call it, and only a definitive 550/551/553 mailbox
+  // rejection can mark a lead "invalid".
   const { result: smtpResult, mxHost: workingMx } = await smtpVerifyWithMxFallback(normalized, mxRecords);
 
   if (smtpResult.valid) {
@@ -539,21 +629,33 @@ export async function verifyEmail(email: string, smtpConfig?: SmtpConfig): Promi
       // Accept-all domains (Gmail, Outlook, corporate catch-alls) confirm
       // nothing: the address may or may not exist. Marking these "invalid"
       // silently discarded every Gmail lead; marking "valid" would be a lie.
-      // "risky" lets the user decide per campaign.
-      return { status: "risky", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
+      // It's its own risk tier: allow the send but flag it for manual review.
+      return { status: "catch_all", reason: "catch_all_domain", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: true };
     }
     return { status: "valid", reason: "mailbox_exists", provider, format: true, mxValid: true, smtpValid: true, isCatchAll: false };
   }
 
-  if (smtpResult.reason === "mailbox_not_found" || smtpResult.reason === "mailbox_full_or_rejected") {
-    return { status: "invalid", reason: smtpResult.reason, provider, format: true, mxValid: true, smtpValid: false };
+  // "Mailbox not found" over raw port 25 is a definitive reject ONLY on
+  // providers that answer probes honestly. Gmail/Microsoft/Yahoo/AOL return a
+  // synthetic 550 just to hang up on probers, no matter whether the mailbox
+  // exists — so their 550 proves nothing. Degrade those to "unknown" instead
+  // of silently discarding real leads; the bounce net catches the dead ones.
+  if (smtpResult.reason === "mailbox_not_found") {
+    return probe550Verdict(provider) === "unknown"
+      ? { status: "unknown", reason: "provider_blocks_probing", provider, format: true, mxValid: true, smtpValid: false }
+      : { status: "invalid", reason: "mailbox_not_found", provider, format: true, mxValid: true, smtpValid: false };
   }
 
-  if (smtpResult.reason === "greylisted") {
-    return { status: "unknown", reason: "greylisted", provider, format: true, mxValid: true, smtpValid: false };
+  // Everything below is "no clean answer": mailbox full or generic 55x,
+  // greylisting, timeouts, throttles, connection failures. None of these
+  // prove the address is dead, so they get a soft "unknown" flag (sendable,
+  // reviewable) rather than an "invalid" block — this is exactly where the
+  // false positives hide.
+  if (smtpResult.reason === "mailbox_full_or_rejected" || smtpResult.reason === "greylisted") {
+    return { status: "unknown", reason: smtpResult.reason, provider, format: true, mxValid: true, smtpValid: false };
   }
 
-  if (SMTP_UNREACHABLE_REASONS.has(smtpResult.reason)) {
+  if (SMTP_UNREACHABLE_REASONS.has(smtpResult.reason) || smtpResult.reason === "mx_valid_smtp_unreachable") {
     return { status: "unknown", reason: "mx_valid_smtp_unreachable", provider, format: true, mxValid: true, smtpValid: false };
   }
 
@@ -567,6 +669,17 @@ export function canSendToLead(verificationStatus: string | null, enableRiskyEmai
   if (verificationStatus === "valid") {
     return { allowed: true, reason: "valid" };
   }
+  if (verificationStatus === "unknown") {
+    // Soft/unverifiable (timeout, greylist, throttle, mailbox full): no clean
+    // answer, but nothing proved the address dead. Don't auto-block — flag it
+    // so the user can decide (this is where the false positives hide).
+    return { allowed: true, reason: "unknown_flagged" };
+  }
+  if (verificationStatus === "catch_all") {
+    // Accept-all domain: can't confirm this specific mailbox. Allow sending
+    // but flag for manual review rather than blocking outright.
+    return { allowed: true, reason: "catch_all_flagged" };
+  }
   if (verificationStatus === "risky") {
     if (enableRiskyEmails) {
       return { allowed: true, reason: "risky_allowed_by_user" };
@@ -575,9 +688,6 @@ export function canSendToLead(verificationStatus: string | null, enableRiskyEmai
   }
   if (verificationStatus === "invalid") {
     return { allowed: false, reason: "invalid" };
-  }
-  if (verificationStatus === "unknown") {
-    return { allowed: false, reason: "unknown" };
   }
   return { allowed: true, reason: "unknown_status" };
 }

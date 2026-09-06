@@ -122,7 +122,7 @@ export async function POST(req: Request) {
   // outbound SMTP connections — enough to get throttled or blocklisted by
   // big receivers. 20 keeps bursts polite without slowing small lists.
   const BATCH_SIZE = 20;
-  const summary = { total: leads.length, valid: 0, invalid: 0, risky: 0, unknown: 0 };
+  const summary = { total: leads.length, valid: 0, invalid: 0, risky: 0, catch_all: 0, unknown: 0 };
 
   for (let i = 0; i < leads.length; i += BATCH_SIZE) {
     const batch = leads.slice(i, i + BATCH_SIZE);
@@ -143,6 +143,7 @@ export async function POST(req: Request) {
         if (result.status === "valid") summary.valid++;
         else if (result.status === "invalid") summary.invalid++;
         else if (result.status === "risky") summary.risky++;
+        else if (result.status === "catch_all") summary.catch_all++;
         else summary.unknown++;
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);

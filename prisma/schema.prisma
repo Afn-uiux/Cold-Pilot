@@ -116,6 +116,23 @@ model BlockedSignal {
   @@index([type])
 }
 
+// Every login attempt that matters — failures, throttles, and successes — so
+// the admin can see brute-force / password-spray activity instead of relying
+// on server logs that don't persist anywhere.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String?
+  userAgent String?
+  success   Boolean  @default(false)
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([ip])
+  @@index([createdAt])
+}
+
 model Account {
   id                String  @id @default(cuid())
   userId            String

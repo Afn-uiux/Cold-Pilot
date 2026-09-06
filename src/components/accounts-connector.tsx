@@ -295,8 +295,7 @@ export default function AccountsConnector({
           <div className="px-8 pb-8 overflow-y-auto">
             <h2 className="text-xl font-normal mb-1">Connect a provider</h2>
             <p className="text-sm text-muted mb-6">Choose your email provider to get started.</p>
-            <ProviderCard icon={<svg width="22" height="22" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/></svg>} name="Google" subtitle="Gmail / G-Suite" onClick={() => setScreen("google")} />
-            <ProviderCard icon={<svg width="22" height="22" viewBox="0 0 24 24"><path fill="#0078D4" d="M11.5 2H21a1 1 0 0 1 1 1v7.5l-5 3-5.5-3V2z"/><path fill="#0078D4" d="M2 11.5h9v9H3a1 1 0 0 1-1-1v-8z"/></svg>} name="Microsoft" subtitle="Office 365 / Outlook" onClick={() => setScreen("microsoft")} />
+            <ProviderCard icon={<GoogleLogo />} name="Google" subtitle="Gmail / G-Suite" onClick={() => setScreen("google")} />
             <ProviderCard icon={<Mail01Icon size={22} />} name="Any Provider" subtitle="IMAP / SMTP" onClick={() => setScreen("any-provider")} />
           </div>
         )}

@@ -18,6 +18,58 @@ import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
 import { assertSafeMailTarget } from "@/lib/ssrf";
 import { CREDIT_COSTS } from "@/lib/plans";
 
+function seedFromId(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// Build the personalization map for a lead, merging standard fields with
+// any custom fields the user imported so ANY variable tag resolves by name.
+function leadVars(lead: {
+  firstName: string | null;
+  lastName: string | null;
+  company: string | null;
+  email: string;
+  title: string | null;
+  phone: string | null;
+  website: string | null;
+  location: string | null;
+  personalization: string | null;
+  customFields: string | null;
+}, accountSignature: string): Record<string, string> {
+  const vars: Record<string, string> = {
+    firstName: lead.firstName || "",
+    lastName: lead.lastName || "",
+    company: lead.company || "",
+    companyName: lead.company || "",
+    email: lead.email,
+    title: lead.title || "",
+    phone: lead.phone || "",
+    website: lead.website || "",
+    location: lead.location || "",
+    signature: accountSignature,
+    accountSignature,
+    personalization: lead.personalization || "",
+  };
+  if (lead.customFields) {
+    try {
+      const cf = JSON.parse(lead.customFields) as Record<string, unknown>;
+      for (const [k, v] of Object.entries(cf)) {
+        if (typeof v !== "string" || !v.trim()) continue;
+        const lower = k.toLowerCase();
+        if (!vars[lower] && !(lower in vars)) vars[lower] = v.trim();
+      }
+    } catch {
+      // ignore malformed customFields
+    }
+  }
+  return vars;
+}
+
 function isWithinSchedule(campaign: { startDate: Date | null; endDate: Date | null; noEndDate: boolean; schedules: { startTime: string; endTime: string; timezone: string; days: string }[] }): boolean {
   const now = new Date();
 
@@ -187,6 +239,7 @@ async function executeCampaignInner(campaignId: string) {
   });
 
   const emailSteps = campaign.steps.filter(s => s.type === "email");
+  const emailStepIds = emailSteps.map(s => s.id);
   if (emailSteps.length === 0) return { sent: 0, errors: 0 };
 
   let sent = 0;
@@ -325,30 +378,19 @@ async function executeCampaignInner(campaignId: string) {
       }
 
       try {
-        const vars = {
-          firstName: lead.firstName || "",
-          lastName: lead.lastName || "",
-          company: lead.company || "",
-          companyName: lead.company || "",
-          email: lead.email,
-          title: lead.title || "",
-          phone: lead.phone || "",
-          website: lead.website || "",
-          location: lead.location || "",
-          signature: accountSignature,
-          accountSignature,
-          personalization: lead.personalization || "",
-        };
+        const vars = leadVars(lead, accountSignature);
 
         let subject: string;
         let htmlBody: string;
-        subject = personalizeText(step.subject || "Hello", vars);
+        const leadSeed = seedFromId(lead.id);
+        subject = personalizeText(step.subject || "Hello", vars, leadSeed).replace(/\{\{[^{}]+\}\}/g, "");
 
         const { signature: _sig, accountSignature: _asig, ...varsNoSignature } = vars;
-        htmlBody = personalizeText(step.bodyHtml || "", varsNoSignature);
+        htmlBody = personalizeText(step.bodyHtml || "", varsNoSignature, leadSeed);
         htmlBody = htmlBody
           .replace(/\{\{signature\}\}/gi, accountSignature)
-          .replace(/\{\{accountSignature\}\}/gi, accountSignature);
+          .replace(/\{\{accountSignature\}\}/gi, accountSignature)
+          .replace(/\{\{[^{}]+\}\}/g, "");
         htmlBody = sanitizeHtml(htmlBody);
 
         // Deduct 1 credit before sending (only for free/pay-as-you-go users).
@@ -385,6 +427,7 @@ async function executeCampaignInner(campaignId: string) {
           clickTracking: campaign.clickTracking,
           unsubscribeHeader: campaign.unsubscribeHeader,
           plainTextOnly: campaign.plainTextOnly || campaign.firstEmailPlainText,
+          enableRiskyEmails: campaign.enableRiskyEmails,
         });
 
         recordSend(lead.email).catch(() => {});
@@ -478,7 +521,7 @@ async function executeCampaignInner(campaignId: string) {
 
       try {
         const priorLogs = await prisma.emailLog.findMany({
-          where: { leadId: lead.id, type: "outgoing" },
+          where: { leadId: lead.id, type: "outgoing", campaignStepId: { in: emailStepIds } },
           orderBy: { sentAt: "asc" },
           select: { messageId: true, threadId: true, subject: true },
         });
@@ -490,27 +533,15 @@ async function executeCampaignInner(campaignId: string) {
           ? firstSubject
           : step.subject || "Re: Your conversation with Coldpilot";
         let fupBody = step.bodyHtml || "";
-        const fupVars = {
-          firstName: lead.firstName || "",
-          lastName: lead.lastName || "",
-          company: lead.company || "",
-          companyName: lead.company || "",
-          email: lead.email,
-          title: lead.title || "",
-          phone: lead.phone || "",
-          website: lead.website || "",
-          location: lead.location || "",
-          signature: accountSignature,
-          accountSignature,
-          personalization: lead.personalization || "",
-        };
-        fupSubject = personalizeText(fupSubject, fupVars);
+        const fupVars = leadVars(lead, accountSignature);
+        fupSubject = personalizeText(fupSubject, fupVars, seedFromId(lead.id)).replace(/\{\{[^{}]+\}\}/g, "");
 
         const { signature: _fsig, accountSignature: _fasig, ...fupVarsNoSignature } = fupVars;
-        fupBody = personalizeText(fupBody, fupVarsNoSignature);
+        fupBody = personalizeText(fupBody, fupVarsNoSignature, seedFromId(lead.id));
         fupBody = fupBody
           .replace(/\{\{signature\}\}/gi, accountSignature)
-          .replace(/\{\{accountSignature\}\}/gi, accountSignature);
+          .replace(/\{\{accountSignature\}\}/gi, accountSignature)
+          .replace(/\{\{[^{}]+\}\}/g, "");
 
         if (lastLog && !/^re:/i.test(fupSubject.trim())) {
           fupSubject = `Re: ${fupSubject}`;
@@ -553,6 +584,7 @@ async function executeCampaignInner(campaignId: string) {
           references: referencesChain,
           unsubscribeHeader: campaign.unsubscribeHeader,
           plainTextOnly: campaign.plainTextOnly,
+          enableRiskyEmails: campaign.enableRiskyEmails,
         });
 
         recordSend(lead.email).catch(() => {});

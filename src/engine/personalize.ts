@@ -1,8 +1,19 @@
-function pickRandom(options: string[]): string {
-  return options[Math.floor(Math.random() * options.length)];
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-function resolveGroup(group: string): string {
+function pickRandom(options: string[], rnd: () => number): string {
+  return options[Math.floor(rnd() * options.length)];
+}
+
+function resolveGroup(group: string, rnd: () => number): string {
   const options = group.split("|").map((s: string) => s.trim());
   const weighted = options.every(o => /^\d+[%:]/.test(o));
   if (weighted) {
@@ -10,7 +21,7 @@ function resolveGroup(group: string): string {
       const m = o.match(/^(\d+)[%:]/);
       return sum + (m ? parseInt(m[1]) : 0);
     }, 0);
-    let roll = Math.random() * totalWeight;
+    let roll = rnd() * totalWeight;
     for (const o of options) {
       const m = o.match(/^(\d+)[%:]\s*(.*)/);
       if (m) {
@@ -20,17 +31,17 @@ function resolveGroup(group: string): string {
     }
     return options[options.length - 1].replace(/^\d+[%:]\s*/, "");
   }
-  return pickRandom(options);
+  return pickRandom(options, rnd);
 }
 
-function resolveSpintax(text: string): string {
+function resolveSpintax(text: string, rnd: () => number): string {
   // Recursively resolve innermost groups first so nested spintax works.
   // e.g. "Hey {Hi {there|friend}|Hello}" → "Hey Hi there" or "Hey Hi friend" or "Hey Hello"
   let prev = text;
   let result = text;
   for (let i = 0; i < 10; i++) {
     result = result.replace(/\{([^{}]*)\}/g, (_match, group) => {
-      return resolveGroup(group);
+      return resolveGroup(group, rnd);
     });
     if (result === prev) break;
     prev = result;
@@ -38,31 +49,132 @@ function resolveSpintax(text: string): string {
   return result;
 }
 
-export function processSpintax(text: string): string {
+export function processSpintax(text: string, seed?: number): string {
+  const rnd: () => number = seed === undefined || seed === null ? Math.random : mulberry32(seed);
   // {{RANDOM | option1 | option2 | option3}} — explicit random syntax
   let result = text.replace(/\{\{RANDOM\s*\|\s*([^}]+)\}\}/gi, (_match, group) => {
     const options = group.split("|").map((s: string) => s.trim());
-    return pickRandom(options);
+    return pickRandom(options, rnd);
+  });
+  // Protect any leftover {{variable}} tags so the {...} resolver below can't eat them
+  const placeholders: string[] = [];
+  result = result.replace(/\{\{\w+\}\}/g, (match) => {
+    placeholders.push(match);
+    return `\u0001${placeholders.length - 1}\u0001`;
   });
   // All {...} groups — weighted, flat, or nested (resolved innermost-first)
-  result = resolveSpintax(result);
+  result = resolveSpintax(result, rnd);
+  // Restore protected variable tags
+  result = result.replace(/\u0001(\d+)\u0001/g, (_match, i) => placeholders[parseInt(i, 10)] ?? "");
   return result;
 }
 
-export function personalizeText(text: string, variables: Record<string, string>): string {
+export function previewFillVariables(
+  text: string,
+  overrides: Record<string, string>,
+  lead: Record<string, string | null | undefined> | null
+): string {
+  let result = text || "";
+
+  const knownLower: Record<string, string> = {};
+  for (const [k, v] of Object.entries({
+    firstName: "John", lastName: "Doe", company: "Acme Inc", companyName: "Acme Inc",
+    title: "CEO", email: "john@acme.com", phone: "(555) 123-4567",
+    personalization: "loved your recent post", website: "acme.com",
+    location: "San Francisco, CA", signature: "Best regards,\nYour Name",
+    accountSignature: "Best regards,\nYour Name",
+  })) knownLower[k.toLowerCase()] = v;
+
+  const leadVars: Record<string, string> = {};
+  if (lead) {
+    const map: Record<string, string> = {
+      firstName: lead.firstName || "", lastName: lead.lastName || "",
+      company: lead.company || "", title: lead.title || "",
+      email: lead.email || "", phone: lead.phone || "",
+      website: lead.website || "", location: lead.location || "",
+      personalization: lead.personalization || "",
+    };
+    for (const [k, v] of Object.entries(map)) leadVars[k.toLowerCase()] = v;
+    if (typeof lead.customFields === "string" && lead.customFields) {
+      try {
+        const cf = JSON.parse(lead.customFields) as Record<string, string>;
+        for (const [k, v] of Object.entries(cf)) {
+          if (typeof v === "string" && v) leadVars[k.toLowerCase()] = v;
+        }
+      } catch {
+        // ignore malformed customFields
+      }
+    }
+  }
+
+  const demoValue = (key: string): string => {
+    const map: Record<string, string> = {
+      name: "John Doe",
+      service: "your service",
+      city: "your city",
+      business: "your business",
+      industry: "your industry",
+      date: "Monday",
+      day: "Monday",
+      role: "your role",
+      partner: "your partner",
+      manager: "your manager",
+      count: "10",
+      budget: "your budget",
+      goal: "your goal",
+      challenge: "your challenge",
+      source: "your source",
+      site: "your website",
+      url: "your url",
+    };
+    return map[key.toLowerCase()] ?? "your " + key.toLowerCase();
+  };
+
+  // Collect every tag actually used in the text (both {{...}} and ((...)))
+  const vars: Record<string, string> = {};
+  const usedKeys = new Set<string>();
+  const tagRe = /\{\{([^{}()|]+?)\}\}|\(\(([^{}()|]+?)\)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = tagRe.exec(result)) !== null) {
+    const key = (m[1] || m[2] || "").trim();
+    if (!key) continue;
+    const lower = key.toLowerCase();
+    if (lower === "random") continue;
+    usedKeys.add(lower);
+  }
+
+  for (const key of usedKeys) {
+    let val = "";
+    const ov = overrides[key] ?? overrides[key.toLowerCase()];
+    if (ov && ov.trim()) val = ov.trim();
+    else if (lead && leadVars[key]) val = leadVars[key];
+    if (!val) val = knownLower[key] ?? demoValue(key);
+    vars[key] = val;
+  }
+
+  for (const [key, val] of Object.entries(vars)) {
+    const re = new RegExp(`\\{\\{${key}\\}\\}`, "gi");
+    const re2 = new RegExp(`\\(\\(${key}\\)\\)`, "gi");
+    result = result.replace(re, val).replace(re2, val);
+  }
+
+  return processSpintax(result);
+}
+
+export function personalizeText(text: string, variables: Record<string, string>, seed?: number): string {
   const lowerVars: Record<string, string> = {};
   for (const [k, v] of Object.entries(variables)) {
     lowerVars[k.toLowerCase()] = v;
   }
-  let result = text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    const value = lowerVars[key.toLowerCase()];
+  let result = text.replace(/\{\{([^{}|]+)\}\}/g, (match, key) => {
+    const value = lowerVars[key.trim().toLowerCase()];
     return value || match;
   });
-  result = result.replace(/\(\((\w+)\)\)/g, (match, key) => {
-    const value = lowerVars[key.toLowerCase()];
+  result = result.replace(/\(\(([^()|]+)\)\)/g, (match, key) => {
+    const value = lowerVars[key.trim().toLowerCase()];
     return value || match;
   });
-  result = processSpintax(result);
+  result = processSpintax(result, seed);
   return result;
 }
 

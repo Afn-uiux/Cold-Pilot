@@ -8,30 +8,67 @@ import { Search01Icon } from "@/components/icons/search-01";
 import { Upload01Icon } from "@/components/icons/upload-01";
 import { Cancel01Icon } from "@/components/icons/cancel-01";
 import { useToast } from "@/components/toast";
+import VerificationStatusBadge from "@/components/verification-status-badge";
 
 type Lead = { id: string; email: string; firstName: string | null; lastName: string | null; company: string | null; title: string | null; phone: string | null; website: string | null; location: string | null; notes: string | null; customFields: string | null; campaignId: string | null; status: string; verificationStatus: string | null; createdAt: string; campaign: { name: string } | null; };
 
-const PROVIDERS: Record<string, { name: string; colors: string; logo: string }> = {
-  gmail: { name: "Gmail", colors: "bg-[#3C4043]", logo: "M" },
-  outlook: { name: "Outlook", colors: "bg-[#3C4043]", logo: "O" },
-  hotmail: { name: "Outlook", colors: "bg-[#3C4043]", logo: "O" },
-  live: { name: "Outlook", colors: "bg-[#3C4043]", logo: "O" },
-  yahoo: { name: "Yahoo", colors: "bg-[#3C4043]", logo: "Y" },
-  protonmail: { name: "Proton", colors: "bg-[#3C4043]", logo: "P" },
-  proton: { name: "Proton", colors: "bg-[#3C4043]", logo: "P" },
-  icloud: { name: "iCloud", colors: "bg-[#3C4043]", logo: "" },
-  me: { name: "iCloud", colors: "bg-[#3C4043]", logo: "" },
-  aol: { name: "AOL", colors: "bg-[#3C4043]", logo: "A" },
-  zoho: { name: "Zoho", colors: "bg-[#3C4043]", logo: "Z" },
-  yandex: { name: "Yandex", colors: "bg-[#3C4043]", logo: "Я" },
-  fastmail: { name: "Fastmail", colors: "bg-[#3C4043]", logo: "F" },
-  gmx: { name: "GMX", colors: "bg-[#3C4043]", logo: "G" },
-  mail: { name: "Mail.com", colors: "bg-[#3C4043]", logo: "M" },
+const PROVIDERS: Record<string, { name: string; colors: string; logo?: string; glyph: string }> = {
+  gmail: { name: "Gmail", colors: "bg-white border border-border", logo: "/provider-logos/gmail.png", glyph: "M" },
+  outlook: { name: "Outlook", colors: "bg-white border border-border", logo: "/provider-logos/outlook.png", glyph: "O" },
+  hotmail: { name: "Outlook", colors: "bg-white border border-border", logo: "/provider-logos/outlook.png", glyph: "O" },
+  live: { name: "Outlook", colors: "bg-white border border-border", logo: "/provider-logos/outlook.png", glyph: "O" },
+  yahoo: { name: "Yahoo", colors: "bg-white border border-border", logo: "/provider-logos/yahoo.png", glyph: "Y" },
+  protonmail: { name: "Proton", colors: "bg-white border border-border", logo: "/provider-logos/proton.png", glyph: "P" },
+  proton: { name: "Proton", colors: "bg-white border border-border", logo: "/provider-logos/proton.png", glyph: "P" },
+  icloud: { name: "iCloud", colors: "bg-white border border-border", logo: "/provider-logos/apple.png", glyph: "A" },
+  me: { name: "iCloud", colors: "bg-white border border-border", logo: "/provider-logos/apple.png", glyph: "A" },
+  aol: { name: "AOL", colors: "bg-white border border-border", logo: "/provider-logos/aol.png", glyph: "A" },
+  zoho: { name: "Zoho", colors: "bg-white border border-border", logo: "/provider-logos/zoho.png", glyph: "Z" },
+  yandex: { name: "Yandex", colors: "bg-white border border-border", logo: "/provider-logos/yandex.png", glyph: "Я" },
+  fastmail: { name: "Fastmail", colors: "bg-white border border-border", logo: "/provider-logos/fastmail.png", glyph: "F" },
+  gmx: { name: "GMX", colors: "bg-white border border-border", logo: "/provider-logos/gmx.png", glyph: "G" },
+  mail: { name: "Mail.com", colors: "bg-white border border-border", logo: "/provider-logos/mail.png", glyph: "M" },
+  mailru: { name: "Mail.ru", colors: "bg-white border border-border", logo: "/provider-logos/mailru.png", glyph: "M" },
+  inbox: { name: "Mail.ru", colors: "bg-white border border-border", logo: "/provider-logos/mailru.png", glyph: "M" },
+  list: { name: "Mail.ru", colors: "bg-white border border-border", logo: "/provider-logos/mailru.png", glyph: "M" },
+  tutanota: { name: "Tuta", colors: "bg-white border border-border", logo: "/provider-logos/tutanota.png", glyph: "T" },
+  tutamail: { name: "Tuta", colors: "bg-white border border-border", logo: "/provider-logos/tutanota.png", glyph: "T" },
+  "163": { name: "163", colors: "bg-white border border-border", logo: "/provider-logos/163.png", glyph: "1" },
+  "126": { name: "126", colors: "bg-white border border-border", logo: "/provider-logos/126.png", glyph: "1" },
+  web: { name: "Web.de", colors: "bg-white border border-border", logo: "/provider-logos/webde.png", glyph: "W" },
+  "t-online.de": { name: "T-Online", colors: "bg-white border border-border", logo: "/provider-logos/tonline.png", glyph: "T" },
+  freenet: { name: "Freenet", colors: "bg-white border border-border", logo: "/provider-logos/freenet.png", glyph: "F" },
+  free: { name: "Free", colors: "bg-white border border-border", logo: "/provider-logos/free.png", glyph: "F" },
+  orange: { name: "Orange", colors: "bg-white border border-border", logo: "/provider-logos/orange.png", glyph: "O" },
+  laposte: { name: "La Poste", colors: "bg-white border border-border", logo: "/provider-logos/laposte.png", glyph: "L" },
+  sfr: { name: "SFR", colors: "bg-white border border-border", logo: "/provider-logos/sfr.png", glyph: "S" },
+  qq: { name: "QQ", colors: "bg-white border border-border", logo: "/provider-logos/qq.png", glyph: "Q" },
+  naver: { name: "Naver", colors: "bg-white border border-border", logo: "/provider-logos/naver.png", glyph: "N" },
+  daum: { name: "Daum", colors: "bg-white border border-border", logo: "/provider-logos/daum.png", glyph: "D" },
+  rediffmail: { name: "Rediffmail", colors: "bg-white border border-border", logo: "/provider-logos/rediff.png", glyph: "R" },
+  indiatimes: { name: "Indiatimes", colors: "bg-white border border-border", logo: "/provider-logos/indiatimes.png", glyph: "I" },
+  rambler: { name: "Rambler", colors: "bg-white border border-border", logo: "/provider-logos/rambler.png", glyph: "R" },
+  uol: { name: "UOL", colors: "bg-white border border-border", logo: "/provider-logos/uol.png", glyph: "U" },
+  bol: { name: "BOL", colors: "bg-white border border-border", logo: "/provider-logos/bol.png", glyph: "B" },
+  hey: { name: "Hey", colors: "bg-white border border-border", logo: "/provider-logos/hey.png", glyph: "H" },
+  hushmail: { name: "Hushmail", colors: "bg-white border border-border", logo: "/provider-logos/hushmail.png", glyph: "H" },
+  startmail: { name: "StartMail", colors: "bg-white border border-border", logo: "/provider-logos/startmail.png", glyph: "S" },
+  posteo: { name: "Posteo", colors: "bg-white border border-border", logo: "/provider-logos/posteo.png", glyph: "P" },
+  mailbox: { name: "Mailbox.org", colors: "bg-white border border-border", logo: "/provider-logos/mailbox.png", glyph: "M" },
+  netzero: { name: "NetZero", colors: "bg-white border border-border", logo: "/provider-logos/netzero.png", glyph: "N" },
+  juno: { name: "Juno", colors: "bg-white border border-border", logo: "/provider-logos/juno.png", glyph: "J" },
+  lycos: { name: "Lycos", colors: "bg-white border border-border", logo: "/provider-logos/lycos.png", glyph: "L" },
+  excite: { name: "Excite", colors: "bg-white border border-border", logo: "/provider-logos/excite.png", glyph: "E" },
+  mailfence: { name: "Mailfence", colors: "bg-white border border-border", logo: "/provider-logos/mailfence.png", glyph: "M" },
+  runbox: { name: "Runbox", colors: "bg-white border border-border", logo: "/provider-logos/runbox.png", glyph: "R" },
+  countermail: { name: "CounterMail", colors: "bg-white border border-border", logo: "/provider-logos/countermail.png", glyph: "C" },
 };
 
 function getEmailProvider(email: string) {
-  const domain = email.split("@")[1]?.toLowerCase().split(".")[0] || "";
-  return PROVIDERS[domain] || { name: "Other", colors: "bg-[#6B6578]", logo: "#" };
+  const fullDomain = email.split("@")[1]?.toLowerCase() || "";
+  const first = fullDomain.split(".")[0] || "";
+  const provider = PROVIDERS[fullDomain] || PROVIDERS[first];
+  return provider || { name: "Other", colors: "bg-white border border-border", glyph: "#" };
 }
 
 export default function LeadsPage() {
@@ -341,11 +378,11 @@ export default function LeadsPage() {
                       <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} className="w-4 h-4" />
                     </th>
                     <th>Email</th>
+                    <th>Provider</th>
                     {columns.customKeys.length > 0 ? (
                       columns.customKeys.map(k => <th key={k}>{k}</th>)
                     ) : (
                       <>
-                        <th>Provider</th>
                         {columns.firstName && <th>First Name</th>}
                         {columns.lastName && <th>Last Name</th>}
                         {columns.company && <th>Company</th>}
@@ -375,16 +412,20 @@ export default function LeadsPage() {
                           <input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelect(l.id)} className="w-4 h-4" />
                         </td>
                         <td className="font-medium">{l.email}</td>
+                        <td>
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-ink ${provider.colors}`}>
+                            {provider.logo ? (
+                              <img src={provider.logo} alt="" className="w-3.5 h-3.5 rounded-full object-contain" />
+                            ) : (
+                              <span className="text-[10px] leading-none">{provider.glyph}</span>
+                            )}
+                            {provider.name}
+                          </span>
+                        </td>
                         {columns.customKeys.length > 0 ? (
                           columns.customKeys.map(k => <td key={k} className="text-muted">{parsedCustom[k] || ""}</td>)
                         ) : (
                           <>
-                            <td>
-                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white ${provider.colors}`}>
-                                <span className="text-[10px] leading-none">{provider.logo}</span>
-                                {provider.name}
-                              </span>
-                            </td>
                             {columns.firstName && <td>{l.firstName}</td>}
                             {columns.lastName && <td>{l.lastName}</td>}
                             {columns.company && <td className="text-muted">{l.company}</td>}
@@ -397,22 +438,7 @@ export default function LeadsPage() {
                         )}
                         <td><span className={`badge ${l.status === "replied" ? "active" : l.status === "pending" ? "draft" : ""}`}>{l.status}</span></td>
                         <td>
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                            verifyingIds.has(l.id) ? "bg-blue-50 text-blue-400" :
-                            l.verificationStatus === "valid" ? "bg-emerald-100 text-emerald-700" :
-                            (l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "bg-red-100 text-red-700" :
-                            l.verificationStatus === "catch_all" ? "bg-orange-100 text-orange-700" :
-                            l.verificationStatus === "unknown" ? "bg-gray-100 text-gray-500" :
-                            "bg-blue-50 text-blue-400"
-                          }`}>
-                            {verifyingIds.has(l.id) ? "verifying" : (l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "invalid / do not send" : l.verificationStatus || "unverified"}
-                            {verifyingIds.has(l.id) && (
-                              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                              </svg>
-                            )}
-                          </span>
+                          <VerificationStatusBadge status={l.verificationStatus} verifying={verifyingIds.has(l.id)} />
                         </td>
                         <td>
                           <button onClick={() => handleRemove(l.id)} className="text-xs text-red-500 hover:text-red-700 transition-colors font-medium">Delete</button>

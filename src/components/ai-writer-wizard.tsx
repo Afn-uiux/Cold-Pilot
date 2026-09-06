@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { processSpintax } from "@/engine/personalize";
+import { previewFillVariables } from "@/engine/personalize";
 import { RefreshIcon } from "@/components/icons/refresh";
 import { Cancel01Icon } from "@/components/icons/cancel-01";
 
@@ -65,6 +65,7 @@ export default function AiWriterWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "generate-sequence",
+          campaignId,
           companyName,
           offerDetails,
           targetAudience,
@@ -93,18 +94,7 @@ export default function AiWriterWizard({
   }
 
   function fillVariables(text: string): string {
-    const samples: Record<string, string> = {
-      firstName: "John", lastName: "Doe", company: "Acme Inc",
-      companyName: "Acme Inc", title: "CEO", email: "john@acme.com",
-      phone: "(555) 123-4567", personalization: "loved your recent post",
-      website: "acme.com", location: "San Francisco, CA", signature: "Best regards,\nYour Name",
-      accountSignature: "Best regards,\nYour Name",
-    };
-    let r = text;
-    for (const [key, val] of Object.entries(samples)) {
-      r = r.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val);
-    }
-    return processSpintax(r);
+    return previewFillVariables(text || "", {}, null);
   }
 
   function htmlToPreview(body: string): string {
@@ -363,7 +353,7 @@ export default function AiWriterWizard({
                       </span>
                     </div>
                     <div className="text-[15px] font-bold text-ink mb-3">
-                      Subject: {fillVariables(s.subject)}
+                      {i === 0 ? `Subject: ${fillVariables(s.subject)}` : (s.subject ? `Subject: ${fillVariables(s.subject)}` : "Subject: Empty — uses previous step's subject")}
                     </div>
                     <div className="bg-cream border border-border rounded-lg p-4 text-[13px] text-ink leading-[1.7]">
                       <div dangerouslySetInnerHTML={{ __html: htmlToPreview(fillVariables(s.body)) }} />

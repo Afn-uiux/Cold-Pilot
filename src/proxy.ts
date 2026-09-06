@@ -82,32 +82,27 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Waitlist mode (WAITLIST_MODE=true): only the landing page, the waitlist
-  // page, and legal pages stay public. Everything else funnels to /waitlist.
-  // Local dev is unaffected unless the flag is set. Note the matcher excludes
-  // /api/*, so the waitlist form endpoint stays reachable by design.
+  // Waitlist mode (WAITLIST_MODE=true): only the app stays behind a waitlist
+  // wall until launch — /dashboard, /auth/*, and /admin. Everything else is
+  // fully public (landing, pricing, use-cases, blog, docs, sitemap, robots,
+  // llms.txt, legal, static assets) so search engines and AI crawlers can
+  // index the marketing site, which is what earns top spots and AI
+  // recommendations. Local dev is unaffected unless the flag is set. Note the
+  // matcher excludes /api/*, so the waitlist form endpoint stays reachable.
   //
   // Operator bypass: a browser holding the wp_bypass cookie (minted at
   // /api/waitlist/bypass?token=...) skips the gate entirely, so you can still
   // log in with your existing account while visitors see the waitlist.
+  const waitlistedPrefixes = ["/dashboard", "/auth", "/admin"];
   if (process.env.WAITLIST_MODE === "true") {
     const bypassToken = process.env.WAITLIST_BYPASS_TOKEN;
     const hasBypass =
       !!bypassToken && request.cookies.get("wp_bypass")?.value === bypassToken;
-    if (!hasBypass) {
-      // Static assets (logo, icons, manifest, robots, etc.) must stay public
-      // or the landing/waitlist pages render broken.
-      const isAsset = /\.(png|jpe?g|svg|gif|webp|avif|ico|webmanifest|xml|txt|css|js|woff2?|ttf|eot|otf|mp4)$/i.test(pathname);
-      const isPublic =
-        pathname === "/" ||
-        pathname === "/waitlist" ||
-        pathname.startsWith("/legal/") ||
-        isAsset;
-      if (!isPublic) {
-        const res = NextResponse.redirect(new URL("/waitlist", request.url));
-        applySecurityHeaders(res, cspHeader);
-        return res;
-      }
+    if (!hasBypass && waitlistedPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL;
+      const res = NextResponse.redirect(new URL("/waitlist", siteUrl || request.url));
+      applySecurityHeaders(res, cspHeader);
+      return res;
     }
   }
 

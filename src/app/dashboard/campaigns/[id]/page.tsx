@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { VARIABLE_LIST, processSpintax, getPersonalizedPreview } from "@/engine/personalize";
+import { VARIABLE_LIST, previewFillVariables } from "@/engine/personalize";
 import DOMPurify from "dompurify";
 
 import Select from "@/components/select";
@@ -12,6 +12,7 @@ import ConfirmModal from "@/components/confirm-modal";
 import RichTextEditor, { type RichTextEditorHandle } from "@/components/rich-text-editor";
 import AiWriterWizard, { type GeneratedStep } from "@/components/ai-writer-wizard";
 import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
+import VerificationStatusBadge from "@/components/verification-status-badge";
 import { ChevronUpIcon } from "@/components/icons/chevron-up";
 import { ChevronDownIcon } from "@/components/icons/chevron-down";
 import { Cancel01Icon } from "@/components/icons/cancel-01";
@@ -61,6 +62,7 @@ export default function CampaignDetailPage() {
   const [aiStepIdx, setAiStepIdx] = useState(0);
   const [aiWriterOpen, setAiWriterOpen] = useState(false);
   const [aiDropdownStep, setAiDropdownStep] = useState<number | null>(null);
+  const [spamCheck, setSpamCheck] = useState<{ stepIndex: number; findings: { flag: string; text: string; suggestion: string; fix: string }[]; applied: boolean[] } | null>(null);
   const [variablesPanelStep, setVariablesPanelStep] = useState<number | null>(null);
   const [previewStep, setPreviewStep] = useState<number | null>(null);
   const [senderEmail, setSenderEmail] = useState("");
@@ -74,7 +76,6 @@ export default function CampaignDetailPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [toast, setToast] = useState<string | null>(null);
-  const aiDropdownRef = useRef<HTMLDivElement>(null);
   const [aiDropdownPos, setAiDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const editorRefs = useRef<(RichTextEditorHandle | null)[]>([]);
 
@@ -103,7 +104,7 @@ export default function CampaignDetailPage() {
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const newSteps: Step[] = genSteps.map((s, i) => ({
       type: "email",
-      subject: s.subject || "",
+      subject: i === 0 ? s.subject || "" : "",
       bodyHtml: esc(s.body).replace(/\r?\n/g, "<br>"),
       delayDays: i === 0 ? 0 : 2,
       delayUnit: "days",
@@ -119,11 +120,21 @@ export default function CampaignDetailPage() {
     setAiLoading(true);
     try {
       const step = steps[stepIndex];
-      const text = step.bodyHtml || step.subject || "";
+      const stripHtml = (html: string) =>
+        html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ");
+      const body = step.bodyHtml ? stripHtml(step.bodyHtml).trim() : "";
+      // Spam Check scans the body AND the subject (spam filters read both).
+      // A "Subject:" anchor line keeps subject phrases physically distinct in
+      // the combined text, and each fix is still just the matched words, so
+      // Apply replaces them in whichever field actually contains them.
+      const text = action === "spin"
+        ? body || step.subject || ""
+        : (body || step.subject || "")
+            + (body && step.subject ? "\n\nSubject: " + step.subject : "");
       const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, text, context: "outreach" }),
+        body: JSON.stringify({ action, text, context: "outreach", campaignId: id, subject: step.subject || "" }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {
@@ -131,10 +142,28 @@ export default function CampaignDetailPage() {
         return;
       }
       if (data.result) {
-        if (action === "spin" || action === "write") {
+        if (action === "spin") {
+          const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          updateStep(stepIndex, "bodyHtml", esc(data.result).replace(/\r?\n/g, "<br>"));
+          if (data.subject) updateStep(stepIndex, "subject", data.subject);
+          const shownCount = data.combined || data.comboEstimate;
+          if (shownCount) {
+            const shown = shownCount >= 1e12 ? "100B+" : Number(shownCount).toLocaleString();
+            setToast(data.leadCount
+              ? `Spintax: ~${shown} unique versions (subject + body) — covers your ${data.leadCount} leads`
+              : `Spintax added — ~${shown} unique versions`);
+            setTimeout(() => setToast(null), 4000);
+          }
+        } else if (action === "write") {
           appendAiText(stepIndex, data.result);
         } else if (action === "check") {
-          alert(data.result);
+          const findings = Array.isArray(data.findings) ? data.findings : [];
+          if (findings.length > 0) {
+            setSpamCheck({ stepIndex, findings, applied: findings.map(() => false) });
+          } else {
+            setToast("Spam check passed — no spam-trigger words found");
+            setTimeout(() => setToast(null), 4000);
+          }
         }
       }
     } catch {
@@ -252,9 +281,7 @@ export default function CampaignDetailPage() {
   }
 
   function addStep() {
-    const lastSubject = steps.length > 0 ? steps[steps.length - 1].subject : "";
-    const reSubject = lastSubject ? `Re: ${lastSubject.replace(/^Re:\s*/i, "")}` : "";
-    setSteps([...steps, { type: "email", subject: reSubject, bodyHtml: "", delayDays: 0, delayUnit: "days", order: steps.length }]);
+    setSteps([...steps, { type: "email", subject: "", bodyHtml: "", delayDays: 0, delayUnit: "days", order: steps.length }]);
   }
 
   function removeStep(i: number) {
@@ -263,6 +290,56 @@ export default function CampaignDetailPage() {
 
   function updateStep(i: number, field: string, val: any) {
     setSteps(prev => prev.map((s, j) => j === i ? { ...s, [field]: val } : s));
+  }
+
+  // Replace every case-insensitive occurrence of `text` with `fix` ("" deletes
+  // it) in a string. When deleting, also swallow exactly one neighbouring
+  // space so "a free trial offer" → "a offer" doesn't happen; the resulting
+  // double spaces / leading space are collapsed.
+  function replaceAllInsensitive(input: string, text: string, fix: string): string {
+    if (!text) return input;
+    const lower = input.toLowerCase();
+    const needle = text.toLowerCase();
+    let out = "";
+    let cursor = 0;
+    while (true) {
+      const idx = lower.indexOf(needle, cursor);
+      if (idx === -1) { out += input.slice(cursor); break; }
+      out += input.slice(cursor, idx) + fix;
+      cursor = idx + text.length;
+    }
+    if (fix === "") {
+      out = out.replace(/\s{2,}/g, " ").replace(/^\s+/, "").trim();
+    }
+    return out;
+  }
+
+  function applySpamFix(findingIdx: number) {
+    if (!spamCheck) return;
+    const { stepIndex, findings, applied } = spamCheck;
+    const finding = findings[findingIdx];
+    const step = steps[stepIndex];
+    let nextSubject = step.subject || "";
+    let nextBody = step.bodyHtml || "";
+    let changed = false;
+    // Apply only if the flagged words are actually present in that field.
+    if (nextSubject.toLowerCase().includes(finding.text.toLowerCase())) {
+      nextSubject = replaceAllInsensitive(nextSubject, finding.text, finding.fix);
+      changed = true;
+    }
+    if (nextBody.toLowerCase().includes(finding.text.toLowerCase())) {
+      nextBody = replaceAllInsensitive(nextBody, finding.text, finding.fix);
+      changed = true;
+    }
+    if (changed) {
+      updateStep(stepIndex, "subject", nextSubject);
+      updateStep(stepIndex, "bodyHtml", nextBody);
+      const nextApplied = applied.slice();
+      nextApplied[findingIdx] = true;
+      setSpamCheck({ stepIndex, findings, applied: nextApplied });
+      setToast(`Fixed "${finding.text}"`);
+      setTimeout(() => setToast(null), 2500);
+    }
   }
 
   function moveStep(i: number, dir: number) {
@@ -290,24 +367,8 @@ export default function CampaignDetailPage() {
   }
 
   function fillVariables(text: string): string {
-    const overriddenKeys = new Set(Object.keys(varOverrides).filter(k => varOverrides[k]));
-    let result = text;
-    for (const [key, val] of Object.entries(varOverrides)) {
-      if (val) result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val);
-    }
-    const samples: Record<string, string> = {
-      firstName: "John", lastName: "Doe", company: "Acme Inc",
-      companyName: "Acme Inc", title: "CEO", email: "john@acme.com",
-      phone: "(555) 123-4567", personalization: "loved your recent post",
-      website: "acme.com", location: "San Francisco, CA", signature: "Best regards,\nYour Name",
-      accountSignature: "Best regards,\nYour Name",
-    };
-    for (const [key, val] of Object.entries(samples)) {
-      if (!overriddenKeys.has(key)) {
-        result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val);
-      }
-    }
-    return processSpintax(result);
+    const lead = leadList.find(l => l.id === selectedLeadId) || null;
+    return previewFillVariables(text || "", varOverrides, lead);
   }
 
   function getPreviewContent(stepIdx: number): string {
@@ -462,9 +523,18 @@ export default function CampaignDetailPage() {
                           {/* Subject row */}
                           <div className="flex items-center gap-3 pl-5 pr-4 h-[52px] border-b border-border/30">
                             <span className="text-sm font-semibold text-ink/90 w-[68px] shrink-0 tracking-tight">Subject</span>
-                            <input value={step.subject} onChange={e => updateStep(i, "subject", e.target.value)}
-                              placeholder="Your subject"
-                              className="flex-1 bg-transparent outline-none text-sm text-ink placeholder:text-muted-2/40 min-w-0" />
+                            {i === 0 ? (
+                              <input value={step.subject} onChange={e => updateStep(i, "subject", e.target.value)}
+                                placeholder="Your subject"
+                                className="flex-1 bg-transparent outline-none text-sm text-ink placeholder:text-muted-2/40 min-w-0" />
+                            ) : (
+                              <>
+                                <div className="flex-1 text-sm text-blue-accent/70 truncate min-w-0" title="Leave empty to use the previous step&apos;s subject — follow-ups always reuse it and send threading headers so they stay in the same conversation.">
+                                  Leave empty to use previous step&apos;s subject
+                                </div>
+                                <span className="text-[10px] font-mono text-blue-accent/60 bg-blue-light/30 px-2 py-0.5 rounded-full shrink-0">thread</span>
+                              </>
+                            )}
                             <div className="w-px h-5 bg-border/40 shrink-0"></div>
                             <button onClick={() => setPreviewStep(i)}
                               className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-blue-accent px-2.5 py-1.5 rounded-lg hover:bg-blue-light/40 transition-all shrink-0">
@@ -517,8 +587,8 @@ export default function CampaignDetailPage() {
 
                             <div className="w-px h-5 bg-border/40 shrink-0 mx-1.5"></div>
 
-                              <div className="relative" ref={aiDropdownRef}>
-                              <button onClick={e => { e.stopPropagation(); const rect = aiDropdownRef.current!.getBoundingClientRect(); setAiDropdownPos({ top: rect.bottom + 4, left: rect.left }); setAiDropdownStep(aiDropdownStep === i ? null : i); }}
+                              <div className="relative">
+                              <button onClick={e => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); setAiDropdownPos({ top: rect.bottom + 4, left: rect.left }); setAiDropdownStep(aiDropdownStep === i ? null : i); }}
                                 className="flex items-center gap-1.5 text-xs text-muted hover:text-blue-accent px-2.5 py-1.5 rounded-lg hover:bg-white/70 transition-all">
                                 <FlashIcon size={14} />
                                 AI Tools
@@ -533,7 +603,7 @@ export default function CampaignDetailPage() {
                                   <button onClick={() => { setAiDropdownStep(null); setAiStepIdx(i); runAi("check", i); }}
                                     disabled={aiLoading} className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-muted hover:text-blue-accent hover:bg-cream-2/60 transition-all disabled:opacity-30">
                                     <CircleCheckIcon size={14} />
-                                    Word Checker
+                                    Spam Check
                                   </button>
                                   <button onClick={() => { setAiDropdownStep(null); setAiStepIdx(i); setAiWriterOpen(true); }}
                                     disabled={aiLoading} className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-muted hover:text-blue-accent hover:bg-cream-2/60 transition-all disabled:opacity-30">
@@ -693,7 +763,7 @@ export default function CampaignDetailPage() {
                           <>
                             <div className="text-xs text-gray-500 uppercase tracking-wider mb-1 font-medium">Subject</div>
                             <div className="text-sm font-semibold text-[#222] mb-4 pb-3 border-b border-gray-200">
-                              {fillVariables(steps[previewStep]?.subject || "") || "(no subject)"}
+                              {fillVariables(steps[previewStep]?.subject || "") || (previewStep > 0 ? "Leave empty to use previous step's subject" : "(no subject)")}
                             </div>
                             <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getPreviewContent(previewStep)) }} />
                           </>
@@ -788,6 +858,56 @@ export default function CampaignDetailPage() {
           onGenerated={applyGeneratedSequence}
         />
 
+        {/* Spam Check Modal */}
+        {spamCheck && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setSpamCheck(null)}>
+            <div className="bg-white rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] w-full max-w-[640px] max-h-[85vh] flex flex-col m-4" onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-[#1a1a1a]">Spam Check</h2>
+                <button onClick={() => setSpamCheck(null)} className="text-gray-400 hover:text-gray-600 flex items-center justify-center">
+                  <Cancel01Icon size={18} />
+                </button>
+              </div>
+
+              {/* Findings */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+                <p className="text-sm text-[#666]">Found {spamCheck.findings.length} issue{spamCheck.findings.length !== 1 ? "s" : ""}. Apply a fix to swap every occurrence in this email — or reword it yourself.</p>
+                {spamCheck.findings.map((f, i) => (
+                  <div key={i} className={`border rounded-xl p-4 ${spamCheck.applied[i] ? "border-green-200 bg-green-50" : "border-gray-200"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">{f.flag}</div>
+                        <div className="text-sm font-semibold text-[#1a1a1a] break-words mb-1">&ldquo;{f.text}&rdquo;</div>
+                        <div className="text-sm text-[#555] leading-relaxed">{f.suggestion}</div>
+                      </div>
+                      <button
+                        onClick={() => applySpamFix(i)}
+                        disabled={spamCheck.applied[i]}
+                        className={`shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          spamCheck.applied[i]
+                            ? "bg-green-100 text-green-700 cursor-default"
+                            : "bg-blue-accent text-white hover:bg-blue-accent/90"
+                        }`}
+                      >
+                        {spamCheck.applied[i] ? "Fixed ✓" : "Apply fix"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-end px-4 sm:px-6 py-4 border-t border-gray-200">
+                <button onClick={() => setSpamCheck(null)}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors">
+                  {spamCheck.applied.some(Boolean) ? "Done" : "Close"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
@@ -810,16 +930,103 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
     if (domain === "aol.com") return "AOL";
     if (domain === "icloud.com" || domain === "me.com" || domain === "mac.com") return "Apple";
     if (domain === "protonmail.com" || domain === "proton.me" || domain === "pm.me") return "ProtonMail";
+    if (domain === "zoho.com") return "Zoho";
+    if (domain === "gmx.com" || domain === "gmx.de" || domain === "gmx.net") return "GMX";
+    if (domain === "mail.ru" || domain === "inbox.ru" || domain === "list.ru") return "Mail.ru";
+    if (domain === "yandex.com" || domain === "yandex.ru") return "Yandex";
+    if (domain === "fastmail.com" || domain === "fastmail.fm") return "Fastmail";
+    if (domain === "tutanota.com" || domain === "tutamail.com") return "Tutanota";
+    if (domain === "163.com") return "163";
+    if (domain === "126.com") return "126";
+    if (domain === "web.de") return "Web.de";
+    if (domain === "t-online.de") return "T-Online";
+    if (domain === "freenet.de") return "Freenet";
+    if (domain === "free.fr") return "Free";
+    if (domain === "orange.fr") return "Orange";
+    if (domain === "laposte.net") return "La Poste";
+    if (domain === "sfr.fr") return "SFR";
+    if (domain === "qq.com") return "QQ";
+    if (domain === "naver.com") return "Naver";
+    if (domain === "daum.net") return "Daum";
+    if (domain === "rediffmail.com") return "Rediffmail";
+    if (domain === "indiatimes.com") return "Indiatimes";
+    if (domain === "rambler.ru") return "Rambler";
+    if (domain === "uol.com.br") return "UOL";
+    if (domain === "bol.com.br") return "BOL";
+    if (domain === "hey.com") return "Hey";
+    if (domain === "hushmail.com") return "Hushmail";
+    if (domain === "startmail.com") return "StartMail";
+    if (domain === "posteo.de") return "Posteo";
+    if (domain === "mailbox.org") return "Mailbox.org";
+    if (domain === "netzero.com" || domain === "netzero.net") return "NetZero";
+    if (domain === "juno.com") return "Juno";
+    if (domain === "lycos.com") return "Lycos";
+    if (domain === "excite.com") return "Excite";
+    if (domain === "mailfence.com") return "Mailfence";
+    if (domain === "runbox.com") return "Runbox";
+    if (domain === "countermail.com") return "CounterMail";
     return dbProvider || "Other";
   }
 
+  const PROVIDER_LOGO: Record<string, string | undefined> = {
+    Google: "/provider-logos/gmail.png",
+    Gmail: "/provider-logos/gmail.png",
+    Yahoo: "/provider-logos/yahoo.png",
+    Microsoft: "/provider-logos/outlook.png",
+    Outlook: "/provider-logos/outlook.png",
+    AOL: "/provider-logos/aol.png",
+    Apple: "/provider-logos/apple.png",
+    iCloud: "/provider-logos/apple.png",
+    ProtonMail: "/provider-logos/proton.png",
+    Proton: "/provider-logos/proton.png",
+    Zoho: "/provider-logos/zoho.png",
+    GMX: "/provider-logos/gmx.png",
+    "Mail.ru": "/provider-logos/mailru.png",
+    "Mail.com": "/provider-logos/mail.png",
+    Yandex: "/provider-logos/yandex.png",
+    Fastmail: "/provider-logos/fastmail.png",
+    Tutanota: "/provider-logos/tutanota.png",
+    "163": "/provider-logos/163.png",
+    "126": "/provider-logos/126.png",
+    "Web.de": "/provider-logos/webde.png",
+    "T-Online": "/provider-logos/tonline.png",
+    Freenet: "/provider-logos/freenet.png",
+    Free: "/provider-logos/free.png",
+    Orange: "/provider-logos/orange.png",
+    "La Poste": "/provider-logos/laposte.png",
+    SFR: "/provider-logos/sfr.png",
+    QQ: "/provider-logos/qq.png",
+    Naver: "/provider-logos/naver.png",
+    Daum: "/provider-logos/daum.png",
+    Rediffmail: "/provider-logos/rediff.png",
+    Indiatimes: "/provider-logos/indiatimes.png",
+    Rambler: "/provider-logos/rambler.png",
+    UOL: "/provider-logos/uol.png",
+    BOL: "/provider-logos/bol.png",
+    Hey: "/provider-logos/hey.png",
+    Hushmail: "/provider-logos/hushmail.png",
+    StartMail: "/provider-logos/startmail.png",
+    Posteo: "/provider-logos/posteo.png",
+    "Mailbox.org": "/provider-logos/mailbox.png",
+    NetZero: "/provider-logos/netzero.png",
+    Juno: "/provider-logos/juno.png",
+    Lycos: "/provider-logos/lycos.png",
+    Excite: "/provider-logos/excite.png",
+    Mailfence: "/provider-logos/mailfence.png",
+    Runbox: "/provider-logos/runbox.png",
+    CounterMail: "/provider-logos/countermail.png",
+  };
+
   function getProviderBadge(provider: string) {
-    const colors: Record<string, string> = {
-      Google: "bg-red-500", Yahoo: "bg-purple-600", Microsoft: "bg-blue-500",
-      AOL: "bg-blue-400", Apple: "bg-gray-800", ProtonMail: "bg-indigo-600",
-      Zoho: "bg-red-600", Other: "bg-gray-400",
-    };
-    return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white ${colors[provider] || colors.Other}`}>{provider}</span>;
+    const logo = PROVIDER_LOGO[provider];
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-ink bg-white border border-border">
+        {logo ? (
+          <img src={logo} alt="" className="w-3.5 h-3.5 rounded-full object-contain" />
+        ) : null}
+        {provider}
+      </span>
+    );
   }
   useEffect(() => {
     fetch(`/api/leads?campaignId=${campaignId}`).then(r => r.json()).then(data => setLeads(Array.isArray(data) ? data : [])).catch(() => {}).finally(() => setLoading(false));
@@ -912,22 +1119,7 @@ function LeadsTab({ campaignId }: { campaignId: string }) {
                 )}
                 <td><span className={`badge ${l.status === "replied" ? "active" : l.status === "completed" ? "completed" : ""}`}>{l.status}</span></td>
                 <td>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                    verifyingIds.has(l.id) ? "bg-blue-50 text-blue-400" :
-                    l.verificationStatus === "valid" ? "bg-emerald-100 text-emerald-700" :
-                    (l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "bg-red-100 text-red-700" :
-                    l.verificationStatus === "catch_all" ? "bg-orange-100 text-orange-700" :
-                    l.verificationStatus === "unknown" ? "bg-gray-100 text-gray-500" :
-                    "bg-blue-50 text-blue-400"
-                  }`}>
-                    {verifyingIds.has(l.id) ? "verifying" : (l.verificationStatus === "invalid" || l.verificationStatus === "risky") ? "invalid / do not send" : l.verificationStatus || "unverified"}
-                    {verifyingIds.has(l.id) && (
-                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                    )}
-                  </span>
+                  <VerificationStatusBadge status={l.verificationStatus} verifying={verifyingIds.has(l.id)} />
                 </td>
                 <td><button onClick={() => handleRemove(l.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button></td>
               </tr>

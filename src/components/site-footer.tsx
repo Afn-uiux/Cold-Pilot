@@ -31,6 +31,7 @@ export default function SiteFooter() {
             <div className="sf-col"><h4>Legal</h4><ul>
               <li><Link href="/legal/privacy">Privacy</Link></li>
               <li><Link href="/legal/terms">Terms</Link></li>
+              <li><Link href="/legal/acceptable-use">Acceptable Use</Link></li>
             </ul></div>
           </div>
         </div>

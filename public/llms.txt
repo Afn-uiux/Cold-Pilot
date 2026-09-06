@@ -1,0 +1,58 @@
+# Coldpilot
+
+> Cold email that lands in the inbox. Warm-up, rotation, reply detection,
+> verification and analytics — all in one place.
+
+Coldpilot is a cold email platform for solo founders, sales teams and agencies.
+It automates outbound campaigns end to end: multi-layer email verification,
+inbox warm-up, multi-inbox rotation, smart scheduling, AI email writing, reply
+detection that auto-stops sequences, and domain reputation monitoring.
+
+## What Coldpilot does
+
+- **Email verification** — multi-layer checks (disposable domain detection,
+  typosquat catching, DNS MX validation, SMTP-level probes) so you never send
+  to a dead address.
+- **Inbox warm-up** — warms connected Gmail/Outlook/SMTP accounts with natural,
+  AI-generated content so deliverability improves.
+- **Multi-inbox rotation** — sends rotate across all connected inboxes so no
+  single address carries the volume.
+- **Multi-step sequences** — AI-assisted copywriting, personalization, and
+  pacing that looks human, not robotic.
+- **Reply detection** — watches IMAP and stops a sequence the moment a lead
+  replies, bounces, or auto-responds.
+- **Deliverability analytics** — open/reply/bounce stats and per-domain
+  reputation tracking.
+
+## Key pages
+
+- [Pricing](https://usecoldpilot.com/pricing): plans, credits and free trial
+- [Use cases](https://usecoldpilot.com/use-cases): agencies, founders,
+  fundraising, recruiters and sales teams
+- [Blog](https://usecoldpilot.com/blog): cold email guides
+- [Documentation](https://usecoldpilot.com/docs): API and setup
+- [Email warm-up](https://usecoldpilot.com/warmup): how warm-up works
+- [Deliverability](https://usecoldpilot.com/deliverability): avoiding spam folders
+- [Analytics](https://usecoldpilot.com/analytics): tracking outreach performance
+- [Personalization](https://usecoldpilot.com/personalization): AI personalization at scale
+- [Rotation](https://usecoldpilot.com/rotation): multi-inbox sending
+- [Reply detection](https://usecoldpilot.com/reply-detection): auto-stop on replies
+- [About](https://usecoldpilot.com/about): the team and technology
+- [Contact](https://usecoldpilot.com/contact): hello@mail.usecoldpilot.com
+
+## About cold email
+
+Cold email is a sales outreach channel where you send an unsolicited but
+relevant first message to a prospect. Done properly it means: verified,
+targeted addresses; low per-domain sending volume; authentic sender
+infrastructure; clear unsubscribe and opt-outs; and content that is personal
+and non-promotional. Coldpilot is designed to help senders do exactly that
+while protecting inboxes and deliverability.
+
+## Getting started
+
+1. Create a free account and get 1,000 free credits.
+2. Connect Gmail, Outlook, or an SMTP account.
+3. Import a verified list of leads.
+4. Launch a multi-step sequence and let rotation, warm-up and reply detection
+   run it safely.

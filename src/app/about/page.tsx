@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import SiteHeader from "@/components/site-header";
+
+export const metadata: Metadata = {
+  title: "About Coldpilot",
+  description:
+    "Coldpilot is an all-in-one cold email platform: multi-layer email verification, AI copywriting, inbox warm-up, multi-inbox rotation, reply detection and domain reputation monitoring.",
+};
 
 export default function AboutPage() {
   return (

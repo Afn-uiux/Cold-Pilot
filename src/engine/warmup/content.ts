@@ -9,24 +9,35 @@ const AI_MAX_RETRIES = 3;
 const AI_PROMPT = `You are writing a short professional email between two business colleagues.
 Requirements:
 - Subject line: 3 to 7 words, natural, no hype words
-- Body: exactly 2 to 3 sentences, plain text only
+- Body: exactly 3 to 4 short sentences (roughly 45 to 60 words), plain text only
 - Tone: {tone}
 - Context: {context}
 - Sender name: {sender_name}
+- Invent a small, safe, plausible detail for the situation (a meeting, a schedule, a shared task, some notes) so the email feels real — but never mention specific brands, products, links, prices, currencies, or anything sensitive. Keep it generic and believable.
 - No marketing language, no links, no HTML, no emojis
 - Do not start with "I hope this email finds you well"
 - Do not use "synergy", "leverage", "circle back", "touch base", "reaching out"
 - Must end with a soft question or statement that naturally invites a reply
-- Sound like a real human, not a template
+- Sound like a real human, not a template; when possible rephrase the context in your own words rather than echoing it back
 Return ONLY a valid JSON object, no explanation, no markdown:
 {"subject": "...", "body": "..."}`;
 
-const TONES = ["professional and brief", "friendly and warm", "casual and direct", "polite and concise", "conversational and relaxed"];
+const TONES = [
+  "professional and brief", "friendly and warm", "casual and direct", "polite and concise",
+  "conversational and relaxed", "warm and personal", "relaxed and easygoing", "direct and no-nonsense",
+  "thoughtful and considerate",
+];
 const CONTEXTS = [
   "following up on a previous conversation", "checking in after some time has passed",
-  "reaching out to reconnect", "touching base on something discussed before",
-  "following up on an email sent last week", "checking if the other person had a chance to review something",
-  "reaching out as it has been a while", "following up after an introduction",
+  "reaching out to reconnect", "checking if the other person had a chance to review something",
+  "following up on an email sent last week", "following up after an introduction",
+  "confirming a time to catch up", "scheduling or rescheduling a short call",
+  "sharing a quick status update on something you both are tracking",
+  "asking a small favor such as a quick look at a shared document",
+  "arranging to send over some notes or material", "checking in about a deadline or timeline",
+  "following up on a plan made in a previous meeting", "confirming details for an upcoming meeting",
+  "asking whether a shared task is still on track", "closing the loop on an item that was left open",
+  "sharing a brief recap of a discussion", "checking in on something the two of you were going to work on together",
 ];
 
 const SUBJECTS = [
@@ -158,19 +169,68 @@ const BODIES: string[] = [
 const GREETINGS = ["Hi", "Hey", "Hello", "Good morning", "Morning", "Hi there"];
 const SIGNOFFS = ["Best", "Thanks", "Regards", "Cheers", "Talk soon", "Thanks again"];
 
+// Safe, generic "what is this about" phrases that make template emails read as
+// real colleague conversations rather than colourless check-ins. Never brands,
+// money, or links — just ordinary work small talk.
+const TOPICS = [
+  "the handoff notes", "the schedule for next week", "the plan we outlined",
+  "the numbers we discussed", "the document I mentioned", "the notes from that call",
+  "the tracker we share", "the follow-up items", "the draft we are reviewing",
+  "the timeline we agreed on", "the summary from last meeting", "the updates from yesterday",
+  "the items we left open", "the list you said you would send",
+];
+
+const TOPIC_SUBJECTS = [
+  "A quick note on {topic}", "Your thoughts on {topic}", "Re: {topic}",
+  "One thing on {topic}", "Following up on {topic}", "Quick update on {topic}",
+];
+
+const TOPIC_BODIES = [
+  "Hi {name}, just reviewing {topic}. Wanted to make sure we are on the same page before the week wraps up. {signoff}",
+  "{greeting} {name}, I looked back over {topic}. Do you want to catch up briefly on it? {signoff}",
+  "Hi there, quick one on {topic}. Let me know when you would have time to go over it together. {signoff}, {name}",
+  "{greeting}, I had a thought about {topic}. Worth a quick chat when you are free? {signoff}",
+  "Hi {name}, I have a quick update on {topic}. Happy to walk through it when you have a moment. {signoff}",
+  "Hi there, checking in on {topic}. No rush — just wanted to keep it moving if possible. {signoff}, {name}",
+];
+
+// Extra courteous sentences added to many template bodies so they read like a
+// real person's email (3 sentences) instead of a terse one-liner. Still no
+// links, no offers, no pressure — just ordinary professional small talk.
+const EXTENSIONS = [
+  "I know it has been a busy stretch, so no pressure on timing at all.",
+  "If a quick call is easier than going back and forth, happy to set one up.",
+  "I can also pull together any notes you would need to get up to speed.",
+  "If this week does not work, we can simply roll it to next week.",
+  "Happy to move this wherever it is easiest for you.",
+  "No rush at all — just wanted to keep it on your radar while it is fresh.",
+  "Let me know if anything from my side would help move this along.",
+  "Either way, good to be connected on it.",
+  "It can wait until things settle down on your end, obviously.",
+  "Happy to leave it with you and pick it back up whenever suits.",
+];
+
 function hashContent(subject: string, body: string): string {
   return crypto.createHash("sha256").update(`${subject.toLowerCase().trim()}|||${body.toLowerCase().trim()}`).digest("hex");
 }
 
 function buildTemplateContent(senderName: string): { subject: string; body: string } {
-  const subject = SUBJECTS[Math.floor(Math.random() * SUBJECTS.length)];
-  const bodyTemplate = BODIES[Math.floor(Math.random() * BODIES.length)];
+  const topicUsed = Math.random() < 0.6;
+  const topic = topicUsed ? TOPICS[Math.floor(Math.random() * TOPICS.length)] : null;
+  const subject = topic && Math.random() < 0.5
+    ? TOPIC_SUBJECTS[Math.floor(Math.random() * TOPIC_SUBJECTS.length)].replace("{topic}", topic)
+    : SUBJECTS[Math.floor(Math.random() * SUBJECTS.length)];
+  const bodySource = topic && Math.random() < 0.4
+    ? TOPIC_BODIES[Math.floor(Math.random() * TOPIC_BODIES.length)]
+    : BODIES[Math.floor(Math.random() * BODIES.length)];
   const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
   const signoff = SIGNOFFS[Math.floor(Math.random() * SIGNOFFS.length)];
-  const body = bodyTemplate
+  const extension = EXTENSIONS[Math.floor(Math.random() * EXTENSIONS.length)];
+  const body = bodySource
     .replace(/\{name\}/g, senderName)
     .replace(/\{greeting\}/g, greeting)
-    .replace(/\{signoff\}/g, signoff);
+    .replace(/\{signoff\}/g, (extension ? extension + " " : "") + signoff)
+    .replace(/\{topic\}/g, topic ?? "");
   return { subject, body };
 }
 
