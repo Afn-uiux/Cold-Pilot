@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   const redirect = searchParams.get("redirect");
   const sig = searchParams.get("sig");
   const stepId = searchParams.get("stepId");
+  const ts = searchParams.get("ts");
 
   if (id) {
     try {
@@ -54,13 +55,14 @@ export async function GET(req: NextRequest) {
 
   if (redirect) {
     // Never trust the redirect target on its own — only follow it if it's
-    // signed with this exact (leadId, stepId, url) triple, proving it's the
-    // link this app actually generated at send time rather than an
+    // signed with this exact (leadId, stepId, url, issuedAt) tuple, proving
+    // it's the link this app actually generated at send time rather than an
     // arbitrary attacker-supplied destination riding on our trusted domain.
-    if (id && verifyRedirect(id, stepId || undefined, redirect, sig)) {
+    // Freshness is enforced inside verifyRedirect (30-day TTL).
+    if (id && verifyRedirect(id, stepId || undefined, redirect, sig, ts)) {
       return NextResponse.redirect(redirect);
     }
-    console.warn(`[track] rejected unsigned/invalid redirect: leadId=${id} target=${redirect}`);
+    console.warn(`[track] rejected unsigned/invalid/expired redirect: leadId=${id} target=${redirect}`);
   }
 
   return new NextResponse(PIXEL_GIF, {

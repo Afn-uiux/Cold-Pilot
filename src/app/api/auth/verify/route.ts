@@ -6,6 +6,7 @@ import { sendEmailSafe } from "@/lib/email/send";
 import { VERIFY_TOKEN_TTL_MS } from "@/lib/verification";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import crypto from "crypto";
+import { hashToken } from "@/lib/tokens";
 
 export async function POST(req: Request) {
   const { email } = await req.json();
@@ -34,8 +35,9 @@ export async function POST(req: Request) {
   const token = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
 
+  // Only the digest is stored — a leaked DB never exposes usable tokens.
   await prisma.verificationToken.create({
-    data: { identifier: email, token, expires },
+    data: { identifier: email, token: hashToken(token), expires },
   });
 
   const verifyUrl = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/auth/verify?token=${token}`;
@@ -51,12 +53,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Token is required" }, { status: 400 });
   }
 
-  const record = await prisma.verificationToken.findUnique({ where: { token } });
+  const tokenDigest = hashToken(token);
+  const record = await prisma.verificationToken.findUnique({ where: { token: tokenDigest } });
   if (!record) {
     return NextResponse.json({ error: "Invalid token" }, { status: 400 });
   }
   if (new Date() > record.expires) {
-    await prisma.verificationToken.delete({ where: { token } });
+    await prisma.verificationToken.delete({ where: { token: tokenDigest } });
     return NextResponse.json({ error: "Token expired" }, { status: 400 });
   }
 
@@ -64,7 +67,7 @@ export async function GET(req: Request) {
     where: { email: record.identifier },
     data: { emailVerified: new Date() },
   });
-  await prisma.verificationToken.delete({ where: { token } });
+  await prisma.verificationToken.delete({ where: { token: tokenDigest } });
 
   return NextResponse.json({ message: "Email verified successfully" });
 }

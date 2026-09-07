@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import bcrypt from "bcryptjs";
+import { hashToken } from "@/lib/tokens";
 
 const IDENTIFIER_PREFIX = "reset_password:";
 
@@ -23,19 +24,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
   }
 
-  const record = await prisma.verificationToken.findUnique({ where: { token } });
+  // Tokens are stored as SHA-256 digests only (see /lib/tokens) — the lookup
+  // and every delete operate on the digest of the presented token.
+  const tokenDigest = hashToken(String(token));
+  const record = await prisma.verificationToken.findUnique({ where: { token: tokenDigest } });
   if (!record || !record.identifier.startsWith(IDENTIFIER_PREFIX)) {
     return NextResponse.json({ error: "Invalid or expired reset link" }, { status: 400 });
   }
   if (new Date() > record.expires) {
-    await prisma.verificationToken.delete({ where: { token } });
+    await prisma.verificationToken.delete({ where: { token: tokenDigest } });
     return NextResponse.json({ error: "Invalid or expired reset link" }, { status: 400 });
   }
 
   const email = record.identifier.slice(IDENTIFIER_PREFIX.length);
   const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (!user) {
-    await prisma.verificationToken.delete({ where: { token } });
+    await prisma.verificationToken.delete({ where: { token: tokenDigest } });
     return NextResponse.json({ error: "Invalid or expired reset link" }, { status: 400 });
   }
 
@@ -43,7 +47,7 @@ export async function POST(req: Request) {
   await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
 
   // The token is single-use; delete it immediately so it can't be replayed.
-  await prisma.verificationToken.delete({ where: { token } });
+  await prisma.verificationToken.delete({ where: { token: tokenDigest } });
 
   // A password reset should also kill any existing sessions — otherwise
   // someone who already had a foothold on the account (e.g. a stolen

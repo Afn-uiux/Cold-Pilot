@@ -1,6 +1,5 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import { createSession, revokeSession, isSessionValid, SESSION_TTL_MS } from "./session";
@@ -8,10 +7,6 @@ import { verifyToken as verifyTotp } from "./totp";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
     Credentials({
       name: "credentials",
       credentials: {
@@ -67,10 +62,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         select: { deletedAt: true, totpSecret: true },
       });
       if (existing?.deletedAt) return false;
-      // 2FA bypass hardening: the Google provider has no TOTP step, while the
-      // Credentials provider enforces it. A user with 2FA enabled must not be
-      // able to sign in via Google and skip it. (Google provisioning/linking is
-      // not implemented, so this also rejects unprovisioned Google logins.)
+      // 2FA bypass hardening: no provider may mint a session past TOTP. The
+      // Credentials provider enforces the code itself, and this guard keeps any
+      // future/provisioned provider from skipping it.
       if (existing?.totpSecret) return false;
       return true;
     },

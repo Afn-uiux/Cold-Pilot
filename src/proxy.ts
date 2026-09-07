@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { decode } from "next-auth/jwt";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { currencyFromCountry } from "@/lib/currency";
+import { isAllowedHost, redirectBaseUrl } from "@/lib/host";
 
 const protectedPaths = ["/dashboard"];
 const authPaths = ["/auth/login", "/auth/signup"];
@@ -81,6 +82,17 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
 
   const { pathname } = request.nextUrl;
+
+  // Host-header poisoning defense: in production a request whose Host is not
+  // allow-listed (ALLOWED_HOSTS, or the canonical origin's host) is rejected
+  // outright so no auth/redirect flow can ever be pointed at an attacker's
+  // domain through this edge. Development stays permissive for localhost and
+  // Cloudflare-tunnel testing.
+  if (process.env.NODE_ENV === "production" && !isAllowedHost(request.headers.get("host"))) {
+    const res = new NextResponse("Bad Request", { status: 400 });
+    applySecurityHeaders(res, cspHeader);
+    return res;
+  }
 
   // Waitlist mode (WAITLIST_MODE=true): only the app stays behind a waitlist
   // wall until launch — /dashboard, /auth/*, and /admin. Everything else is

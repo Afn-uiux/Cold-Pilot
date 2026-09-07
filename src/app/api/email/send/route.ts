@@ -8,6 +8,38 @@ import { sendEmail } from "@/engine/send";
 import { spendCredits, InsufficientCreditsError } from "@/lib/credits";
 import { CREDIT_COSTS } from "@/lib/plans";
 import { rateLimitAsync } from "@/lib/rate-limit";
+import crypto from "crypto";
+
+// A manual send is a distinct billable event, so its credit charge is keyed on
+// a fresh nonce per call — the old static `manual_send:${leadId}` refId made
+// every send to a lead after the first ride free (audit finding M-1). To keep
+// honest client retries of the SAME request from double-charging, we dedupe on
+// (user, account, lead, content hash) within a short window.
+const RECENT_SEND_WINDOW_MS = 120_000;
+const recentSendKeys = new Map<string, number>();
+
+function sendContentHash(subject: string, body: string): string {
+  return crypto.createHash("sha256").update(`${subject}\u0000${body}`).digest("hex").slice(0, 16);
+}
+
+function isRecentDuplicateSend(
+  userId: string,
+  accountId: string,
+  leadId: string,
+  subject: string,
+  body: string
+): boolean {
+  const now = Date.now();
+  if (recentSendKeys.size > 10_000) {
+    for (const [k, t] of recentSendKeys) {
+      if (now - t > RECENT_SEND_WINDOW_MS) recentSendKeys.delete(k);
+    }
+  }
+  const key = `${userId}:${accountId}:${leadId}:${sendContentHash(subject, body)}`;
+  const seen = recentSendKeys.get(key);
+  recentSendKeys.set(key, now);
+  return !!seen && now - seen < RECENT_SEND_WINDOW_MS;
+}
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -46,19 +78,28 @@ export async function POST(req: Request) {
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
   // Metered-billing guard: free/pay-as-you-go manual sends must spend a credit,
-  // matching the campaign engine. The refId makes this idempotent across retries.
+  // matching the campaign engine. A fresh UUID refId makes each independent
+  // send its own billable event (the static per-lead key let repeats run free),
+  // while recent-identical-send dedupe protects legitimate retries.
   if (user?.plan === "free") {
-    try {
-      await spendCredits(session.user.id, CREDIT_COSTS.campaign, "campaign_send", `manual_send:${leadId}`);
-    } catch (err) {
-      if (err instanceof InsufficientCreditsError) {
-        return NextResponse.json(
-          { error: "You're out of credits. Buy more to send emails." },
-          { status: 402 },
+    if (!isRecentDuplicateSend(session.user.id, account.id, lead.id, subject, htmlBody)) {
+      try {
+        await spendCredits(
+          session.user.id,
+          CREDIT_COSTS.campaign,
+          "campaign_send",
+          `manual_send:${crypto.randomUUID()}`
         );
+      } catch (err) {
+        if (err instanceof InsufficientCreditsError) {
+          return NextResponse.json(
+            { error: "You're out of credits. Buy more to send emails." },
+            { status: 402 },
+          );
+        }
+        console.error("Manual send credit deduction failed:", err);
+        return NextResponse.json({ error: "Failed to process credits. Please try again." }, { status: 500 });
       }
-      console.error("Manual send credit deduction failed:", err);
-      return NextResponse.json({ error: "Failed to process credits. Please try again." }, { status: 500 });
     }
   }
 

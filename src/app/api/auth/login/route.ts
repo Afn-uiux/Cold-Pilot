@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth, signIn } from "@/lib/auth";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import { logLoginAttempt } from "@/lib/login-audit";
+import { isAllowedHost, redirectBaseUrl } from "@/lib/host";
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,10 +54,16 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Redirect to the host the request actually arrived on (accounts for the
-// Cloudflare tunnel) instead of always using the server's localhost origin.
+// Redirect to a host we are allowed to redirect to. The raw Host header is
+// attacker-controlled (host-header poisoning), so when it is not explicitly
+// allow-listed we fall back to the canonical origin instead of reflecting it.
 function getBaseUrl(req: NextRequest): string {
-  const host = req.headers.get("host") ?? "localhost:3000";
-  const proto = req.headers.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}`;
+  const host = req.headers.get("host");
+  if (isAllowedHost(host)) {
+    return redirectBaseUrl(host);
+  }
+  // Not an allowed host: never reflect it. Use the canonical origin so a
+  // poisoned Host cannot turn this into an open redirect.
+  const canonical = process.env.AUTH_URL || process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
+  return canonical.replace(/\/+$/, "");
 }

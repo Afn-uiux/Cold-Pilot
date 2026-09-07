@@ -37,18 +37,33 @@ setInterval(() => {
  *      chains. Never the leftmost.
  *   3. Fall back to `x-real-ip` (last value), then to a placeholder.
  *
- * In non-production without an explicit TRUST_PROXY we return a constant, since
- * there is no trusted proxy boundary to derive a real client IP from.
+ * Proxy trust is STRICTLY OPT-IN. Production no longer implies a trusted proxy
+ * boundary (a direct connection that bypasses the proxy makes every forwarding
+ * header attacker-forgeable); `TRUST_PROXY="true"` must be set explicitly AND
+ * the origin must actually be unreachable except through that proxy.
  *
- * NOTE: cf-connecting-ip / XFF are only meaningful if the origin refuses direct
- * connections that bypass the proxy (firewall to Cloudflare/LB IPs). Enforce
- * that at the infrastructure layer.
+ * `REQUIRE_PROXY="true"` (with `TRUST_PROXY="true"`) hardens further: a request
+ * that carries no proof of having passed through the trusted proxy (no
+ * cf-connecting-ip / cf-ray / x-vercel-forwarded-for) is treated as having an
+ * unknown client IP. That collapses every per-IP limiter onto one shared
+ * "unknown" bucket — which is stricter than trusting a spoofed value, never
+ * looser.
  */
 export function getClientIp(
   forwarded: { get(name: string): string | null } | null | undefined
 ): string {
-  const trustProxy = process.env.NODE_ENV === "production" || process.env.TRUST_PROXY === "true";
+  const trustProxy = process.env.TRUST_PROXY === "true";
   if (!forwarded || !trustProxy) return "unknown";
+
+  const requireProxy = process.env.REQUIRE_PROXY === "true";
+  if (
+    requireProxy &&
+    !forwarded.get("cf-connecting-ip") &&
+    !forwarded.get("cf-ray") &&
+    !forwarded.get("x-vercel-forwarded-for")
+  ) {
+    return "unknown";
+  }
 
   const cf = forwarded.get("cf-connecting-ip");
   if (cf && cf.trim()) return cf.trim();

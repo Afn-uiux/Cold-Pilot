@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { sendEmailSafe } from "@/lib/email/send";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import crypto from "crypto";
+import { hashToken } from "@/lib/tokens";
 
 // Identifier prefix keeps reset tokens in the same VerificationToken table
 // without colliding with email-verification tokens for the same address.
@@ -38,8 +39,9 @@ export async function POST(req: Request) {
 
   // Invalidate any previously issued reset tokens for this address before
   // creating the new one, so only the most recently requested link works.
+  // Only the SHA-256 digest is stored — a DB leak can never replay a token.
   await prisma.verificationToken.deleteMany({ where: { identifier } });
-  await prisma.verificationToken.create({ data: { identifier, token, expires } });
+  await prisma.verificationToken.create({ data: { identifier, token: hashToken(token), expires } });
 
   const resetUrl = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/auth/reset-password?token=${token}`;
   sendEmailSafe(email, "password-reset", { resetUrl });

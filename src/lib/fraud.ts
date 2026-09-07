@@ -122,6 +122,13 @@ export async function voidTrial(userId: string, reason: string): Promise<void> {
 
 export const RISK_FLAG_THRESHOLD = 30;
 const REPEAT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+// A single real human rarely owns more than a couple of distinct inboxes
+// (Gmail + work + a backup). Several distinct mailboxes already first-claimed
+// by accounts sharing this signup's device/IP lineage is the classic credit
+// farm: each mailbox gets its own account and its own 1000-credit signup
+// bonus. The mailboxes ARE distinct inboxes (plus-address/dot aliases were
+// already collapsed into one) — so the owner is just rotating real boxes.
+const MAILBOX_OWNER_CAP = 3;
 
 export interface RiskResult {
   score: number;
@@ -141,6 +148,26 @@ export async function computeSignupRisk(opts: {
 }): Promise<RiskResult> {
   let score = 0;
   const flags: string[] = [];
+
+  // A signup without any device identifier is itself a mild risk signal: it
+  // is the cheapest way to avoid device-level recurrence checks.
+  if (!opts.fingerprint) {
+    score += 8;
+    flags.push("missing_fingerprint");
+  }
+
+  if (opts.email) {
+    const domain = opts.email.trim().toLowerCase().split("@")[1] || "";
+    if (domain) {
+      const blockedDomain = await prisma.blockedSignal.findUnique({
+        where: { type_value: { type: "domain", value: domain } },
+      });
+      if (blockedDomain) {
+        score += 40;
+        flags.push("blocked_domain");
+      }
+    }
+  }
 
   if (opts.fingerprint) {
     const blockedDevice = await prisma.blockedSignal.findUnique({
@@ -192,7 +219,7 @@ export async function computeSignupRisk(opts: {
       where: { ip: opts.ip, createdAt: { gte: new Date(Date.now() - REPEAT_WINDOW_MS) } },
     });
     if (ipRepeats >= 2) {
-      score += Math.min(ipRepeats - 1, 3) * 5;
+      score += Math.min(ipRepeats - 1, 3) * 10;
       flags.push("ip_repeat");
     }
   }
@@ -210,6 +237,30 @@ export async function computeSignupRisk(opts: {
     flags.push("tied_mailbox_signup");
   }
 
+  // Mailbox-owner cap (audit M-6): distinct inboxes already first-claimed by
+  // accounts sharing this signup's device/IP lineage. One or two distinct
+  // mailboxes per lineage is normal household sharing; three or more distinct
+  // inboxes is the credit-farm pattern, since each account redeems a fresh
+  // 1000-credit signup bonus and a 14-day trial against its own mailbox.
+  const lineageWhere: Prisma.UserWhereInput[] = [];
+  if (opts.fingerprint) lineageWhere.push({ deviceFingerprint: opts.fingerprint });
+  if (opts.ip && opts.ip !== "unknown") lineageWhere.push({ signupIp: opts.ip });
+  if (lineageWhere.length > 0) {
+    const lineageUsers = await prisma.user.findMany({
+      where: { id: { not: opts.userId }, OR: lineageWhere },
+      select: { id: true },
+    });
+    if (lineageUsers.length > 0) {
+      const lineageMailboxes = await prisma.mailboxIdentity.count({
+        where: { firstSeenUserId: { in: lineageUsers.map((u) => u.id) } },
+      });
+      if (lineageMailboxes >= MAILBOX_OWNER_CAP) {
+        score += 25;
+        flags.push("mailbox_farm");
+      }
+    }
+  }
+
   const status = score >= RISK_FLAG_THRESHOLD ? "flagged" : "none";
   return { score, flags, status };
 }
@@ -224,7 +275,7 @@ export async function computeSignupRisk(opts: {
 export async function killUser(userId: string, reason: string): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { deviceFingerprint: true, signupIp: true },
+    select: { deviceFingerprint: true, signupIp: true, email: true },
   });
 
   await prisma.$transaction([
@@ -255,6 +306,16 @@ export async function killUser(userId: string, reason: string): Promise<void> {
     await prisma.blockedSignal.upsert({
       where: { type_value: { type: "ip", value: user.signupIp } },
       create: { type: "ip", value: user.signupIp, reason: `kill:${userId}` },
+      update: {},
+    });
+  }
+  // A banned account's email domain is a useful signal: org-abuse and mass
+  // spam-signup operations reuse a handful of domains across accounts.
+  const killDomain = user?.email?.trim().toLowerCase().split("@")[1];
+  if (killDomain) {
+    await prisma.blockedSignal.upsert({
+      where: { type_value: { type: "domain", value: killDomain } },
+      create: { type: "domain", value: killDomain, reason: `kill:${userId}` },
       update: {},
     });
   }

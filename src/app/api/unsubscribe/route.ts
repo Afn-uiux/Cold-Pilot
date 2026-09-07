@@ -15,8 +15,9 @@ import { verifyUnsubscribe } from "@/lib/track-sign";
 export async function POST(req: NextRequest) {
   const leadId = req.nextUrl.searchParams.get("lead");
   const sig = req.nextUrl.searchParams.get("sig");
+  const ts = req.nextUrl.searchParams.get("ts");
 
-  if (!leadId || !sig || !verifyUnsubscribe(leadId, sig)) {
+  if (!leadId || !sig || !verifyUnsubscribe(leadId, sig, ts)) {
     return NextResponse.json({ error: "Invalid unsubscribe link" }, { status: 400 });
   }
 
@@ -27,9 +28,10 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const leadId = req.nextUrl.searchParams.get("lead");
   const sig = req.nextUrl.searchParams.get("sig");
+  const ts = req.nextUrl.searchParams.get("ts");
 
-  if (!leadId || !sig || !verifyUnsubscribe(leadId, sig)) {
-    return new NextResponse("<html><body><h1>Invalid unsubscribe link</h1></body></html>", {
+  if (!leadId || !sig || !verifyUnsubscribe(leadId, sig, ts)) {
+    return new NextResponse("<html><body><h1>Invalid or expired unsubscribe link</h1></body></html>", {
       status: 400,
       headers: { "Content-Type": "text/html" },
     });

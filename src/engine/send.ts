@@ -87,8 +87,9 @@ function rewriteLinks(html: string, baseUrl: string, leadId: string, campaignSte
   const stepParam = campaignStepId ? `&stepId=${campaignStepId}` : "";
   const wrap = (url: string): string => {
     if (url.includes(baseUrl.replace(/https?:\/\//, ""))) return url;
-    const sig = signRedirect(leadId, campaignStepId, url);
-    return `${baseUrl}/api/track?id=${leadId}&type=click&redirect=${encodeURIComponent(url)}${stepParam}&sig=${sig}`;
+    const ts = Date.now();
+    const sig = signRedirect(leadId, campaignStepId, url, ts);
+    return `${baseUrl}/api/track?id=${leadId}&type=click&redirect=${encodeURIComponent(url)}${stepParam}&ts=${ts}&sig=${sig}`;
   };
 
   // Extract every <a ...>...</a> element. Explicit links are fully rewritten
@@ -175,7 +176,8 @@ export async function sendEmail(opts: SendOptions) {
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
-  const unsubscribeUrl = opts.unsubscribeHeader ? `${baseUrl}/api/unsubscribe?lead=${opts.leadId}&sig=${signUnsubscribe(opts.leadId)}` : null;
+  const unsubscribeTs = Date.now();
+  const unsubscribeUrl = opts.unsubscribeHeader ? `${baseUrl}/api/unsubscribe?lead=${opts.leadId}&ts=${unsubscribeTs}&sig=${signUnsubscribe(opts.leadId, unsubscribeTs)}` : null;
 
   // Open/click tracking work by having the recipient's mail client load a URL
   // from the public internet. A localhost URL is only reachable from this

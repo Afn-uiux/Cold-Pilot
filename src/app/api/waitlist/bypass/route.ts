@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { rateLimitAsync } from "@/lib/rate-limit";
+import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 
 // Operator bypass for waitlist mode. Visit
 //   /api/waitlist/bypass?token=<WAITLIST_BYPASS_TOKEN>
@@ -18,8 +18,10 @@ export async function GET(req: NextRequest) {
   const secret = process.env.WAITLIST_BYPASS_TOKEN;
   const token = req.nextUrl.searchParams.get("token") ?? "";
 
-  // Brute-force hygiene on the only secret-guessing vector here.
-  const rl = await rateLimitAsync(`bypass:${req.headers.get("x-forwarded-for") || "ip"}`, {
+  // Brute-force hygiene on the only secret-guessing vector here. Keyed through
+  // getClientIp (rightmost trusted XFF / cf-connecting-ip) — NOT the raw
+  // client-appendable header, which would be trivially rotated (audit M-8).
+  const rl = await rateLimitAsync(`bypass:${getClientIp(req.headers as unknown as { get(name: string): string | null })}`, {
     max: 10,
     windowMs: 60_000,
   });

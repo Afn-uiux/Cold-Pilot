@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { auth } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getCreditState } from "@/lib/credits";
@@ -65,13 +66,34 @@ export async function PATCH(req: Request) {
 
   const data: any = {};
   if (name !== undefined) data.name = name;
-  if (email !== undefined && typeof email === "string" && email.trim()) data.email = email.trim();
+  if (email !== undefined && typeof email === "string" && email.trim()) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail.includes("@") || cleanEmail.length > 254) {
+      return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
+    }
+    data.email = cleanEmail;
+  }
   if (billingCurrency === "NGN" || billingCurrency === "USD") data.billingCurrency = billingCurrency;
 
-  const updated = await prisma.user.update({
-    where: { id: session.user.id },
-    data,
-  });
+  let updated;
+  try {
+    updated = await prisma.user.update({
+      where: { id: session.user.id },
+      data,
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return NextResponse.json({ error: "That email address is already registered" }, { status: 409 });
+    }
+    throw err;
+  }
+
+  // Changing the account email repoints the login identifier: revoke every
+  // session so any other device holding the old context must re-authenticate
+  // (audit M-7).
+  if (data.email) {
+    await prisma.userSession.deleteMany({ where: { userId: session.user.id } });
+  }
 
   // Mirror the currency override into the client cookie so prices re-render in
   // the chosen currency immediately (same cookie name the proxy stamps).

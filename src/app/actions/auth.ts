@@ -10,6 +10,13 @@ import { sendEmailSafe } from "@/lib/email/send";
 import { computeSignupRisk, voidTrial } from "@/lib/fraud";
 import { VERIFY_TOKEN_TTL_MS } from "@/lib/verification";
 import crypto from "crypto";
+import { hashToken } from "@/lib/tokens";
+
+// Client-supplied device fingerprints must be structurally sane before we
+// store or score them. Anything that isn't a bounded alphanumeric hash is
+// ignored (treated as absent) so malformed/adversarial payloads can't poison
+// the shared fraud signals (audit M-6).
+const FINGERPRINT_RE = /^[a-zA-Z0-9_-]{16,128}$/;
 
 export async function signup(formData: FormData) {
   const name = formData.get("name") as string;
@@ -25,6 +32,11 @@ export async function signup(formData: FormData) {
     return { error: "Password must be at least 12 characters" };
   }
 
+  const cleanFingerprint =
+    typeof fingerprint === "string" && fingerprint.trim() && FINGERPRINT_RE.test(fingerprint.trim())
+      ? fingerprint.trim()
+      : null;
+
   const { headers } = await import("next/headers");
   const h = await headers();
   const ip = getClientIp(h as unknown as { get(name: string): string | null });
@@ -33,6 +45,16 @@ export async function signup(formData: FormData) {
   if (!allowed) {
     const minutes = Math.ceil(retryAfterMs / 60000);
     return { error: `Too many signups from this network. Try again in ${minutes} minute${minutes > 1 ? "s" : ""}.` };
+  }
+
+  // Per-IP-per-domain throttle: the IP cap alone still permits fast rotation
+  // across many domains from one network — a hallmark of trial/credit farming.
+  const signupDomain = email.trim().toLowerCase().split("@")[1] || "";
+  if (signupDomain) {
+    const domainLimit = checkRateLimit(`signup:${ip}:${signupDomain}`, { max: 3, windowMs: 60 * 60 * 1000 });
+    if (!domainLimit.allowed) {
+      return { error: "Too many signups from this network for that email domain. Try again later." };
+    }
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -57,14 +79,14 @@ export async function signup(formData: FormData) {
       email,
       password: hashedPassword,
       trialEndsAt: new Date(Date.now() + TRIAL_MS),
-      deviceFingerprint: fingerprint,
+      deviceFingerprint: cleanFingerprint,
       signupIp: ip !== "unknown" ? ip : null,
     },
   });
 
   // Risk gate: blocks on a hard blocklist hit (a device/IP that was
   // previously banned via killUser), otherwise flags for admin review.
-  const risk = await computeSignupRisk({ userId: user.id, email, fingerprint, ip });
+  const risk = await computeSignupRisk({ userId: user.id, email, fingerprint: cleanFingerprint, ip });
   if (risk.flags.includes("blocked_device") || risk.flags.includes("blocked_ip")) {
     await voidTrial(user.id, "blocklist_hit");
     await prisma.user.update({
@@ -80,7 +102,7 @@ export async function signup(formData: FormData) {
   await prisma.signupSignal.create({
     data: {
       userId: user.id,
-      deviceFingerprint: fingerprint,
+      deviceFingerprint: cleanFingerprint,
       ip: ip !== "unknown" ? ip : null,
     },
   });
@@ -100,8 +122,11 @@ async function sendVerificationEmail(email: string): Promise<void> {
   try {
     const token = crypto.randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
+    // Only the SHA-256 digest of the token is stored (lib/tokens) so a DB
+    // leak can never be used to verify an arbitrary email the attacker
+    // didn't actually control the inbox for.
     await prisma.verificationToken.create({
-      data: { identifier: email, token, expires },
+      data: { identifier: email, token: hashToken(token), expires },
     });
     const verifyUrl = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/auth/verify?token=${token}`;
     await sendEmailSafe(email, "email-verification", { verifyUrl });

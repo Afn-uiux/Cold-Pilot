@@ -13,6 +13,13 @@ export async function POST() {
     if (blocked) return blocked;
   }
 
+  // Dev/demo-only endpoint: fabricating replies, logs and deals in production
+  // would let any authenticated user fake analytics and trip stop-on-reply,
+  // so it is fully disabled outside development (audit L-3).
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not available" }, { status: 404 });
+  }
+
   const campaign = await prisma.campaign.findFirst({ where: { userId: session.user.id, deletedAt: null } });
   const account = await prisma.emailAccount.findFirst({ where: { userId: session.user.id } });
   if (!account) {

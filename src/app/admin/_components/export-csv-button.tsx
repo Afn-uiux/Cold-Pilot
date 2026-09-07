@@ -3,7 +3,14 @@
 import { Download01Icon } from "@/components/icons/download-01";
 
 function toCsv(rows: Record<string, string>[]): string {
-  const esc = (v: string) => `"${(v ?? "").replaceAll('"', '""')}"`;
+  const esc = (v: string) => {
+    let s = v ?? "";
+    // Formula-injection neutralization (audit L-8): Excel/GSheets evaluates
+    // cells that start with =, +, -, @, or tab/CR as formulas. Prefix those
+    // with a single quote so they render as literal text.
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return `"${s.replaceAll('"', '""')}"`;
+  };
   const headers = Object.keys(rows[0]);
   return [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join("\r\n");
 }

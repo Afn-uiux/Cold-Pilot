@@ -47,6 +47,19 @@ function embedSiteImages(html: string) {
   return { html: embeddedHtml, images: [...images.values()] };
 }
 
+// All template {{variables}} are text/URLs — escape them so a user-controlled
+// value (waitlist name, digest lead emails, campaign names) can never inject
+// markup into a transactional email from the trusted sender (audit M-2).
+function escapeHtml(value: unknown): string {
+  const s = value === null || value === undefined ? "" : String(value);
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function renderEmail(templateId: EmailTemplateId, data?: Record<string, unknown>) {
   const template = getTemplateById(templateId);
   if (!template) throw new Error(`Unknown email template: ${templateId}`);
@@ -55,7 +68,7 @@ export function renderEmail(templateId: EmailTemplateId, data?: Record<string, u
 
   html = html.replace(/\{\{(\w+)\}\}/g, (_match, key) => {
     const value = data?.[key];
-    return value !== undefined && value !== null ? String(value) : "";
+    return value !== undefined && value !== null ? escapeHtml(value) : "";
   });
 
   return {

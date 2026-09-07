@@ -8,7 +8,37 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { decryptAccount, encryptAccount } from "@/lib/crypto";
 import { assertSafeSocketTarget, isAllowedSocketPort } from "@/lib/ssrf";
-import { rateLimitAsync } from "@/lib/rate-limit";
+import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
+
+// Hosts a user may "test new credentials" against without first owning a
+// configured email account. Anything custom must be tested through an
+// account the user has already created (emailAccountId). This stops the
+// endpoint from being used as a free arbitrary-host credential-stuffing /
+// SMTP-enumeration oracle (the audit finding H-2).
+const KNOWN_TEST_HOSTS = new Set([
+  "smtp.gmail.com", "imap.gmail.com",
+  "smtp.office365.com", "outlook.office365.com",
+  "smtp.mail.yahoo.com", "imap.mail.yahoo.com",
+  "smtp.zoho.com", "imap.zoho.com",
+  "mail.gmx.com", "imap.gmx.com",
+]);
+
+// Provider-pair rule: SMTP and IMAP for a "free" (no account id) test must
+// belong to the same provider, otherwise the pairwise probing turns into a
+// cross-provider mailbox validator.
+function sameProviderPair(smtp: string | undefined, imap: string | undefined): boolean {
+  if (!smtp || !imap) return true;
+  const s = smtp.toLowerCase();
+  const i = imap.toLowerCase();
+  if (s.includes("gmail") || i.includes("gmail")) return s.includes("gmail") && i.includes("gmail");
+  if (s.includes("office365") || s.includes("outlook") || i.includes("office365") || i.includes("outlook")) {
+    return (s.includes("office365") || s.includes("outlook")) && (i.includes("office365") || i.includes("outlook"));
+  }
+  if (s.includes("yahoo") || i.includes("yahoo")) return s.includes("yahoo") && i.includes("yahoo");
+  return true;
+}
+
+const GENERIC_FAILURE = "Connection test failed. Double-check your server details and credentials, then try again.";
 
 async function getGoogleAccessToken(refreshToken: string): Promise<string | null> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -73,9 +103,12 @@ export async function POST(req: Request) {
 
   // Throttle: each call opens live SMTP/IMAP connections to third-party
   // servers with caller-supplied credentials — a probe/credential-stuffing
-  // amplifier without a per-user limit.
-  const rl = await rateLimitAsync(`conntest:${session.user.id}`, { max: 20, windowMs: 60_000 });
-  if (!rl.ok) {
+  // amplifier without a per-user AND per-IP limit.
+  const [rlUser, rlIp] = await Promise.all([
+    rateLimitAsync(`conntest:${session.user.id}`, { max: 20, windowMs: 60_000 }),
+    rateLimitAsync(`conntest:ip:${getClientIp(req.headers as unknown as { get(name: string): string | null })}`, { max: 60, windowMs: 60_000 }),
+  ]);
+  if (!rlUser.ok || !rlIp.ok) {
     return NextResponse.json(
       { error: "Too many connection tests. Please wait a moment and try again." },
       { status: 429 }
@@ -83,17 +116,21 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  let { smtpHost, smtpPort, smtpUser, smtpPass, imapHost, imapPort, imapUser, imapPass, encryption, emailAccountId } = body;
+  let { smtpHost, smtpPort, smtpUser, smtpPass, imapHost, imapPort, imapUser, imapPass, emailAccountId } = body;
 
   let useOAuth = false;
 
+  // An account id means the user is (re)testing one of their OWN connected
+  // mailboxes — the OAuth-refresh / stored-settings flow is unchanged.
   if (emailAccountId) {
     const rawAccount = await prisma.emailAccount.findFirst({
       where: { id: emailAccountId, userId: session.user.id },
     });
     if (!rawAccount) {
-      return NextResponse.json({ success: false, error: "Account not found" }, { status: 404 });
+      // Uniform failure: never reveal whether the account exists.
+      return NextResponse.json({ success: false, error: GENERIC_FAILURE }, { status: 200 });
     }
+
     const account = decryptAccount(rawAccount);
     smtpHost = account.smtpHost;
     smtpPort = account.smtpPort;
@@ -131,72 +168,74 @@ export async function POST(req: Request) {
         if (!imapPort) imapPort = 993;
       }
     }
-  }
-
-  const errors: string[] = [];
-
-  if (smtpHost && smtpPort && smtpUser && smtpPass !== undefined) {
-    const port = Number(smtpPort);
-    const hostErr = await assertSafeSocketTarget(smtpHost, port);
-    if (hostErr) {
-      errors.push(`SMTP: ${hostErr}`);
-    } else if (!isAllowedSocketPort(port)) {
-      errors.push(`SMTP: port ${port} not allowed`);
-    } else {
-      try {
-        const transporter = nodemailer.createTransport({
-          host: smtpHost,
-          port,
-          secure: port === 465,
-          auth: useOAuth
-            ? { type: "OAuth2", user: smtpUser, accessToken: smtpPass }
-            : { user: smtpUser, pass: smtpPass },
-          tls: { rejectUnauthorized: true },
-          connectionTimeout: 10000,
-        });
-        await transporter.verify();
-      } catch (err: any) {
-        let message = "SMTP connection failed";
-        if (err.code === "EAUTH") message = "Invalid SMTP username or password.";
-        else if (err.code === "ESOCKET") message = `Could not connect to ${smtpHost}:${port}.`;
-        else if (err.code === "ETIMEDOUT") message = "SMTP connection timed out.";
-        else if (err.message?.includes("SSL")) message = "SSL/TLS handshake failed. Try a different encryption.";
-        else message = err.message || message;
-        errors.push(message);
-      }
+  } else {
+    // No account id: testing NEW credentials before saving them. To keep this
+    // from becoming an arbitrary-host authentication oracle, only well-known
+    // provider hosts are accepted here, the SMTP/IMAP pair must belong to the
+    // same provider, and any violation gets the same generic failure.
+    const smtp = String(smtpHost || "").toLowerCase();
+    const imap = String(imapHost || "").toLowerCase();
+    if ((smtp && !KNOWN_TEST_HOSTS.has(smtp)) || (imap && !KNOWN_TEST_HOSTS.has(imap)) || !sameProviderPair(smtp, imap)) {
+      return NextResponse.json({ success: false, error: GENERIC_FAILURE }, { status: 200 });
     }
   }
 
-  if (imapHost && imapUser && imapPass !== undefined) {
-    const imapPortNum = Number(imapPort) || 993;
-    const hostErr = await assertSafeSocketTarget(imapHost, imapPortNum);
-    if (hostErr) {
-      errors.push(`IMAP: ${hostErr}`);
-    } else if (!isAllowedSocketPort(imapPortNum)) {
-      errors.push(`IMAP: port ${imapPortNum} not allowed`);
-    } else {
-      try {
-        const client = new ImapFlow({
-          host: imapHost,
-          port: imapPortNum,
-          secure: true,
-          auth: useOAuth ? { user: imapUser, accessToken: imapPass } : { user: imapUser, pass: imapPass },
-          logger: false,
-        });
-        await client.connect();
-        await client.logout();
-      } catch (err: any) {
-        let message = "IMAP connection failed";
-        if (err.code === "AUTHENTICATIONFAILED") message = "Invalid IMAP username or password.";
-        else if (err.returnCode === 1 || err.code === "ECONNREFUSED") message = `Could not connect to ${imapHost}:${imapPortNum}.`;
-        else message = err.message || message;
-        errors.push(message);
+  // Deliberately opaque: track failures locally for logging but NEVER return
+  // granular reasons to the caller. Distinguishing "bad password" from
+  // "server absent" / "lockout" is exactly what makes this a credential-
+  // validation oracle for attackers.
+  const anyFailure = await (async (): Promise<boolean> => {
+    if (smtpHost && smtpPort && smtpUser && smtpPass !== undefined) {
+      const port = Number(smtpPort);
+      const hostErr = await assertSafeSocketTarget(String(smtpHost), port).catch(() => "unsafe");
+      if (!hostErr && isAllowedSocketPort(port)) {
+        try {
+          const transporter = nodemailer.createTransport({
+            host: smtpHost,
+            port,
+            secure: port === 465,
+            auth: useOAuth
+              ? { type: "OAuth2", user: smtpUser, accessToken: smtpPass }
+              : { user: smtpUser, pass: smtpPass },
+            tls: { rejectUnauthorized: true },
+            connectionTimeout: 10000,
+          });
+          await transporter.verify();
+        } catch {
+          return true;
+        }
+      } else {
+        return true;
       }
     }
-  }
 
-  if (errors.length > 0) {
-    return NextResponse.json({ success: false, error: errors.join("; "), errors });
+    if (imapHost && imapUser && imapPass !== undefined) {
+      const imapPortNum = Number(imapPort) || 993;
+      const hostErr = await assertSafeSocketTarget(String(imapHost), imapPortNum).catch(() => "unsafe");
+      if (!hostErr && isAllowedSocketPort(imapPortNum)) {
+        try {
+          const client = new ImapFlow({
+            host: imapHost,
+            port: imapPortNum,
+            secure: true,
+            auth: useOAuth ? { user: imapUser, accessToken: imapPass } : { user: imapUser, pass: imapPass },
+            logger: false,
+          });
+          await client.connect();
+          await client.logout();
+        } catch {
+          return true;
+        }
+      } else {
+        return true;
+      }
+    }
+
+    return false;
+  })();
+
+  if (anyFailure) {
+    return NextResponse.json({ success: false, error: GENERIC_FAILURE }, { status: 200 });
   }
 
   return NextResponse.json({ success: true });
