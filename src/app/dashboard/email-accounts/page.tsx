@@ -74,6 +74,7 @@ export default function EmailAccountsPage() {
               <thead>
                 <tr>
                   <th>Email</th>
+                  <th>Status</th>
                   <th>Emails Sent</th>
                   <th>Daily Limit</th>
                   <th>Warmup</th>
@@ -87,10 +88,12 @@ export default function EmailAccountsPage() {
                     <td className="font-medium">
                       <div className="flex items-center gap-2">
                         <span>{a.email}</span>
-                        {a.status === "error" && (
-                          <span className="text-[11px] font-medium text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full whitespace-nowrap">Needs reconnection</span>
-                        )}
                       </div>
+                    </td>
+                    <td>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${a.status === "error" ? "text-red-600 bg-red-50 border border-red-200" : "text-green-700 bg-green-50 border border-green-200"}`}>
+                        {a.status === "error" ? "Needs reconnection" : "Active"}
+                      </span>
                     </td>
                     <td className="text-muted">{a.sent ?? 0}</td>
                     <td className="text-muted">{a.dailySendLimit}</td>

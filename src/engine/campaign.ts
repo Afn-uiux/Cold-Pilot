@@ -156,6 +156,62 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Promote leads that are past their final email step ("currentStep" is the
+// index of the NEXT email step to send, so currentStep >= emailStepCount means
+// there is nothing left to send) to "completed", then — if every lead is done —
+// flip the campaign to "completed", dispatch the integration event, and send
+// the user a completion email with REAL numbers pulled from the DB.
+async function maybeCompleteCampaign(campaign: {
+  id: string;
+  userId: string;
+  name: string;
+  steps: { type: string }[];
+}): Promise<boolean> {
+  const emailStepCount = campaign.steps.filter(s => s.type === "email").length;
+
+  // Leads with no remaining email step can never be sent again — outside the
+  // schedule window the send loop never runs, so promote them here instead of
+  // waiting for a reply to move the lead out of "sent".
+  await prisma.lead.updateMany({
+    where: {
+      campaignId: campaign.id,
+      status: "sent",
+      currentStep: { gte: emailStepCount },
+      deletedAt: null,
+    },
+    data: { status: "completed" },
+  });
+
+  const remaining = await prisma.lead.count({
+    where: { campaignId: campaign.id, status: { in: ["pending", "sent"] }, deletedAt: null },
+  });
+  if (remaining > 0) return false;
+
+  await prisma.campaign.update({ where: { id: campaign.id }, data: { status: "completed" } });
+
+  const [sent, opened, replied, bounced] = await Promise.all([
+    prisma.emailLog.count({ where: { lead: { campaignId: campaign.id }, type: "outgoing", status: "sent" } }),
+    prisma.emailLog.count({ where: { lead: { campaignId: campaign.id }, type: "outgoing", status: "sent", openedAt: { not: null } } }),
+    prisma.lead.count({ where: { campaignId: campaign.id, status: "replied" } }),
+    prisma.lead.count({ where: { campaignId: campaign.id, status: "bounced" } }),
+  ]);
+
+  dispatchIntegrationEvent(campaign.userId, "campaign_completed", {
+    name: campaign.name,
+    sent,
+    replies: replied,
+    opened,
+    bounced,
+  }).catch(() => {});
+
+  const campaignUser = await prisma.user.findUnique({ where: { id: campaign.userId }, select: { email: true } });
+  if (campaignUser?.email) {
+    sendEmailSafe(campaignUser.email, "campaign-completed", { sent, opened, replied, bounced });
+  }
+
+  return true;
+}
+
 function cleanReplyBody(raw: string): string {
   let body = raw;
   // Strip MIME headers that leak into the body (Content-Type, Content-Transfer-Encoding, etc.)
@@ -197,19 +253,11 @@ async function executeCampaignInner(campaignId: string) {
 
   if (!campaign || campaign.status !== "active") return { sent: 0, errors: 0, skipped: 0 };
 
-  // Auto-complete: if no leads are pending or awaiting follow-up, mark campaign done
-  const activeLeads = await prisma.lead.count({
-    where: { campaignId, status: { in: ["pending", "sent"] }, deletedAt: null },
-  });
-  if (activeLeads === 0) {
-    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "completed" } });
-    const replyCount = await prisma.lead.count({ where: { campaignId, status: "replied" } });
-    dispatchIntegrationEvent(campaign.userId, "campaign_completed", { name: campaign.name, sent: 0, replies: replyCount }).catch(() => {});
-    // Send campaign completed email
-    const campaignUser = await prisma.user.findUnique({ where: { id: campaign.userId }, select: { email: true } });
-    if (campaignUser?.email) sendEmailSafe(campaignUser.email, "campaign-completed");
-    return { sent: 0, errors: 0, skipped: 0, reason: "completed" };
-  }
+  // Auto-complete: if no leads are pending or awaiting follow-up, mark campaign
+  // done. Runs BEFORE the schedule gate so campaigns outside their send window
+  // still complete once every lead is finished.
+  const alreadyDone = await maybeCompleteCampaign(campaign);
+  if (alreadyDone) return { sent: 0, errors: 0, skipped: 0, reason: "completed" };
 
   if (!isWithinSchedule(campaign)) return { sent: 0, errors: 0, skipped: 0, reason: "outside_schedule" };
 
@@ -628,18 +676,8 @@ async function executeCampaignInner(campaignId: string) {
   }
 
   // Final completion check — mark campaign done if all leads are processed
-  const remainingActive = await prisma.lead.count({
-    where: { campaignId, status: { in: ["pending", "sent"] } },
-  });
-  if (remainingActive === 0) {
-    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "completed" } });
-    const replyCount = await prisma.lead.count({ where: { campaignId, status: "replied" } });
-    dispatchIntegrationEvent(campaign.userId, "campaign_completed", { name: campaign.name, sent, replies: replyCount }).catch(() => {});
-    // Send campaign completed email
-    const campaignUser2 = await prisma.user.findUnique({ where: { id: campaign.userId }, select: { email: true } });
-    if (campaignUser2?.email) sendEmailSafe(campaignUser2.email, "campaign-completed");
-    return { sent, errors, skipped, reason: "completed" };
-  }
+  const allDone = await maybeCompleteCampaign(campaign);
+  if (allDone) return { sent, errors, skipped, reason: "completed" };
 
   return { sent, errors, skipped };
 }

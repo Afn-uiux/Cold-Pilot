@@ -30,11 +30,11 @@
 <h1 class="headline" style="font-family:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:700;font-size:34px;line-height:1.15;margin:0 0 16px 0;color:#0F1929;">Your warmup health dropped.</h1>
 <p style="font-size:15px;line-height:1.6;color:#5A6B87;max-width:400px;margin:0 auto 30px auto;">We noticed a decline in your warmup score. Here's what you can do to recover.</p>
 <div style="margin:0 auto 28px auto;text-align:center;">
-<p style="font-family:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:48px;font-weight:600;color:#DC2626;margin:0 0 4px 0;">42</p>
+<p style="font-family:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:48px;font-weight:600;color:#DC2626;margin:0 0 4px 0;">{{current_score}}</p>
 <p style="font-family:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5A6B87;margin:0;">Current health score</p>
 </div>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" width="480" style="width:480px;max-width:90%;margin:0 auto 24px auto;"><tr>
-<td bgcolor="#F8FAFC" style="background-color:#F8FAFC;padding:14px 18px;font-size:13px;color:#0F1929;line-height:1.5;"><strong>Score dropped:</strong> Your warmup health fell from 78 to 42 over the past 3 days. This may affect your deliverability.</td>
+<td bgcolor="#F8FAFC" style="background-color:#F8FAFC;padding:14px 18px;font-size:13px;color:#0F1929;line-height:1.5;"><strong>Score dropped:</strong> Your warmup health fell from {{previous_score}} to {{current_score}}. This may affect your deliverability.</td>
 </tr></table>
 <div style="max-width:420px;margin:0 auto 28px auto;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
 <td width="24" valign="middle"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="24" height="24" align="center" valign="middle" style="width:24px;height:24px;padding:0;text-align:center;border:1px solid #E8E5E0;border-radius:12px;background-color:#F8FAFC;color:#2563EB;font-family:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px;-webkit-text-size-adjust:100%;"><span style="display:block;height:24px;line-height:24px;mso-line-height-rule:exactly;">1</span></td></tr>

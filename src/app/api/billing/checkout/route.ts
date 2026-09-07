@@ -3,13 +3,16 @@ export const runtime = "nodejs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { createCheckoutSession } from "@/lib/bachs";
 import { CREDIT_PACKS, PLANS, type PlanId } from "@/lib/plans";
-import { currencyFromHeaders, type Currency } from "@/lib/currency";
+import { type Currency } from "@/lib/currency";
 import { isBillingEnabled } from "@/lib/billing-gate";
 
-const PUBLIC_URL = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
+// Bachs requires success_url/cancel_url to be publicly reachable, so localhost
+// is rejected. In dev, point CHECKOUT_PUBLIC_URL at your ngrok tunnel so the
+// hosted checkout can route back to your local dev server. Production can leave
+// it unset and fall back to NEXT_PUBLIC_URL.
+const PUBLIC_URL = process.env.CHECKOUT_PUBLIC_URL || process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
 
 export async function POST(req: NextRequest) {
   // Billing is dormant until BILLING_ENABLED is set. Keep the feature behind
@@ -42,13 +45,23 @@ export async function POST(req: NextRequest) {
   });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Resolve the checkout currency: an explicit USD preference wins; otherwise
-  // auto-detect from the visitor's country (NG -> NGN, everywhere else -> USD).
-  const detected: Currency = currencyFromHeaders(await headers());
-  const billingCurrency: Currency = user.billingCurrency === "USD" ? "USD" : detected;
+  // Checkout currency is fixed to the currency stored on the account at
+  // signup — a VPN or later travel cannot change it mid-life. Legacy accounts
+  // created before signup detection carry the NGN default, which matches the
+  // fallback of the old behavior.
+  const billingCurrency: Currency = user.billingCurrency === "USD" ? "USD" : "NGN";
 
-  const successUrl = `${PUBLIC_URL}/dashboard/settings?tab=Billing&billing=success`;
-  const cancelUrl = `${PUBLIC_URL}/dashboard/settings?tab=Billing&billing=cancelled`;
+  // When CHECKOUT_PUBLIC_URL differs from NEXT_PUBLIC_URL (dev via a tunnel),
+  // route the return through a small redirect endpoint so the browser lands
+  // back on the real app origin where the session cookie applies. Otherwise
+  // (production) go straight to the settings page.
+  const useReturnBounce = !!process.env.CHECKOUT_PUBLIC_URL;
+  const successUrl = useReturnBounce
+    ? `${PUBLIC_URL}/api/billing/return?to=success`
+    : `${PUBLIC_URL}/dashboard/settings?tab=Billing&billing=success`;
+  const cancelUrl = useReturnBounce
+    ? `${PUBLIC_URL}/api/billing/return?to=cancelled`
+    : `${PUBLIC_URL}/dashboard/settings?tab=Billing&billing=cancelled`;
 
   try {
     if (body.kind === "credits") {

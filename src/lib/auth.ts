@@ -1,12 +1,20 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import { createSession, revokeSession, isSessionValid, SESSION_TTL_MS } from "./session";
 import { verifyToken as verifyTotp } from "./totp";
+import { TRIAL_MS } from "./trial";
+import { computeSignupRisk, voidTrial } from "./fraud";
+import { sendEmailSafe } from "./email/send";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
     Credentials({
       name: "credentials",
       credentials: {
@@ -55,8 +63,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ user }) {
-      if (!user.email) return false;
+    async signIn({ user, account, profile }) {
+      if (!user?.email) return false;
+      if (account?.provider === "google") {
+        return provisionGoogleUser({
+          email: typeof profile?.email === "string" && profile.email ? (profile.email as string) : user.email,
+          name: typeof user.name === "string" ? user.name : null,
+          image: typeof user.image === "string" ? user.image : null,
+        });
+      }
       const existing = await prisma.user.findUnique({
         where: { email: user.email },
         select: { deletedAt: true, totpSecret: true },
@@ -95,9 +110,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.sid = sid;
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       // `user` is only present on an actual sign-in, never on token refresh —
       // so this is exactly where a new session should be minted, once.
+      if (account?.provider === "google" && user?.email) {
+        // Google path: the sign-in callback just provisioned/validated the DB
+        // account, but NextAuth passes us the OAuth profile user, not the DB
+        // row. Resolve the real user id by email so token.sub (and thus the
+        // session callback's DB checks) points at the actual account.
+        const dbUser = await prisma.user.findUnique({
+          where: { email: user.email.toLowerCase().trim() },
+          select: { id: true, role: true },
+        });
+        if (dbUser) {
+          token.sub = dbUser.id;
+          token.sid = crypto.randomUUID();
+          token.role = dbUser.role || "user";
+          await createSession(dbUser.id, token.sid as string);
+        }
+        return token;
+      }
       if (user?.id) {
         token.sub = user.id;
         token.sid = crypto.randomUUID();
@@ -140,3 +172,79 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   trustHost: true,
 });
+
+// Wire-up for Google logins (previously the button existed but the flow died
+// at the session step: NextAuth sets token.sub from the OAuth profile, which
+// never matched a real User row, so the session callback killed every Google
+// session. We now create the account here, in the signIn callback, so the jwt
+// callback can resolve a real id.)
+async function provisionGoogleUser(opts: {
+  email: string;
+  name: string | null;
+  image: string | null;
+}): Promise<boolean> {
+  const email = opts.email.trim().toLowerCase();
+  try {
+    // Note: this beta's signIn callback exposes no request headers, so the
+    // signup IP signal is unavailable to Google signups. The IP-based risk
+    // checks (blocked_ip, ip_repeat) simply miss; email uniqueness and the
+    // domain blocklist still apply.
+    const ip: string | null = null;
+
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { deletedAt: true, totpSecret: true, emailVerified: true },
+    });
+    if (existing) {
+      if (existing.deletedAt) return false;
+      // 2FA bypass hardening: Google has no TOTP step, so an account with 2FA
+      // enabled must log in with email + password + code instead.
+      if (existing.totpSecret) return false;
+      return true;
+    }
+
+    // New account. Google already verified the email address, so no
+    // verification-email step is needed — it counts as verified from birth,
+    // which flips ensureSignupCredits on (same incentive as an email signup
+    // that clicks the link).
+    const user = await prisma.user.create({
+      data: {
+        name: opts.name || null,
+        image: opts.image || null,
+        email,
+        emailVerified: new Date(),
+        trialEndsAt: new Date(Date.now() + TRIAL_MS),
+        signupIp: ip && ip !== "unknown" ? ip : null,
+      },
+    });
+
+    // Run the same risk gate as an email signup (device fingerprints don't
+    // exist for OAuth logins, so the only signals are IP/domain lineage). A
+    // hard blocklist hit bans the account and denies the login; anything else
+    // just flags it for admin review.
+    const risk = await computeSignupRisk({ userId: user.id, email, fingerprint: null, ip });
+    if (risk.flags.includes("blocked_device") || risk.flags.includes("blocked_ip")) {
+      await voidTrial(user.id, "blocklist_hit");
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { riskStatus: "banned", riskScore: risk.score, riskFlags: JSON.stringify(risk.flags) },
+      });
+      return false;
+    }
+    if (risk.score > 0 || risk.status === "flagged") {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { riskScore: risk.score, riskFlags: JSON.stringify(risk.flags), riskStatus: risk.status },
+      });
+    }
+    await prisma.signupSignal.create({
+      data: { userId: user.id, deviceFingerprint: null, ip: ip && ip !== "unknown" ? ip : null },
+    });
+
+    sendEmailSafe(email, "welcome");
+    return true;
+  } catch (err) {
+    console.error("[auth] google provisioning failed:", err);
+    return false;
+  }
+}

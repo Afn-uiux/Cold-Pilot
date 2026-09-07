@@ -50,6 +50,13 @@ export function isAllowedHost(host: string | null | undefined): boolean {
 // Cloudflare-tunnel / LAN-dev flows do not bounce to a dead canonical URL.
 export function redirectBaseUrl(requestHost: string | null | undefined): string {
   if (process.env.NODE_ENV !== "production" && isAllowedHost(requestHost)) {
+    // Local hosts never get https in dev: nothing serves TLS on localhost, so
+    // redirecting there would bounce the browser into a dead secure connection
+    // (this bit dev once TRUST_PROXY was enabled for tunnel testing).
+    const h = normalizedHost(requestHost);
+    const isLocal =
+      h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]" || h.endsWith(".localhost");
+    if (isLocal) return `http://${requestHost}`;
     const proto = process.env.NEXT_PUBLIC_URL?.startsWith("https://")
       ? "https"
       : process.env.TRUST_PROXY === "true"

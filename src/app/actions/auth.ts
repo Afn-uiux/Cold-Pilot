@@ -9,6 +9,7 @@ import { logLoginAttempt } from "@/lib/login-audit";
 import { sendEmailSafe } from "@/lib/email/send";
 import { computeSignupRisk, voidTrial } from "@/lib/fraud";
 import { VERIFY_TOKEN_TTL_MS } from "@/lib/verification";
+import { currencyFromHeaders } from "@/lib/currency";
 import crypto from "crypto";
 import { hashToken } from "@/lib/tokens";
 
@@ -40,6 +41,12 @@ export async function signup(formData: FormData) {
   const { headers } = await import("next/headers");
   const h = await headers();
   const ip = getClientIp(h as unknown as { get(name: string): string | null });
+
+  // Currency is decided once, at registration, from the visitor's country
+  // (NG -> NGN, everywhere else -> USD) and stored on the account so billing
+  // displays and checkout stay consistent regardless of where they log in from
+  // later.
+  const billingCurrency = currencyFromHeaders(h as unknown as Headers);
 
   const { allowed, retryAfterMs } = checkRateLimit(`signup:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 });
   if (!allowed) {
@@ -79,6 +86,7 @@ export async function signup(formData: FormData) {
       email,
       password: hashedPassword,
       trialEndsAt: new Date(Date.now() + TRIAL_MS),
+      billingCurrency,
       deviceFingerprint: cleanFingerprint,
       signupIp: ip !== "unknown" ? ip : null,
     },

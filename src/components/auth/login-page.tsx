@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { demoLogin } from "@/app/actions/auth";
+import { signIn } from "next-auth/react";
 import Link from "next/link";
 import Logo from "@/components/logo";
 
@@ -20,6 +21,8 @@ export default function LoginPage() {
       if (err === "invalid") setError("Invalid email or password");
       else if (err === "missing") setError("Email and password are required");
       else if (err === "rate_limited") setError("Too many attempts. Try again in a few minutes.");
+      else if (err === "AccessDenied") setError("Google sign-in was blocked for this device or network. Try again later, or sign in with your email and password.");
+      else if (err === "OAuthSignin" || err === "OAuthCallback") setError("Google sign-in couldn't be completed. If 2FA is enabled on your account, use your email and password instead.");
       else setError("Login failed");
     }
     if (params.get("verify") === "required") {
@@ -79,6 +82,15 @@ export default function LoginPage() {
     setLoading(true);
     await demoLogin();
     window.location.href = "/dashboard";
+  }
+
+  async function handleGoogleSignIn() {
+    setError(null);
+    try {
+      await signIn("google", { redirectTo: "/dashboard" });
+    } catch {
+      setError("Google sign-in didn't work. Please try again.");
+    }
   }
 
   return (
@@ -191,6 +203,30 @@ export default function LoginPage() {
               {loading || isPending ? "Logging in..." : "Log in"}
             </button>
           </form>
+
+          <div style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ flex: 1, height: 1, background: "rgba(15,25,41,0.08)" }} />
+            <span style={{ fontSize: 12, color: "#8A9BB5", textTransform: "uppercase", letterSpacing: "0.08em" }}>or</span>
+            <div style={{ flex: 1, height: 1, background: "rgba(15,25,41,0.08)" }} />
+          </div>
+
+          <button type="button" onClick={handleGoogleSignIn} disabled={loading}
+            style={{
+              width: "100%", marginTop: 20, padding: "12px 16px", fontFamily: "inherit", fontSize: 14, fontWeight: 500,
+              color: "#0F1929", background: "#fff", border: "1px solid rgba(15,25,41,0.15)", borderRadius: 6,
+              cursor: loading ? "default" : "pointer", opacity: loading ? 0.7 : 1,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            }}
+            onMouseEnter={e => { if (!loading) (e.target as HTMLElement).style.borderColor = "#0F1929"; }}
+            onMouseLeave={e => { if (!loading) (e.target as HTMLElement).style.borderColor = "rgba(15,25,41,0.15)"; }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/>
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/>
+              <path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/>
+              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.94 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/>
+            </svg>
+            Continue with Google
+          </button>
 
           <div style={{ marginTop: 12, textAlign: "right" }}>
             <button onClick={() => { setResetOpen(true); setResetMsg(null); setResetEmail(""); setResetSent(false); }}

@@ -94,23 +94,26 @@ export async function proxy(request: NextRequest) {
     return res;
   }
 
-  // Waitlist mode (WAITLIST_MODE=true): only the app stays behind a waitlist
-  // wall until launch — /dashboard, /auth/*, and /admin. Everything else is
-  // fully public (landing, pricing, use-cases, blog, docs, sitemap, robots,
-  // llms.txt, legal, static assets) so search engines and AI crawlers can
-  // index the marketing site, which is what earns top spots and AI
-  // recommendations. Local dev is unaffected unless the flag is set. Note the
+  // Waitlist mode (prod only): gates ONLY the sign-in and sign-up pages
+  // (WAITLIST_MODE=true). Everything else is fully public — landing, pricing,
+  // use-cases, blog, docs, sitemap, robots, llms.txt, legal, static assets —
+  // so search engines and AI crawlers can index the marketing site, which is
+  // what earns top spots and AI recommendations. Logged-in users and everyone
+  // on /dashboard, /admin and the rest of /auth are unaffected. Local dev is
+  // unaffected unless the flag is set (it only acts in production). Note the
   // matcher excludes /api/*, so the waitlist form endpoint stays reachable.
   //
   // Operator bypass: a browser holding the wp_bypass cookie (minted at
-  // /api/waitlist/bypass?token=...) skips the gate entirely, so you can still
-  // log in with your existing account while visitors see the waitlist.
-  const waitlistedPrefixes = ["/dashboard", "/auth", "/admin"];
-  if (process.env.WAITLIST_MODE === "true") {
+  // /api/waitlist/bypass?token=...) skips the gate, so you can still reach the
+  // login page while visitors see the waitlist.
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.WAITLIST_MODE === "true" &&
+    (pathname === "/auth/login" || pathname === "/auth/signup")
+  ) {
     const bypassToken = process.env.WAITLIST_BYPASS_TOKEN;
-    const hasBypass =
-      !!bypassToken && request.cookies.get("wp_bypass")?.value === bypassToken;
-    if (!hasBypass && waitlistedPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    const hasBypass = !!bypassToken && request.cookies.get("wp_bypass")?.value === bypassToken;
+    if (!hasBypass) {
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL;
       const res = NextResponse.redirect(new URL("/waitlist", siteUrl || request.url));
       applySecurityHeaders(res, cspHeader);

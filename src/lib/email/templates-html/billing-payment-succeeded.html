@@ -28,16 +28,16 @@
 <img src="https://usecoldpilot.com/email/ill-billing-payment-succeeded.png" alt="" width="180" style="width:180px;height:auto;display:block;border:0;" />
 </div>
 <h1 class="headline" style="font-family:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:700;font-size:34px;line-height:1.15;margin:0 0 16px 0;color:#0F1929;">Payment confirmed.</h1>
-<p style="font-size:15px;line-height:1.6;color:#5A6B87;max-width:400px;margin:0 auto 30px auto;">Your payment has been processed successfully. Here's your receipt.</p>
+<p style="font-size:15px;line-height:1.6;color:#5A6B87;max-width:400px;margin:0 auto 30px auto;">Your purchase of <strong style="color:#0F1929;">{{plan_name}}</strong> has been processed successfully<span style="color:#8A9BB5;">{{amount}}</span>. Here's your receipt.</p>
 
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 8px auto;"><tr>
-<td align="center" bgcolor="#2563EB" style="border-radius:3px;background-color:#2563EB;"><a href="https://usecoldpilot.com/dashboard/settings" style="display:inline-block;font-family:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;font-weight:600;letter-spacing:0.02em;color:#FFFFFF;text-decoration:none;padding:15px 34px;">View invoice</a></td>
+<td align="center" bgcolor="#2563EB" style="border-radius:3px;background-color:#2563EB;"><a href="{{invoice_url}}" style="display:inline-block;font-family:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;font-weight:600;letter-spacing:0.02em;color:#FFFFFF;text-decoration:none;padding:15px 34px;">View invoice</a></td>
 </tr></table>
 
 </td></tr>
 
 <tr><td class="px" style="padding:36px 36px 0 36px;font-size:14px;color:#5A6B87;line-height:1.7;">
-<div style="margin:0 0 0 0;"><p style="margin:0 0 12px 0;">Your next billing date is August 25, 2026. You'll receive a reminder 3 days before.</p><p style="margin:0;">All the best,<br>The Coldpilot Team</p></div>
+<div style="margin:0 0 0 0;"><p style="margin:0 0 12px 0;">{{billing_note}}{{renewal_note}}</p><p style="margin:0;">All the best,<br>The Coldpilot Team</p></div>
 </td></tr>
 <tr><td class="px" style="padding:40px 36px 0 36px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>

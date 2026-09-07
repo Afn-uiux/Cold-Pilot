@@ -8,6 +8,7 @@ import { CREDIT_PACKS, PLANS, type PlanId } from "@/lib/plans";
 import { Prisma } from "@prisma/client";
 import { USD_NAIRA_RATE } from "@/lib/currency";
 import { isBillingEnabled } from "@/lib/billing-gate";
+import { sendEmailSafe } from "@/lib/email/send";
 
 // Maps a Bachs subscription status to whether the user should keep plan access.
 // `trialing` and `active` grant access; anything else (past_due, unpaid,
@@ -227,6 +228,24 @@ async function handleCollectionSucceeded(
     subscriptionId: null,
     providerEventId: eventId,
   });
+
+const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (user?.email) {
+    sendEmailSafe(user.email, "payment-succeeded", {
+      plan_name: `${credits.toLocaleString()} credits`,
+      amount: ` for ${currency === "USD" ? "$" : "NGN"}${paid}`,
+      billing_note: `You now have ${credits.toLocaleString()} credits added to your balance. `,
+      invoice_url: invoiceUrl(eventId),
+    });
+  }
+}
+
+// Invoice pages live in the logged-in dashboard under /dashboard/invoice and
+// are keyed by the Bachs provider event id, so the receipt link can land
+// directly on the payment record.
+function invoiceUrl(providerEventId: string): string {
+  const base = process.env.NEXT_PUBLIC_URL || "https://usecoldpilot.com";
+  return `${base}/dashboard/invoice/${providerEventId}`;
 }
 
 async function handleSubscriptionState(eventId: string, eventType: string, data: SubscriptionData): Promise<void> {
@@ -276,6 +295,21 @@ async function handleSubscriptionState(eventId: string, eventType: string, data:
     subscriptionId,
     providerEventId: eventId,
   });
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (user?.email) {
+    if (eventType === "customer.subscription.created") {
+      sendEmailSafe(user.email, "payment-succeeded", {
+        plan_name: PLANS[planId]?.name || planId,
+        amount: "",
+        billing_note: "Your subscription is now active. ",
+        renewal_note: "You'll receive a reminder before your next billing date. ",
+        invoice_url: invoiceUrl(eventId),
+      });
+    } else if (!grantsAccess) {
+      sendEmailSafe(user.email, "payment-failed");
+    }
+  }
 }
 
 async function handleSubscriptionCanceled(eventId: string, data: SubscriptionData): Promise<void> {
@@ -291,7 +325,7 @@ async function handleSubscriptionCanceled(eventId: string, data: SubscriptionDat
   // "deleted" event for an old subscription doesn't revoke a newer one.
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { bachsSubscriptionId: true },
+    select: { bachsSubscriptionId: true, email: true },
   });
   if (user && user.bachsSubscriptionId === subscriptionId) {
     await prisma.user.update({
@@ -309,4 +343,8 @@ async function handleSubscriptionCanceled(eventId: string, data: SubscriptionDat
     subscriptionId,
     providerEventId: eventId,
   });
+
+  if (user?.email) {
+    sendEmailSafe(user.email, "subscription-cancelled");
+  }
 }

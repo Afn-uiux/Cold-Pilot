@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { PLANS, CREDIT_PACKS, type PlanId } from "@/lib/plans";
 import { formatPrice } from "@/lib/currency";
-import { useCurrency } from "@/lib/currency-client";
 
 type BillingState = {
   plan: PlanId;
@@ -19,7 +18,6 @@ export default function BillingSection() {
   const [state, setState] = useState<BillingState>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
-  const currency = useCurrency();
 
   useEffect(() => {
     let active = true;
@@ -76,27 +74,6 @@ export default function BillingSection() {
     }
   }
 
-  async function setBillingCurrency(next: "NGN" | "USD") {
-    setBusy(`currency-${next}`);
-    setNotice(null);
-    try {
-      const res = await fetch("/api/user", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ billingCurrency: next }),
-      });
-      if (!res.ok) {
-        setNotice({ type: "error", text: "Could not update billing currency. Please try again." });
-        setBusy(null);
-        return;
-      }
-      window.location.reload();
-    } catch {
-      setNotice({ type: "error", text: "Network error. Please try again." });
-      setBusy(null);
-    }
-  }
-
   if (!state) {
     return (
       <div className="card">
@@ -125,7 +102,7 @@ export default function BillingSection() {
           </div>
           <div>
             <p className="text-xs text-muted">Price</p>
-            <p className="text-lg font-medium mt-1">{currentPlan.price === 0 ? "Free" : `${formatPrice(currentPlan.price, currency)}/mo`}</p>
+            <p className="text-lg font-medium mt-1">{currentPlan.price === 0 ? "Free" : `${formatPrice(currentPlan.price, state.billingCurrency)}/mo`}</p>
           </div>
           <div>
             <p className="text-xs text-muted">Credit balance</p>
@@ -148,29 +125,7 @@ export default function BillingSection() {
 
       {state.billingEnabled && (<>
       <div className="card">
-        <div className="card-header flex flex-wrap items-center justify-between gap-3">
-          <h3>Upgrade plan</h3>
-          <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-            <button
-              disabled={busy !== null}
-              onClick={() => setBillingCurrency("NGN")}
-              className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                state.billingCurrency === "NGN" ? "bg-blue-accent text-white" : "text-muted hover:text-ink"
-              }`}
-            >
-              ₦ Naira
-            </button>
-            <button
-              disabled={busy !== null}
-              onClick={() => setBillingCurrency("USD")}
-              className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                state.billingCurrency === "USD" ? "bg-blue-accent text-white" : "text-muted hover:text-ink"
-              }`}
-            >
-              $ Dollar
-            </button>
-          </div>
-        </div>
+        <div className="card-header"><h3>Upgrade plan</h3></div>
         <p className="text-sm text-muted mb-4">Switch to a paid plan for more leads, inboxes and AI. Your card is saved and billed {state.billingCurrency === "NGN" ? "in Naira" : "in Dollars"} monthly.</p>
         <div className="grid gap-4 sm:grid-cols-3">
           {(["starter", "pro", "agency"] as PlanId[]).map((id) => {
@@ -182,7 +137,7 @@ export default function BillingSection() {
                   <p className="font-medium">{p.name}</p>
                   {isCurrent && <span className="badge active">Current</span>}
                 </div>
-                <p className="text-2xl font-medium mt-2">{formatPrice(p.price, currency)}<span className="text-xs text-muted font-normal">/mo</span></p>
+                <p className="text-2xl font-medium mt-2">{formatPrice(p.price, state.billingCurrency)}<span className="text-xs text-muted font-normal">/mo</span></p>
                 <p className="text-xs text-muted mt-2">{p.leadLimit === Infinity ? "Unlimited" : p.leadLimit.toLocaleString()} leads</p>
                 <p className="text-xs text-muted mt-1">{p.inboxLimit === Infinity ? "Unlimited" : `${p.inboxLimit} inboxes`}</p>
                 <p className="text-xs text-muted mt-1">AI {p.aiEnabled ? "included" : "not included"}</p>
@@ -206,8 +161,8 @@ export default function BillingSection() {
           {CREDIT_PACKS.map((pack) => (
             <div key={pack.credits} className="border border-border rounded-lg p-5">
               <p className="text-2xl font-medium">{pack.credits.toLocaleString()}<span className="text-sm text-muted font-normal"> credits</span></p>
-              <p className="text-sm text-muted mt-1">{formatPrice(pack.price, currency)}</p>
-              <p className="text-[11px] text-muted-2 mt-1">{formatPrice(pack.price / pack.credits, currency)} / credit</p>
+              <p className="text-sm text-muted mt-1">{formatPrice(pack.price, state.billingCurrency)}</p>
+              <p className="text-[11px] text-muted-2 mt-1">{formatPrice(pack.price / pack.credits, state.billingCurrency)} / credit</p>
               <button
                 disabled={busy !== null}
                 onClick={() => startCheckout({ kind: "credits", credits: pack.credits })}
