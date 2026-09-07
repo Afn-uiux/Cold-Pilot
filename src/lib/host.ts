@@ -23,7 +23,7 @@ export function canonicalOrigin(): string {
 function allowedHosts(): string[] {
   return (process.env.ALLOWED_HOSTS || "")
     .split(",")
-    .map((s) => s.trim().toLowerCase().replace(/:\d+$/, ""))
+    .map((s) => s.trim().replace(/^"|"$/g, "").toLowerCase().replace(/:\d+$/, ""))
     .filter(Boolean);
 }
 
