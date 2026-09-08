@@ -5,7 +5,17 @@
 
 export function normalizedHost(host: string | null | undefined): string {
   if (!host) return "";
-  return host.trim().toLowerCase().replace(/:\d+$/, "");
+  const h = host.trim();
+  // Canonical origins carry a scheme (https://...); headers carry a bare host.
+  // Normalize both to the bare hostname so they can be compared.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(h)) {
+    try {
+      return new URL(h).hostname.toLowerCase();
+    } catch {
+      // fall through to the bare-host path below
+    }
+  }
+  return h.toLowerCase().replace(/:\d+$/, "");
 }
 
 export function canonicalOrigin(): string {
