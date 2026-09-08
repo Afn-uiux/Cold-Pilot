@@ -23,8 +23,14 @@ model User {
     plan                String   @default("free")
     billingCurrency     String   @default("NGN")
     creditBalance       Float    @default(0)
+    // Portion of creditBalance that came from the signup bonus (free, revocable
+    // at trial expiry) as opposed to purchased credits (never expire). Spends
+    // draw down the free reserve FIRST so purchased credits survive the trial.
+    freeCreditReserve   Float    @default(0)
     signupCreditsGranted Boolean @default(false)
     trialEndsAt         DateTime?
+    planExpiresAt       DateTime?
+    planReminderSentDays Int     @default(0)
     bachsCustomerId     String?
     bachsSubscriptionId String?
   deletedAt           DateTime?
@@ -332,6 +338,9 @@ model Campaign {
   ccAddresses       String   @default("")
   bccAddresses      String   @default("")
   nextAllowedSendAt DateTime?
+  // True when the engine auto-paused this campaign because the user ran out of
+  // credits. On the next credit purchase it resumes automatically.
+  resumeOnFunding Boolean  @default(false)
   deletedAt       DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

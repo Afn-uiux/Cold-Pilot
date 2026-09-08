@@ -150,10 +150,6 @@ export default function AccountsConnector({
     window.open(path, "oauth-popup", `width=${width},height=${height},left=${left},top=${top}`);
   }
 
-  function handleGoogleOAuth() {
-    openOAuth(googleAuthPath, setGoogleOAuthStatus, setGoogleOAuthMsg);
-  }
-
   function handleMicrosoftOAuth() {
     openOAuth(microsoftAuthPath, setMsOAuthStatus, setMsOAuthMsg);
   }
@@ -271,7 +267,7 @@ export default function AccountsConnector({
         <div className="flex items-center gap-3 px-8 pt-7 pb-4 shrink-0">
           {screen !== "select" && (
             <button onClick={() => {
-              if (screen === "google-app-password") setScreen("google");
+              if (screen === "google-app-password") setScreen("select");
               else if (screen === "microsoft") setScreen("select");
               else if (screen === "any-imap") setScreen("any-single");
               else if (screen === "any-smtp") setScreen("any-imap");
@@ -295,7 +291,7 @@ export default function AccountsConnector({
           <div className="px-8 pb-8 overflow-y-auto">
             <h2 className="text-xl font-normal mb-1">Connect a provider</h2>
             <p className="text-sm text-muted mb-6">Choose your email provider to get started.</p>
-            <ProviderCard icon={<GoogleLogo />} name="Google" subtitle="Gmail / G-Suite" onClick={() => setScreen("google")} />
+            <ProviderCard icon={<GoogleLogo />} name="Google" subtitle="Gmail / G-Suite" onClick={() => setScreen("google-app-password")} />
             <ProviderCard icon={<Mail01Icon size={22} />} name="Any Provider" subtitle="IMAP / SMTP" onClick={() => setScreen("any-provider")} />
           </div>
         )}
@@ -303,26 +299,8 @@ export default function AccountsConnector({
         {screen === "google" && (
           <div className="px-8 pb-8 overflow-y-auto">
             <h2 className="text-xl font-normal mb-1">Connect Your Google Account</h2>
-            <p className="text-sm text-muted mb-6">Gmail / G-Suite</p>
-            {googleOAuthStatus !== "idle" && (
-              <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm mb-4 ${googleOAuthStatus === "connecting" ? "bg-blue-50 text-blue-700 border border-blue-200" : googleOAuthStatus === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                {googleOAuthStatus === "connecting" && <Spinner />}
-                {googleOAuthStatus === "success" && <CircleCheckIcon size={16} />}
-                {googleOAuthStatus === "error" && <CircleXIcon size={16} />}
-                <span>{googleOAuthMsg}</span>
-              </div>
-            )}
-            <button onClick={handleGoogleOAuth} disabled={googleOAuthStatus === "connecting"} className="w-full flex items-center justify-center gap-3 p-4 rounded-lg border border-border bg-transparent hover:bg-cream-2 transition-colors cursor-pointer mb-4">
-              <GoogleLogo />
-              <span className="text-sm font-medium">{googleOAuthStatus === "connecting" ? "Connecting..." : "Sign in with Google"}</span>
-            </button>
-            <div className="flex items-center gap-3 text-[11px] text-muted-2 mb-4">
-              <div className="flex-1 h-px bg-border" />
-              <span>or</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
+            <p className="text-sm text-muted mb-4">Gmail / G-Suite</p>
             <OptionCard title="App Password" description="Use an app password. Requires 2-factor authentication on your Google account." onClick={() => setScreen("google-app-password")} />
-            <p className="text-xs text-muted mt-2">Signing in with Google is easier and safer — no app password needed. Recommended for most users.</p>
           </div>
         )}
 

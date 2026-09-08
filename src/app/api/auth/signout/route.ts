@@ -14,10 +14,14 @@ function clearSessionCookies(res: NextResponse): void {
   clear("authjs.csrf-token");
   clear("authjs.callback-url");
 
-  // Secure variants (HTTPS / production)
+  // Secure variants (HTTPS / production). Note the CSRF cookie uses the
+  // __Host- prefix (not __Secure-) under useSecureCookies; signing out must
+  // delete both spellings or the stale session cookie survives and the user
+  // is bounced straight back to /dashboard (they appear "still logged in").
   clear("__Secure-authjs.session-token", { secure: true });
   clear("__Secure-authjs.csrf-token", { secure: true });
   clear("__Secure-authjs.callback-url", { secure: true });
+  clear("__Host-authjs.csrf-token", { secure: true });
 }
 
 async function revokeCurrentSession(): Promise<void> {
@@ -37,7 +41,15 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const bodyCsrf = String(formData.get("csrfToken") ?? "");
 
-  const csrfCookie = req.cookies.get("authjs.csrf-token")?.value ?? "";
+  // The CSRF cookie name differs by environment: plain `authjs.csrf-token`
+  // in dev (HTTP) and `__Host-authjs.csrf-token` in production (HTTPS, per
+  // @auth/core useSecureCookies). Check every spelling so signout can't
+  // silently fail validation (and leave the session cookie alive) on prod.
+  const csrfCookie =
+    req.cookies.get("__Host-authjs.csrf-token")?.value ??
+    req.cookies.get("__Secure-authjs.csrf-token")?.value ??
+    req.cookies.get("authjs.csrf-token")?.value ??
+    "";
   const [token, hash] = csrfCookie.split("|");
   const expectedHash = createHash("sha256")
     .update(`${token}${process.env.AUTH_SECRET ?? ""}`)

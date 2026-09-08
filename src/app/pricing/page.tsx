@@ -20,11 +20,11 @@ const faqs = [
   },
   {
     q: "What happens when I run out of credits?",
-    a: "Campaigns pause and verification/AI stop until you buy a credit pack or upgrade. Sending costs 1 credit per email, verification 0.25 credits per check, and AI writing 2 credits per generation.",
+    a: "Campaigns pause and verification/AI stop until you buy a credit pack or upgrade. Sending costs 0.02 credits per email, import 0.05 credits per lead, verification 0.25 credits per check, and AI writing 2 credits per generation. Your data is never locked out — everything stays viewable.",
   },
   {
     q: "Is there a free trial?",
-    a: "Every new account gets 14 days free with no credit card: 2 inboxes, 300 leads, and 1,000 one-time credits to test verification. After day 14 you can still log in and see everything — you just can't send, import, verify, or use AI until you upgrade.",
+    a: "Every new account gets 14 days free with no credit card: 2 inboxes and 1,000 one-time credits. After day 14 you can still log in and see everything — you just can't send, import, verify, or use AI until you add credits or upgrade.",
   },
   {
     q: "Can I switch plans or cancel?",

@@ -6,12 +6,9 @@ import { TRIAL_MS } from "@/lib/trial";
 import { signIn } from "@/lib/auth";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { logLoginAttempt } from "@/lib/login-audit";
-import { sendEmailSafe } from "@/lib/email/send";
 import { computeSignupRisk, voidTrial } from "@/lib/fraud";
-import { VERIFY_TOKEN_TTL_MS } from "@/lib/verification";
+import { sendVerificationEmail } from "@/lib/verification";
 import { currencyFromHeaders } from "@/lib/currency";
-import crypto from "crypto";
-import { hashToken } from "@/lib/tokens";
 
 // Client-supplied device fingerprints must be structurally sane before we
 // store or score them. Anything that isn't a bounded alphanumeric hash is
@@ -68,8 +65,10 @@ export async function signup(formData: FormData) {
   if (existing) {
     if (!existing.emailVerified) {
       // Account already exists but never had its verification link clicked.
-      // Show the check-your-inbox state again, with a resend option, instead
-      // of silently routing into the login flow.
+      // Fire a fresh verification email so the "check your inbox" state the
+      // UI shows is backed by an actual send (a silent no-op here made the
+      // user stare at an inbox that never received anything).
+      await sendVerificationEmail(email);
       return { success: true, verificationRequired: true };
     }
     // Enumeration-safe: respond identically to a successful signup so an
@@ -115,32 +114,14 @@ export async function signup(formData: FormData) {
     },
   });
 
-  sendEmailSafe(email, "welcome");
+  // No welcome email here — it goes out only once the user clicks the
+  // verification link (see /api/auth/verify). The verification email is the
+  // only thing sent at signup.
   await sendVerificationEmail(email);
 
   // No auto-login: login is hard-blocked until the email is verified, so the
   // signup page shows a "check your inbox to verify, then log in" state.
   return { success: true, verificationRequired: true };
-}
-
-// Fires the one-click email-verification link. Signup credits are gated on
-// email verification, so this must run at signup rather than waiting for the
-// user to discover the verify endpoint. Fire-and-forget; silent on failure.
-async function sendVerificationEmail(email: string): Promise<void> {
-  try {
-    const token = crypto.randomBytes(32).toString("hex");
-    const expires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
-    // Only the SHA-256 digest of the token is stored (lib/tokens) so a DB
-    // leak can never be used to verify an arbitrary email the attacker
-    // didn't actually control the inbox for.
-    await prisma.verificationToken.create({
-      data: { identifier: email, token: hashToken(token), expires },
-    });
-    const verifyUrl = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/auth/verify?token=${token}`;
-    await sendEmailSafe(email, "email-verification", { verifyUrl });
-  } catch (err) {
-    console.error("[signup] Failed to send verification email:", err);
-  }
 }
 
 export async function login(formData: FormData) {

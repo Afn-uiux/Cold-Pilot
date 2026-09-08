@@ -9,6 +9,8 @@ import { Prisma } from "@prisma/client";
 import { USD_NAIRA_RATE } from "@/lib/currency";
 import { isBillingEnabled } from "@/lib/billing-gate";
 import { sendEmailSafe } from "@/lib/email/send";
+import { PLAN_MS } from "@/lib/plan-expiry";
+import { resumeCampaignsAfterCredits } from "@/lib/credits";
 
 // Maps a Bachs subscription status to whether the user should keep plan access.
 // `trialing` and `active` grant access; anything else (past_due, unpaid,
@@ -189,6 +191,14 @@ async function handleCollectionSucceeded(
   data: CollectionData
 ): Promise<void> {
   const metadata = data.metadata || {};
+  if (metadata.kind === "plan") {
+    // Plans are currently sold as one-time payments (Bachs has NGN
+    // subscriptions disabled account-wide). When a collection.succeeded
+    // carries plan metadata, grant the plan directly — mirroring what the
+    // customer.subscription.* handlers do once subscriptions are enabled.
+    await handleOneTimePlanPurchase(eventId, data);
+    return;
+  }
   if (metadata.kind !== "credits") return;
 
   const userId = String(metadata.userId || "");
@@ -220,6 +230,12 @@ async function handleCollectionSucceeded(
   // dedup row were somehow lost.
   await addCredits(userId, credits, "purchase", eventId);
 
+  // Auto-resume any campaigns that stalled for lack of credits earlier.
+  const resumed = await resumeCampaignsAfterCredits(userId);
+  if (resumed > 0) {
+    console.log(`[bachs-webhook] resumed ${resumed} campaign(s) for user ${userId}`);
+  }
+
   await recordPaymentEvent({
     userId,
     type: "payment_succeeded",
@@ -246,6 +262,77 @@ const user = await prisma.user.findUnique({ where: { id: userId }, select: { ema
 function invoiceUrl(providerEventId: string): string {
   const base = process.env.NEXT_PUBLIC_URL || "https://usecoldpilot.com";
   return `${base}/dashboard/invoice/${providerEventId}`;
+}
+
+// Grants a paid plan from a one-time purchase (no recurring subscription).
+// Plans are sold this way while Bachs has subscriptions disabled account-wide;
+// the collection.succeeded carryover in handleCollectionSucceeded routes here
+// whenever metadata.kind === "plan". Amount is checked against the plan's list
+// price (converted for USD) the same way credit packs are, then the user is
+// upgraded and a receipt goes out.
+async function handleOneTimePlanPurchase(
+  eventId: string,
+  data: CollectionData
+): Promise<void> {
+  const metadata = data.metadata || {};
+  const userId = String(metadata.userId || "");
+  const planId = resolvePlanId(metadata, undefined);
+  if (!userId || !planId) return;
+  const plan = PLANS[planId];
+  if (!plan || plan.price === 0) return;
+
+  const currency = metadata.currency === "USD" ? "USD" : "NGN";
+  const paid = Number(data?.amount);
+  const expected =
+    currency === "USD"
+      ? Math.round((plan.price / USD_NAIRA_RATE) * 100) / 100
+      : plan.price;
+  if (!Number.isFinite(paid) || Math.abs(paid - expected) > 0.001) {
+    console.warn(
+      `[bachs-webhook] amount mismatch for one-time plan ${planId} (${currency}): paid=${paid} expected=${expected}`,
+      { eventId, userId }
+    );
+    return;
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      plan: planId,
+      // One-time purchases run a 30-day clock; the plan-expiry sweep reverts
+      // the user to "free" (and emails reminders) when it lapses. Re-buying
+      // before expiry extends the plan (resets the clock).
+      planExpiresAt: new Date(Date.now() + PLAN_MS),
+      planReminderSentDays: 0,
+    },
+  });
+
+  await recordPaymentEvent({
+    userId,
+    type: "payment_succeeded",
+    amount: paid,
+    currency,
+    plan: planId,
+    subscriptionId: null,
+    providerEventId: eventId,
+  });
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (user?.email) {
+    sendEmailSafe(user.email, "payment-succeeded", {
+      plan_name: plan.name,
+      amount: ` for ${currency === "USD" ? "$" : "NGN"}${paid}`,
+      billing_note: `${plan.name} is now active on your account. `,
+      invoice_url: invoiceUrl(eventId),
+    });
+  }
+
+  // A paid plan makes sending free again — pick up any campaigns that were
+  // stalled on lack of credits.
+  const resumed = await resumeCampaignsAfterCredits(userId);
+  if (resumed > 0) {
+    console.log(`[bachs-webhook] resumed ${resumed} campaign(s) for user ${userId}`);
+  }
 }
 
 async function handleSubscriptionState(eventId: string, eventType: string, data: SubscriptionData): Promise<void> {

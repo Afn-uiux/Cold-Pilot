@@ -92,15 +92,15 @@ const faqs = [
   },
   {
     q: "What happens when I run out of credits?",
-    a: "Campaigns pause and verification/AI stop until you buy a credit pack or upgrade. Sending costs 1 credit per email, verification 0.25 credits per check, and AI writing 2 credits per generation.",
+    a: "Campaigns pause and verification/AI stop until you buy a credit pack or upgrade. Sending costs 0.02 credits per email, import 0.05 credits per lead, verification 0.25 credits per check, and AI writing 2 credits per generation. Your data is never locked out — everything stays viewable.",
   },
   {
     q: "What is a credit worth?",
-    a: "One credit is one unit of usage. Sending an email costs 1 credit, verifying an email costs 0.25 credits, and an AI email generation costs 2 credits. Every account gets 1,000 credits free on signup. Need more? Buy credit packs anytime — no subscription required. Packs start at 100 credits for {pack_start}.",
+    a: "One credit is one unit of usage. Sending an email costs 0.02 credits, importing a lead costs 0.05 credits, verifying an email costs 0.25 credits, and an AI email generation costs 2 credits. Every account gets 1,000 credits free on signup. No subscription? No problem — buy credit packs and pay as you go. Need more? Packs start at 100 credits for {pack_start}.",
   },
   {
     q: "Is there a free trial?",
-    a: "Every new account gets 14 days free with no credit card: 2 inboxes, 300 leads, and 1,000 one-time credits to test verification. After day 14 you can still log in and see everything — you just can't send, import, verify, or use AI until you upgrade. Upgrade anytime, and it costs less than the tools you're replacing.",
+    a: "Every new account gets 14 days free with no credit card: 2 inboxes and 1,000 one-time credits. After day 14 you can still log in and see everything — you just can't send, import, verify, or use AI until you add credits or upgrade. Upgrade anytime, and it costs less than the tools you're replacing.",
   },
   {
     q: "Can I switch plans or cancel?",
@@ -325,8 +325,8 @@ export default function PricingPage() {
                 </div>
                 <p style={{fontSize:13,color:"var(--muted)",marginBottom:16}}>No subscription needed. Credits cover everything:</p>
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  <div className="credit-cost"><b>Lead import</b> — 0.1 credits / lead</div>
-                  <div className="credit-cost"><b>Sending</b> — 1 credit / email</div>
+                  <div className="credit-cost"><b>Lead import</b> — 0.05 credits / lead</div>
+                  <div className="credit-cost"><b>Sending</b> — 0.02 credits / email</div>
                   <div className="credit-cost"><b>Email verification</b> — 0.25 credits / check</div>
                   <div className="credit-cost"><b>AI email writing</b> — 2 credits / generation</div>
                 </div>

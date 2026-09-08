@@ -43,39 +43,70 @@ export function getTrialStatus(plan: string, trialEndsAt: Date | null, trialVoid
   };
 }
 
-// When trial expires, zero out remaining credits so the user can't keep using
-// them as free pay-as-you-go after the trial window.
+// Whether a free user inside their trial window gets features that are
+// otherwise paid-only (AI). Mirrors isEntitledToWarmup: paid plans are always
+// entitled; free users only while the trial has not ended and has not been
+// voided. Legacy free accounts (no trial clock) never get paid features.
+export function trialGrantsFeatureAccess(
+  plan: string | null | undefined,
+  trialEndsAt: Date | null,
+  trialVoided = false
+): boolean {
+  if (plan && plan !== "free") return true;
+  if (trialVoided) return false;
+  return !!trialEndsAt && trialEndsAt.getTime() > Date.now();
+}
+
+// When trial expires, revoke ONLY the free/signup portion of the user's credit
+// balance. Purchased credits never expire — they are the user's pay-as-you-go
+// fuel and must survive the trial for them to keep using the product.
 export async function expireTrialCredits(userId: string): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, creditBalance: true },
+    select: { plan: true, freeCreditReserve: true },
   });
-  if (!user || user.plan !== "free" || user.creditBalance <= 0) return;
+  if (!user || user.plan !== "free" || user.freeCreditReserve <= 0) return;
 
   await prisma.$transaction([
     prisma.creditTransaction.create({
-      data: { userId, amount: -user.creditBalance, reason: "trial_expired" },
+      data: { userId, amount: -user.freeCreditReserve, reason: "trial_expired" },
     }),
     prisma.user.update({
       where: { id: userId },
-      data: { creditBalance: 0 },
+      data: { creditBalance: { decrement: user.freeCreditReserve }, freeCreditReserve: 0 },
     }),
   ]);
 }
 
-// Throws TrialExpiredError when the user's free trial has ended. Call this in
-// every action endpoint to enforce the paywall. Returns the trial status for
-// callers that need it (e.g. to show a countdown).
+// Throws TrialExpiredError when the user's free trial has ended — UNLESS the
+// user still has a positive balance (pay-as-you-go). Credits gate new
+// consumption, never access to what the user already has: a user who paid for
+// credits keeps full access for as long as the balance lasts, and a user at
+// zero balance is still never locked out of reading their own data (reads are
+// not gated by this function). Call this in every action endpoint to enforce
+// the paywall. Returns the trial status for callers that need it.
 export async function assertTrialActive(userId: string): Promise<TrialStatus> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, trialEndsAt: true, trialVoided: true },
+    select: { plan: true, trialEndsAt: true, trialVoided: true, creditBalance: true, freeCreditReserve: true },
   });
 
   const status = getTrialStatus(user?.plan ?? "free", user?.trialEndsAt ?? null, user?.trialVoided ?? false);
   if (status.expired) {
-    // Expire any leftover credits on first detection
+    // Revoke any leftover free credits on first detection, but keep purchases.
     await expireTrialCredits(userId);
+    // Re-read: still positive balance after the free reserve is gone => the
+    // user has bought credits and continues as pay-as-you-go.
+    const after = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { creditBalance: true },
+    });
+    if (Number(after?.creditBalance ?? 0) > 0) {
+      status.active = true;
+      status.expired = false;
+      status.daysLeft = Infinity;
+      return status;
+    }
     throw new TrialExpiredError(status.daysLeft);
   }
   return status;

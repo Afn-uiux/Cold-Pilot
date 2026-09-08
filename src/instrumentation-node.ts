@@ -12,6 +12,7 @@ const { prisma } = await import("@/lib/prisma");
 const { executeCampaign, checkForReplies, sendDailySummaries } = await import("@/engine/campaign");
 const { reconcileWarmupSchedules, processDueWarmupSends, processSeedInboxes, processSeedInboxEngagement, processSeedSends, saveHealthLog } = await import("@/engine/warmup");
 const { acquireLock, newLeaderToken } = await import("@/lib/leader-lock");
+const { sweepPlanExpiries } = await import("@/lib/plan-expiry");
 
 const leaderToken = newLeaderToken();
 let lastSummaryDate = "";
@@ -76,6 +77,17 @@ async function tick() {
       } catch (e) {
         console.error("[scheduler] daily summary error:", e);
       }
+    }
+
+    // One-time plan expiry — downgrade expired plans, fire pre-expiry
+    // reminder emails (bitmask-gated, so each sends exactly once).
+    try {
+      const sweep = await sweepPlanExpiries();
+      if (sweep.downgraded > 0 || sweep.reminded3d > 0 || sweep.reminded1d > 0) {
+        console.log("[scheduler] plan-expiry sweep:", JSON.stringify(sweep));
+      }
+    } catch (e) {
+      console.error("[scheduler] plan-expiry error:", e);
     }
 
     // Warmup engine — reconcile schedules, send due emails, process seed inboxes

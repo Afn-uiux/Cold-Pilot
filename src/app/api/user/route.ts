@@ -23,6 +23,12 @@ export async function GET() {
 
   const credits = await getCreditState(session.user.id);
   const trial = getTrialStatus(user.plan, user.trialEndsAt, user.trialVoided);
+  // A user operating as pay-as-you-go (free plan, positive purchased balance,
+  // credits gate consumption rather than access) is NOT "expired" — hide the
+  // upgrade banner even though the raw trial clock has ended.
+  const effectiveTrial = credits?.payg
+    ? { ...trial, active: true, expired: false, daysLeft: Infinity, endsAt: null }
+    : trial;
 
   return NextResponse.json({
     name: user.name,
@@ -31,8 +37,11 @@ export async function GET() {
     billingCurrency: user.billingCurrency,
     billingEnabled: isBillingEnabled(),
     creditBalance: credits?.balance ?? 0,
+    leadLimit: credits?.leadLimit ?? 300,
+    inboxLimit: credits?.inboxLimit ?? 2,
     aiEnabled: credits?.aiEnabled ?? false,
-    trial,
+    payg: credits?.payg ?? false,
+    trial: effectiveTrial,
   });
 }
 

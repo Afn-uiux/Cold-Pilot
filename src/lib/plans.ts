@@ -48,10 +48,10 @@ export const PLANS: Record<PlanId, Plan> = {
 export const SIGNUP_CREDITS = 1000;
 
 export const CREDIT_COSTS = {
-  campaign: 1,
+  campaign: 0.02,
   verification: 0.25,
   ai: 2,
-  leadImport: 0.1,
+  leadImport: 0.05,
 } as const;
 
 export interface CreditPack {

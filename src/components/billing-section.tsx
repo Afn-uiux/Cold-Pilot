@@ -8,6 +8,9 @@ type BillingState = {
   plan: PlanId;
   creditBalance: number;
   aiEnabled: boolean;
+  leadLimit: number;
+  inboxLimit: number;
+  payg: boolean;
   billingCurrency: "NGN" | "USD";
   billingEnabled: boolean;
 } | null;
@@ -29,6 +32,9 @@ export default function BillingSection() {
           plan: data.plan || "free",
           creditBalance: typeof data.creditBalance === "number" ? data.creditBalance : 0,
           aiEnabled: !!data.aiEnabled,
+          leadLimit: typeof data.leadLimit === "number" ? data.leadLimit : 300,
+          inboxLimit: typeof data.inboxLimit === "number" ? data.inboxLimit : 2,
+          payg: !!data.payg,
           billingCurrency: data.billingCurrency === "USD" ? "USD" : "NGN",
           billingEnabled: data.billingEnabled !== false,
         });
@@ -102,7 +108,7 @@ export default function BillingSection() {
           </div>
           <div>
             <p className="text-xs text-muted">Price</p>
-            <p className="text-lg font-medium mt-1">{currentPlan.price === 0 ? "Free" : `${formatPrice(currentPlan.price, state.billingCurrency)}/mo`}</p>
+            <p className="text-lg font-medium mt-1">{currentPlan.price === 0 ? "Free" : formatPrice(currentPlan.price, state.billingCurrency)}</p>
           </div>
           <div>
             <p className="text-xs text-muted">Credit balance</p>
@@ -111,9 +117,14 @@ export default function BillingSection() {
         </div>
         <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted">
           <span className="badge active">AI {state.aiEnabled ? "included" : "not on this plan"}</span>
-          <span className="badge active">{currentPlan.leadLimit === Infinity ? "Unlimited leads" : `${currentPlan.leadLimit.toLocaleString()} leads`}</span>
-          <span className="badge active">{currentPlan.inboxLimit === Infinity ? "Unlimited inboxes" : `${currentPlan.inboxLimit} inboxes`}</span>
+          <span className="badge active">{state.leadLimit === Infinity ? "Unlimited leads" : `${state.leadLimit.toLocaleString()} leads`}</span>
+          <span className="badge active">{state.inboxLimit === Infinity ? "Unlimited inboxes" : `${state.inboxLimit} inboxes`}</span>
         </div>
+        {state.payg && (
+          <p className="text-xs text-muted mt-2">
+            Pay-as-you-go — every action runs on credits. No subscription needed.
+          </p>
+        )}
       </div>
 
       {!state.billingEnabled && (
@@ -126,7 +137,7 @@ export default function BillingSection() {
       {state.billingEnabled && (<>
       <div className="card">
         <div className="card-header"><h3>Upgrade plan</h3></div>
-        <p className="text-sm text-muted mb-4">Switch to a paid plan for more leads, inboxes and AI. Your card is saved and billed {state.billingCurrency === "NGN" ? "in Naira" : "in Dollars"} monthly.</p>
+        <p className="text-sm text-muted mb-4">Switch to a paid plan for more leads, inboxes and AI. Plans are a one-time payment right now (recurring billing returns soon).</p>
         <div className="grid gap-4 sm:grid-cols-3">
           {(["starter", "pro", "agency"] as PlanId[]).map((id) => {
             const p = PLANS[id];
@@ -137,9 +148,9 @@ export default function BillingSection() {
                   <p className="font-medium">{p.name}</p>
                   {isCurrent && <span className="badge active">Current</span>}
                 </div>
-                <p className="text-2xl font-medium mt-2">{formatPrice(p.price, state.billingCurrency)}<span className="text-xs text-muted font-normal">/mo</span></p>
+                <p className="text-2xl font-medium mt-2">{formatPrice(p.price, state.billingCurrency)}<span className="text-xs text-muted font-normal"> one-time</span></p>
                 <p className="text-xs text-muted mt-2">{p.leadLimit === Infinity ? "Unlimited" : p.leadLimit.toLocaleString()} leads</p>
-                <p className="text-xs text-muted mt-1">{p.inboxLimit === Infinity ? "Unlimited" : `${p.inboxLimit} inboxes`}</p>
+                <p className="text-xs text-muted mt-1">{p.inboxLimit === Infinity ? "Unlimited inboxes" : `${p.inboxLimit} inboxes`}</p>
                 <p className="text-xs text-muted mt-1">AI {p.aiEnabled ? "included" : "not included"}</p>
                 <button
                   disabled={isCurrent || busy === `plan-${id}`}

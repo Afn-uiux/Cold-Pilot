@@ -28,6 +28,8 @@ export default function LoginPage() {
     if (params.get("verify") === "required") {
       window.history.replaceState({}, "", window.location.pathname);
       setVerifyRequired(true);
+      const pendingEmail = params.get("email");
+      if (pendingEmail) setVerifyEmail(pendingEmail);
     }
   }, []);
   const [showPassword, setShowPassword] = useState(false);

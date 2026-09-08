@@ -27,6 +27,20 @@ export async function POST(req: NextRequest) {
   if (session?.user?.id) {
     const blocked = await trialGuard(session.user.id);
     if (blocked) return blocked;
+
+    // API access is a subscription/per-seat feature, not pay-as-you-go. A user
+    // who is only paying with credits (free plan + positive balance) cannot
+    // mint API keys; the keys they already hold keep working.
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { plan: true },
+    });
+    if (!user || user.plan === "free") {
+      return NextResponse.json(
+        { error: "API keys are available on paid plans. Upgrade to unlock API access.", code: "PLAN_REQUIRED" },
+        { status: 402 }
+      );
+    }
   }
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

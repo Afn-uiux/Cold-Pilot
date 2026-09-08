@@ -63,11 +63,23 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Token expired" }, { status: 400 });
   }
 
+  // Welcome email only goes out once the link is actually clicked and verified
+  // — never at signup. Read the pre-verify state so the welcome is sent exactly
+  // once, only when this is the click that flips emailVerified from null.
+  const before = await prisma.user.findUnique({
+    where: { email: record.identifier },
+    select: { emailVerified: true },
+  });
+
   await prisma.user.update({
     where: { email: record.identifier },
     data: { emailVerified: new Date() },
   });
   await prisma.verificationToken.delete({ where: { token: tokenDigest } });
+
+  if (!before?.emailVerified) {
+    sendEmailSafe(record.identifier, "welcome");
+  }
 
   return NextResponse.json({ message: "Email verified successfully" });
 }

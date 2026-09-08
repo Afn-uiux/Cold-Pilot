@@ -131,6 +131,10 @@ export async function PATCH(req: NextRequest) {
     }
   }
   if (Object.keys(campaignData).length > 0) {
+    // A user-driven status change overrides the auto-resume flag: if the user
+    // explicitly paused (or resumed) the campaign, a later credit purchase must
+    // NOT flip it back to active on their behalf.
+    if (body.status !== undefined) campaignData.resumeOnFunding = false;
     await prisma.campaign.update({ where: { id }, data: campaignData });
     // Send transactional emails on status changes
     if (body.status && body.status !== c.status) {

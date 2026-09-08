@@ -1,7 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import { auth, signIn } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { sendVerificationEmail } from "@/lib/verification";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import { logLoginAttempt } from "@/lib/login-audit";
 import { isAllowedHost, redirectBaseUrl } from "@/lib/host";
@@ -33,6 +36,31 @@ export async function POST(req: NextRequest) {
     if (!ipLimit.ok || !emailLimit.ok) {
       await logLoginAttempt({ email: emailKey, ip, userAgent: ua, success: false, reason: "throttled" });
       return NextResponse.redirect(new URL("/auth/login?error=rate_limited", getBaseUrl(req)));
+    }
+
+    // Unverified accounts must complete link verification before they can log
+    // in — including older signups created before verification was enforced.
+    // Only when the password itself is correct do we reveal the unverified
+    // state (send a fresh link + bounce to the verify screen); a wrong password
+    // on an unverified account still gets the generic error, so this never
+    // leaks whether an email is registered. The standard authorize() path
+    // already nulls these logins as a backstop.
+    const existing = await prisma.user.findUnique({
+      where: { email: emailKey },
+      select: { password: true, emailVerified: true, deletedAt: true },
+    });
+    if (
+      existing &&
+      !existing.deletedAt &&
+      existing.password &&
+      !existing.emailVerified &&
+      (await bcrypt.compare(password || "", existing.password))
+    ) {
+      await logLoginAttempt({ email: emailKey, ip, userAgent: ua, success: false, reason: "unverified" });
+      await sendVerificationEmail(emailKey);
+      return NextResponse.redirect(
+        new URL(`/auth/login?verify=required&email=${encodeURIComponent(emailKey)}`, getBaseUrl(req))
+      );
     }
 
     const result = await signIn("credentials", {

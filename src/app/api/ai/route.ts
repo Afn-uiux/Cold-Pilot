@@ -1,9 +1,9 @@
 ﻿import { NextResponse } from "next/server";
-import { trialGuard } from "@/lib/trial";
+import { trialGuard, trialGrantsFeatureAccess } from "@/lib/trial";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPlan, CREDIT_COSTS } from "@/lib/plans";
-import { spendCredits, addCredits, InsufficientCreditsError } from "@/lib/credits";
+import { spendCredits, addCredits, InsufficientCreditsError, isPayAsYouGo } from "@/lib/credits";
 import { rateLimitAsync } from "@/lib/rate-limit";
 import crypto from "crypto";
 
@@ -288,11 +288,19 @@ export async function POST(req: Request) {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { plan: true },
+    select: { plan: true, trialEndsAt: true, trialVoided: true, creditBalance: true },
   });
   const plan = getPlan(user?.plan);
 
-  if (!plan.aiEnabled) {
+  // AI is on paid plans, during the active trial window (free plan, trial not
+  // yet over), AND for pay-as-you-go users — anyone on the free plan with a
+  // positive balance pays the 2-credit cost per generation.
+  const isPayg = isPayAsYouGo(user?.plan, user?.creditBalance);
+  if (
+    !plan.aiEnabled &&
+    !trialGrantsFeatureAccess(user?.plan, user?.trialEndsAt ?? null, user?.trialVoided ?? false) &&
+    !isPayg
+  ) {
     return NextResponse.json(
       {
         error: "AI writing is included on paid plans. Upgrade to unlock it.",

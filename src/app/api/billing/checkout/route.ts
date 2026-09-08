@@ -3,9 +3,9 @@ export const runtime = "nodejs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { createCheckoutSession } from "@/lib/bachs";
+import { createCheckoutSession, toDecimalString } from "@/lib/bachs";
 import { CREDIT_PACKS, PLANS, type PlanId } from "@/lib/plans";
-import { type Currency } from "@/lib/currency";
+import { type Currency, USD_NAIRA_RATE } from "@/lib/currency";
 import { isBillingEnabled } from "@/lib/billing-gate";
 
 // Bachs requires success_url/cancel_url to be publicly reachable, so localhost
@@ -95,20 +95,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Unknown or free plan" }, { status: 400 });
       }
 
-      const productKey = `BACHS_PRODUCT_${planId.toUpperCase()}_${billingCurrency}`;
-      const productId = process.env[productKey];
-      if (!productId) {
-        return NextResponse.json({
-          error: `Payments for the ${plan.name} plan aren't configured yet (missing ${productKey}).`,
-        }, { status: 501 });
-      }
+      // Plans are sold as a one-time charge right now: Bachs has NGN
+      // subscriptions disabled account-wide, so the recurring product cart
+      // path 403s. A plain one-time `pricing` charge (no product) still works.
+      // The webhook grants the plan on the resulting collection.succeeded.
+      // When Bachs enables subscriptions again, switch back to the
+      // product_cart + customer.subscription.* flow (still live in the
+      // webhook handler) and revert this branch.
+      const amountMajor =
+        billingCurrency === "USD"
+          ? Math.round((plan.price / USD_NAIRA_RATE) * 100) / 100
+          : plan.price;
 
       const checkout = await createCheckoutSession({
         customerEmail: user.email,
         customerName: user.name,
         successUrl,
         cancelUrl,
-        productCart: [{ product_id: productId }],
+        pricing: { currency: billingCurrency, amount: toDecimalString(amountMajor, billingCurrency) },
         metadata: { userId: session.user.id, kind: "plan", plan: planId, currency: billingCurrency },
       });
 

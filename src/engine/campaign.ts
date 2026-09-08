@@ -448,7 +448,7 @@ async function executeCampaignInner(campaignId: string) {
             await spendCredits(campaign.userId, CREDIT_COSTS.campaign, "campaign_send", `campaign_send:${lead.id}:${step.id}`);
           } catch (err) {
             if (err instanceof InsufficientCreditsError) {
-              await prisma.campaign.update({ where: { id: campaignId }, data: { status: "paused" } });
+              await prisma.campaign.update({ where: { id: campaignId }, data: { status: "paused", resumeOnFunding: true } });
               createNotification({
                 userId: campaign.userId,
                 type: "credits",
@@ -602,7 +602,7 @@ async function executeCampaignInner(campaignId: string) {
             await spendCredits(campaign.userId, CREDIT_COSTS.campaign, "campaign_send", `campaign_send:${lead.id}:${step.id}`);
           } catch (err) {
             if (err instanceof InsufficientCreditsError) {
-              await prisma.campaign.update({ where: { id: campaignId }, data: { status: "paused" } });
+              await prisma.campaign.update({ where: { id: campaignId }, data: { status: "paused", resumeOnFunding: true } });
               createNotification({
                 userId: campaign.userId,
                 type: "credits",

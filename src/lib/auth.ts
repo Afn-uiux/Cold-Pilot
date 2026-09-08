@@ -7,7 +7,7 @@ import { createSession, revokeSession, isSessionValid, SESSION_TTL_MS } from "./
 import { verifyToken as verifyTotp } from "./totp";
 import { TRIAL_MS } from "./trial";
 import { computeSignupRisk, voidTrial } from "./fraud";
-import { sendEmailSafe } from "./email/send";
+import { sendVerificationEmail } from "./verification";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -96,9 +96,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (token.sub && session.user && sidValid) {
         const user = await prisma.user.findUnique({
           where: { id: token.sub },
-          select: { role: true, deletedAt: true },
+          select: { role: true, deletedAt: true, emailVerified: true },
         });
-        if (!user || user.deletedAt) {
+        // Unverified users get no usable session even if one was minted before
+        // this check existed (e.g. a session created pre-deploy that reached
+        // onboarding). The login paths reject them, but a stale cookie or a
+        // straggler session must not keep working — this re-checks every
+        // request so an unverified account is always bounced to verification.
+        if (!user || user.deletedAt || !user.emailVerified) {
           session.user = undefined as unknown as typeof session.user;
           return session;
         }
@@ -182,7 +187,7 @@ async function provisionGoogleUser(opts: {
   email: string;
   name: string | null;
   image: string | null;
-}): Promise<boolean> {
+}): Promise<boolean | string> {
   const email = opts.email.trim().toLowerCase();
   try {
     // Note: this beta's signIn callback exposes no request headers, so the
@@ -200,19 +205,26 @@ async function provisionGoogleUser(opts: {
       // 2FA bypass hardening: Google has no TOTP step, so an account with 2FA
       // enabled must log in with email + password + code instead.
       if (existing.totpSecret) return false;
+      if (!existing.emailVerified) {
+        // Account exists but the verification link was never clicked. Same
+        // treatment as the credential flow: fire a fresh verification email and
+        // bounce the user to the "check your inbox" screen instead of letting
+        // them in.
+        await sendVerificationEmail(email);
+        return `/auth/login?verify=required&email=${encodeURIComponent(email)}`;
+      }
       return true;
     }
 
-    // New account. Google already verified the email address, so no
-    // verification-email step is needed — it counts as verified from birth,
-    // which flips ensureSignupCredits on (same incentive as an email signup
-    // that clicks the link).
+    // New account. Google has confirmed the email address on its side, but we
+    // still hold the account in the same unverified state as an email signup:
+    // signup credits only flip once the user clicks the link we send, and no
+    // session is minted until then.
     const user = await prisma.user.create({
       data: {
         name: opts.name || null,
         image: opts.image || null,
         email,
-        emailVerified: new Date(),
         trialEndsAt: new Date(Date.now() + TRIAL_MS),
         signupIp: ip && ip !== "unknown" ? ip : null,
       },
@@ -241,8 +253,10 @@ async function provisionGoogleUser(opts: {
       data: { userId: user.id, deviceFingerprint: null, ip: ip && ip !== "unknown" ? ip : null },
     });
 
-    sendEmailSafe(email, "welcome");
-    return true;
+    // No welcome email here — it only goes out once the verification link is
+    // clicked (see /api/auth/verify), not at signup.
+    await sendVerificationEmail(email);
+    return `/auth/login?verify=required&email=${encodeURIComponent(email)}`;
   } catch (err) {
     console.error("[auth] google provisioning failed:", err);
     return false;
