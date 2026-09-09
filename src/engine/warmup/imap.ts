@@ -144,8 +144,10 @@ async function searchFolderForSenders(
     const lock = await client.getMailboxLock(folder);
     try {
       for (const sender of senderEmails) {
+        const uids = await client.search({ from: sender }, { uid: true });
+        if (!uids || uids.length === 0) continue;
         const searchResult: any[] = [];
-        for await (const msg of client.fetch(`FROM "${sender}"`, { uid: true, envelope: true, internalDate: true })) {
+        for await (const msg of client.fetch(uids, { uid: true, envelope: true, internalDate: true })) {
           searchResult.push(msg);
         }
 

@@ -92,8 +92,10 @@ async function searchFolder(client: ImapFlow, folder: string, senderEmails: stri
     const lock = await client.getMailboxLock(folder);
     try {
       for (const sender of senderEmails) {
+        const uids = await client.search({ from: sender }, { uid: true });
+        if (!uids || uids.length === 0) continue;
         const list: any[] = [];
-        for await (const msg of client.fetch(`FROM "${sender}"`, { uid: true, envelope: true, internalDate: true })) {
+        for await (const msg of client.fetch(uids, { uid: true, envelope: true, internalDate: true })) {
           list.push(msg);
         }
         if (list.length > 0) {
