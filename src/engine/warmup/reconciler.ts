@@ -13,6 +13,7 @@ export async function reconcileWarmupSchedules(): Promise<number> {
       warmupEnabled: true,
       isPaused: false,
       status: "active",
+      deletedAt: null,
       user: { deletedAt: null },
     },
     select: {

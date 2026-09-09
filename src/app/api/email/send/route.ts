@@ -70,7 +70,7 @@ export async function POST(req: Request) {
   // and to their own lead. The engine guard (account.userId === lead.userId)
   // alone does NOT tie either resource to the authenticated caller.
   const [account, lead, user] = await Promise.all([
-    prisma.emailAccount.findFirst({ where: { id: emailAccountId, userId: session.user.id } }),
+    prisma.emailAccount.findFirst({ where: { id: emailAccountId, userId: session.user.id, deletedAt: null } }),
     prisma.lead.findFirst({ where: { id: leadId, userId: session.user.id } }),
     prisma.user.findUnique({ where: { id: session.user.id }, select: { plan: true } }),
   ]);

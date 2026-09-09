@@ -83,7 +83,7 @@ export async function POST(req: Request) {
       if (campaign?.accountIds) {
         const accountIds: string[] = JSON.parse(campaign.accountIds);
         if (accountIds.length > 0) {
-          const account = await prisma.emailAccount.findFirst({ where: { id: accountIds[0], userId } });
+          const account = await prisma.emailAccount.findFirst({ where: { id: accountIds[0], userId, deletedAt: null } });
           if (account && account.smtpHost && account.smtpUser && account.smtpPass) {
             const decrypted = decryptAccount(account);
             smtpConfig = {
@@ -103,7 +103,7 @@ export async function POST(req: Request) {
 
   if (!smtpConfig) {
     try {
-      const firstAccount = await prisma.emailAccount.findFirst({ where: { userId } });
+      const firstAccount = await prisma.emailAccount.findFirst({ where: { userId, deletedAt: null } });
       if (firstAccount && firstAccount.smtpHost && firstAccount.smtpUser && firstAccount.smtpPass) {
         const decrypted = decryptAccount(firstAccount);
         smtpConfig = {

@@ -159,7 +159,7 @@ export async function calculateNextWarmupTime(accountId: string): Promise<Date |
   }
 
   // Cap to eligible accounts
-  const accountCount = await prisma.emailAccount.count({ where: { status: "active", id: { not: accountId } } });
+  const accountCount = await prisma.emailAccount.count({ where: { status: "active", deletedAt: null, id: { not: accountId } } });
   if (accountCount > 0 && targetVolume > accountCount) {
     targetVolume = accountCount;
   }

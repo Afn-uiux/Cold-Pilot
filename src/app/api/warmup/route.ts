@@ -171,9 +171,9 @@ export async function GET(req: Request) {
   }
 
   // List all accounts with warmup info
-  const accounts = await prisma.emailAccount.findMany({
-    where: { userId: session.user.id },
-    select: {
+    const accounts = await prisma.emailAccount.findMany({
+      where: { userId: session.user.id, deletedAt: null },
+      select: {
       id: true, email: true, warmupEnabled: true, healthScore: true,
       healthState: true, isPaused: true, currentDailyVolume: true,
       targetDailyVolume: true, warmupWeek: true, status: true,

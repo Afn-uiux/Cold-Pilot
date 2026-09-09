@@ -269,6 +269,7 @@ async function executeCampaignInner(campaignId: string) {
     where: {
       userId: campaign.userId,
       status: "active",
+      deletedAt: null,
       ...(selectedIds.length > 0 ? { id: { in: selectedIds } } : {}),
     },
   });
@@ -792,7 +793,7 @@ async function processReply(
 
 export async function checkForReplies(userId: string) {
   const rawAccounts = await prisma.emailAccount.findMany({
-    where: { userId, status: "active" },
+    where: { userId, status: "active", deletedAt: null },
   });
   const accounts = rawAccounts.map(a => decryptAccount(a));
 
@@ -1712,7 +1713,7 @@ export async function sendDailySummaries() {
   for (const { userId } of usersWithIntegrations) {
     try {
       const accountIds = (await prisma.emailAccount.findMany({
-        where: { userId },
+        where: { userId, deletedAt: null },
         select: { id: true },
       })).map(a => a.id);
 

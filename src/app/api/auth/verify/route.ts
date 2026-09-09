@@ -7,6 +7,7 @@ import { VERIFY_TOKEN_TTL_MS } from "@/lib/verification";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import crypto from "crypto";
 import { hashToken } from "@/lib/tokens";
+import { parseSignupSourceCookie, parseCookieHeader, countryFromHeaders, userAgentFromHeaders } from "@/lib/signup-source";
 
 export async function POST(req: Request) {
   const { email } = await req.json();
@@ -68,12 +69,47 @@ export async function GET(req: Request) {
   // once, only when this is the click that flips emailVerified from null.
   const before = await prisma.user.findUnique({
     where: { email: record.identifier },
-    select: { emailVerified: true },
+    select: { emailVerified: true, signupIp: true, signupCountry: true, signupSource: true, signupUserAgent: true },
   });
+
+  const data: {
+    emailVerified: Date;
+    signupIp?: string | null;
+    signupCountry?: string | null;
+    signupSource?: string | null;
+    signupReferrer?: string | null;
+    signupUtmSource?: string | null;
+    signupUtmMedium?: string | null;
+    signupUtmCampaign?: string | null;
+    signupUserAgent?: string | null;
+  } = { emailVerified: new Date() };
+
+  // Google signups can't reach request headers in the signIn callback, so the
+  // first verification click is the one place we can attribute the account.
+  // Only backfill what's missing — fields already captured at email signup are
+  // kept untouched.
+  const ip = getClientIp(req.headers as unknown as { get(name: string): string | null });
+  if (!before?.signupIp && ip && ip !== "unknown") data.signupIp = ip;
+  const country = countryFromHeaders(req.headers as unknown as Headers);
+  if (!before?.signupCountry && country) data.signupCountry = country;
+  const ua = userAgentFromHeaders(req.headers as unknown as Headers);
+  if (!before?.signupUserAgent && ua) data.signupUserAgent = ua;
+  if (!before?.signupSource) {
+    const src = parseSignupSourceCookie(
+      parseCookieHeader((req.headers as unknown as Headers).get("cookie"))?.cp_src,
+    );
+    if (src) {
+      if (!before?.signupSource && (src.utm_source || src.ref)) data.signupSource = src.utm_source || src.ref;
+      if (src.ref) data.signupReferrer = src.ref;
+      if (src.utm_source) data.signupUtmSource = src.utm_source;
+      if (src.utm_medium) data.signupUtmMedium = src.utm_medium;
+      if (src.utm_campaign) data.signupUtmCampaign = src.utm_campaign;
+    }
+  }
 
   await prisma.user.update({
     where: { email: record.identifier },
-    data: { emailVerified: new Date() },
+    data,
   });
   await prisma.verificationToken.delete({ where: { token: tokenDigest } });
 

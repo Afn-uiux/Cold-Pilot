@@ -56,6 +56,9 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 
   // Waitlist
   { id: "waitlist-notify", subject: "New waitlist signup", category: "Waitlist", filename: "waitlist-notify.html" },
+
+  // Support
+  { id: "support-chat-escalation", subject: "Support chat needs a human", category: "Support", filename: "support-chat-escalation.html" },
 ];
 
 export type EmailTemplateId = (typeof EMAIL_TEMPLATES)[number]["id"];

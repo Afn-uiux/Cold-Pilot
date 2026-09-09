@@ -44,8 +44,8 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
     }),
     prisma.emailAccount.findMany({
-      where: { userId: session.user.id },
-      select: { id: true, email: true },
+        where: { userId: session.user.id, deletedAt: null },
+        select: { id: true, email: true },
       orderBy: { createdAt: "desc" },
     }),
   ]);

@@ -54,6 +54,8 @@ export async function GET(req: NextRequest) {
       trialVoided: true,
       trialVoidReason: true,
       signupIp: true,
+      signupCountry: true,
+      signupSource: true,
       deviceFingerprint: true,
       reviewedAt: true,
       plan: true,

@@ -21,7 +21,7 @@ export async function POST() {
   }
 
   const campaign = await prisma.campaign.findFirst({ where: { userId: session.user.id, deletedAt: null } });
-  const account = await prisma.emailAccount.findFirst({ where: { userId: session.user.id } });
+  const account = await prisma.emailAccount.findFirst({ where: { userId: session.user.id, deletedAt: null } });
   if (!account) {
     return NextResponse.json({ error: "Connect an email account first" }, { status: 400 });
   }

@@ -33,6 +33,7 @@ export async function POST(req: Request) {
     where: {
       userId: session.user.id,
       status: "active",
+      deletedAt: null,
       ...(selectedIds.length > 0 ? { id: { in: selectedIds } } : {}),
     },
   });

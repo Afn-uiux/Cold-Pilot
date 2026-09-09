@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
   });
   let account = lastLog?.emailAccount ?? null;
   if (!account) {
-    account = await prisma.emailAccount.findFirst({ where: { userId: session.user.id } });
+    account = await prisma.emailAccount.findFirst({ where: { userId: session.user.id, deletedAt: null } });
   }
   if (!account) {
     return NextResponse.json({ error: "No email account connected. Add one in Settings." }, { status: 400 });

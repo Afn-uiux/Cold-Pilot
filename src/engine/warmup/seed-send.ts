@@ -181,7 +181,7 @@ async function pickReceiver(
   }
 
   const peers = await prisma.emailAccount.findMany({
-    where: { status: "active", warmupEnabled: true, user: { deletedAt: null } },
+    where: { status: "active", warmupEnabled: true, deletedAt: null, user: { deletedAt: null } },
     select: {
       id: true,
       email: true,

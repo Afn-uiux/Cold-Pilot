@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
 
   if (id && detail === "true") {
     const account = await prisma.emailAccount.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, userId: session.user.id, deletedAt: null },
       select: SAFE_FIELDS,
     });
     if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -144,7 +144,7 @@ export async function GET(req: NextRequest) {
   }
 
   const accounts = await prisma.emailAccount.findMany({
-    where: { userId: session.user.id },
+    where: { userId: session.user.id, deletedAt: null },
     orderBy: { createdAt: "desc" },
     select: { ...SAFE_FIELDS, _count: { select: { emailLogs: true } } },
   });
@@ -218,7 +218,7 @@ export async function POST(req: Request) {
   });
 
   // Send onboarding email if this is the user's first account
-  const accountCount = await prisma.emailAccount.count({ where: { userId: session.user.id } });
+  const accountCount = await prisma.emailAccount.count({ where: { userId: session.user.id, deletedAt: null } });
   if (accountCount === 1) {
     sendEmailSafe(email, "onboarding-connect-account");
   }
@@ -245,7 +245,7 @@ export async function PATCH(req: NextRequest) {
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Account ID required" }, { status: 400 });
 
-  const account = await prisma.emailAccount.findFirst({ where: { id, userId: session.user.id } });
+  const account = await prisma.emailAccount.findFirst({ where: { id, userId: session.user.id, deletedAt: null } });
   if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json();
@@ -300,7 +300,7 @@ export async function DELETE(req: NextRequest) {
     const mailboxKey = mailboxIdentityKey(account.email);
     await markMailboxDisconnected(mailboxKey.provider, mailboxKey.providerAccountId);
 
-    await prisma.emailAccount.delete({ where: { id } });
+    await prisma.emailAccount.update({ where: { id }, data: { deletedAt: new Date() } });
     return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error("Failed to delete email account:", err);

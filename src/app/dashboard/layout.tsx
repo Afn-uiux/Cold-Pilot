@@ -7,6 +7,7 @@ import OnboardingWizard from "@/components/onboarding-wizard";
 import StateToggle from "./state-toggle";
 import CommandPalette from "@/components/command-palette";
 import TrialBanner from "@/components/trial-banner";
+import SupportChat from "@/components/support-chat";
 
 export default async function DashboardLayout({
   children,
@@ -49,6 +50,7 @@ export default async function DashboardLayout({
       </main>
       <StateToggle />
       <CommandPalette />
+      <SupportChat />
     </div>
   );
 }

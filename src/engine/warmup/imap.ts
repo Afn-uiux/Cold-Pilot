@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
 import { assertSafeMailTarget } from "@/lib/ssrf";
+import { openImap } from "@/lib/oauth-connect";
 
 const SPAM_FOLDERS: Record<string, string[]> = {
   gmail: ["[Gmail]/Spam", "Spam"],
@@ -111,6 +112,22 @@ async function connectToAccount(account: {
   return client;
 }
 
+// Connect a mailbox for reading warmup sends. OAuth-connected accounts (Gmail /
+// Outlook) carry no imapPassword — openImap resolves the refresh token to an
+// access token and connects via XOAUTH2. Returns null when the account can't be
+// reached; the reader simply skips that mailbox.
+async function connectForRead(account: any): Promise<ImapFlow | null> {
+  if (account.imapUser && account.imapPass) {
+    return connectToAccount({
+      imapHost: account.imapHost,
+      imapPort: account.imapPort,
+      imapUser: account.imapUser,
+      imapPass: account.imapPass,
+    });
+  }
+  return openImap(account);
+}
+
 async function searchFolderForSenders(
   client: ImapFlow,
   folder: string,
@@ -152,7 +169,7 @@ export async function processSeedInboxes(): Promise<{
   rescued: number;
 }> {
   const rawAccounts = await prisma.emailAccount.findMany({
-    where: { status: "active" },
+    where: { status: "active", deletedAt: null },
   });
   const accounts = rawAccounts.map(a => decryptAccount(a) as typeof a);
 
@@ -165,18 +182,12 @@ export async function processSeedInboxes(): Promise<{
   let rescued = 0;
 
   for (const account of accounts) {
-    if (!account.imapHost || !account.imapPort || !account.imapUser || !account.imapPass) continue;
-
     let client: ImapFlow | null = null;
 
     try {
       const provider = account.provider || providerFromEmail(account.email);
-      client = await connectToAccount({
-        imapHost: account.imapHost!,
-        imapPort: account.imapPort!,
-        imapUser: account.imapUser!,
-        imapPass: account.imapPass!,
-      });
+      client = await connectForRead(account);
+      if (!client) continue;
 
       // 1. Check INBOX for warmup emails
       const inboxResults = await searchFolderForSenders(client, "INBOX", senderEmails);

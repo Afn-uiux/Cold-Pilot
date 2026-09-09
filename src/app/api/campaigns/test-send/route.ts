@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!recipientEmail?.includes("@")) return NextResponse.json({ error: "Valid recipient email required" }, { status: 400 });
   if (!subject?.trim() && !bodyHtml?.trim()) return NextResponse.json({ error: "Cannot send a blank email — add a subject or body first" }, { status: 400 });
 
-  const rawAccounts = await prisma.emailAccount.findMany({ where: { userId: session.user.id } });
+  const rawAccounts = await prisma.emailAccount.findMany({ where: { userId: session.user.id, deletedAt: null } });
   if (!rawAccounts.length) return NextResponse.json({ error: "No email account connected" }, { status: 400 });
   const rawAccount = rawAccounts[0];
   const account = decryptAccount(rawAccount);

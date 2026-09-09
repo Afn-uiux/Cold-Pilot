@@ -9,6 +9,7 @@ import { logLoginAttempt } from "@/lib/login-audit";
 import { computeSignupRisk, voidTrial } from "@/lib/fraud";
 import { sendVerificationEmail } from "@/lib/verification";
 import { currencyFromHeaders } from "@/lib/currency";
+import { readSignupSourceFromRequest, countryFromHeaders, userAgentFromHeaders } from "@/lib/signup-source";
 
 // Client-supplied device fingerprints must be structurally sane before we
 // store or score them. Anything that isn't a bounded alphanumeric hash is
@@ -44,6 +45,12 @@ export async function signup(formData: FormData) {
   // displays and checkout stay consistent regardless of where they log in from
   // later.
   const billingCurrency = currencyFromHeaders(h as unknown as Headers);
+  // Where this signup came from (UTM/referrer, captured client-side on the
+  // landing page) and the country the request originated in — both recorded so
+  // growth signals and odd signups are traceable later.
+  const signupSource = await readSignupSourceFromRequest();
+  const signupCountry = countryFromHeaders(h as unknown as Headers);
+  const signupUserAgent = userAgentFromHeaders(h as unknown as Headers);
 
   const { allowed, retryAfterMs } = checkRateLimit(`signup:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 });
   if (!allowed) {
@@ -88,6 +95,13 @@ export async function signup(formData: FormData) {
       billingCurrency,
       deviceFingerprint: cleanFingerprint,
       signupIp: ip !== "unknown" ? ip : null,
+      signupCountry,
+      signupSource: signupSource?.utm_source || signupSource?.ref || null,
+      signupReferrer: signupSource?.ref || null,
+      signupUtmSource: signupSource?.utm_source || null,
+      signupUtmMedium: signupSource?.utm_medium || null,
+      signupUtmCampaign: signupSource?.utm_campaign || null,
+      signupUserAgent,
     },
   });
 

@@ -72,6 +72,7 @@ async function findPeerReceiver(
     where: {
       status: "active",
       warmupEnabled: true,
+      deletedAt: null,
       id: { not: senderMailboxId },
       // A customer's mailbox never warms against another mailbox belonging to
       // the SAME customer (too easily detected as self-warm). It only warms
@@ -143,6 +144,7 @@ export async function pickWarmupReceiver(
       where: {
         status: "active",
         warmupEnabled: true,
+        deletedAt: null,
         id: { not: sender.id },
         user: { deletedAt: null },
       },

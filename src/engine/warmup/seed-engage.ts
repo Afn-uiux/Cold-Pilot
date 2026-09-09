@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
 import { assertSafeMailTarget } from "@/lib/ssrf";
+import { openImap } from "@/lib/oauth-connect";
 
 // Seed engagement engine: makes platform-owned seed inboxes behave like real,
 // live mailboxes. Seeds RECEIVE warmup (from user mailboxes and other seeds),
@@ -64,6 +65,20 @@ async function connect(account: { imapHost: string; imapPort: number; imapUser: 
   });
   await client.connect();
   return client;
+}
+
+// Seed inboxes connect via Google OAuth (admin "google" flow) or plain IMAP.
+// openImap handles both; returns null when unreachable so the loop skips it.
+async function connectForRead(account: any): Promise<ImapFlow | null> {
+  if (account.imapUser && account.imapPass) {
+    return connect({
+      imapHost: account.imapHost,
+      imapPort: account.imapPort,
+      imapUser: account.imapUser,
+      imapPass: account.imapPass,
+    });
+  }
+  return openImap(account);
 }
 
 async function searchFolder(client: ImapFlow, folder: string, senderEmails: string[]) {
@@ -138,7 +153,7 @@ export async function processSeedInboxEngagement(): Promise<{
 
   // Potential senders: any active user mailbox (customers) plus other seeds.
   const userAccounts = await prisma.emailAccount.findMany({
-    where: { status: "active" },
+    where: { status: "active", deletedAt: null },
     select: { email: true },
   });
   const senderEmails = [
@@ -151,16 +166,11 @@ export async function processSeedInboxEngagement(): Promise<{
   let rescued = 0;
 
   for (const seed of seeds) {
-    if (!seed.imapHost || !seed.imapPort || !seed.imapUser || !seed.imapPass) continue;
     let client: ImapFlow | null = null;
     try {
       const provider = seed.provider || providerFromEmail(seed.email);
-      client = await connect({
-        imapHost: seed.imapHost,
-        imapPort: seed.imapPort,
-        imapUser: seed.imapUser,
-        imapPass: seed.imapPass,
-      });
+      client = await connectForRead(seed);
+      if (!client) continue;
 
       // Match a sender email to the warmup log that used THIS seed as receiver.
       async function findLog(senderEmail: string, senderIsUser: boolean) {

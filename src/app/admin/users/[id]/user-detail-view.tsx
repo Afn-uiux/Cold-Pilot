@@ -13,16 +13,19 @@ export interface UserMetric {
 }
 
 export interface UserDetailData {
+  id: string;
   displayName: string;
   email: string;
   plan: string;
   role: string;
+  riskStatus: string;
+  trialVoided: boolean;
   deleted: boolean;
   metrics: UserMetric[];
   payments: PaymentRow[];
   transactions: { id: string; amount: string; reason: string; when: string }[];
   campaigns: { id: string; name: string; status: string; leads: string; updated: string }[];
-  accounts: { id: string; email: string; provider: string; health: string; flags: string }[];
+  accounts: { id: string; email: string; provider: string; health: string; flags: string; removed: boolean; addedAt: string; removedAt: string }[];
   bounces: { id: string; email: string; type: string; lead: string; detail: string; when: string }[];
   suppressions: { id: string; email: string; reason: string; lead: string; when: string }[];
   facts: { label: string; value: string }[];
@@ -55,21 +58,83 @@ function SectionHead({ title, onExport }: { title: string; onExport?: () => void
 
 export default function UserDetailView({ data }: { data: UserDetailData }) {
   const [tab, setTab] = useState("overview");
+  const [actionLoading, setActionLoading] = useState(false);
+  const [riskStatus, setRiskStatus] = useState(data.riskStatus);
   const slug = data.email.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+
+  async function patchUser(body: Record<string, unknown>) {
+    setActionLoading(true);
+    try {
+      await fetch(`/api/admin/users/${data.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      setRiskStatus(
+        typeof body.riskStatus === "string" ? body.riskStatus : body.clearFlag ? "none" : body.markReviewed ? "reviewed" : body.kill ? "banned" : riskStatus,
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  function toggleFlag() {
+    if (riskStatus === "none") patchUser({ riskStatus: "flagged" });
+    else patchUser({ clearFlag: true });
+  }
+
+  function toggleRole() {
+    patchUser({ role: data.role === "admin" ? "user" : "admin" });
+  }
+
+  function kill() {
+    const ok = window.confirm(
+      `Kill ${data.email}?\n\nPauses all activity, voids the trial permanently, and blocks this device/IP from future signups.`
+    );
+    if (ok) patchUser({ kill: true });
+  }
 
   return (
     <div>
-      <div className="flex gap-1.5 mt-6">
-        {TABS.map(([val, label]) => (
+      <div className="flex items-center justify-between gap-3 flex-wrap mt-4">
+        <div className="flex gap-1.5">
+          {TABS.map(([val, label]) => (
+            <button
+              key={val}
+              type="button"
+              onClick={() => setTab(val)}
+              className={`btn btn-xs ${tab === val ? "btn-primary" : "btn-ghost"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1.5">
           <button
-            key={val}
             type="button"
-            onClick={() => setTab(val)}
-            className={`btn btn-xs ${tab === val ? "btn-primary" : "btn-ghost"}`}
+            onClick={toggleFlag}
+            disabled={actionLoading}
+            className="btn btn-xs btn-ghost"
           >
-            {label}
+            {actionLoading ? "..." : riskStatus === "none" ? "Flag" : "Unflag"}
           </button>
-        ))}
+          <button
+            type="button"
+            onClick={toggleRole}
+            disabled={actionLoading}
+            className="btn btn-xs btn-ghost"
+          >
+            {actionLoading ? "..." : data.role === "admin" ? "Remove Admin" : "Make Admin"}
+          </button>
+          <button
+            type="button"
+            onClick={kill}
+            disabled={actionLoading}
+            className="btn btn-xs btn-ghost text-red-600 hover:text-red-700"
+          >
+            {actionLoading ? "..." : "Kill"}
+          </button>
+        </div>
       </div>
 
       {tab === "overview" && (
@@ -195,7 +260,7 @@ export default function UserDetailView({ data }: { data: UserDetailData }) {
               onExport={() =>
                 download(
                   `${slug}-accounts.csv`,
-                  data.accounts.map((a) => ({ email: a.email, provider: a.provider, health: a.health, flags: a.flags }))
+                  data.accounts.map((a) => ({ email: a.email, provider: a.provider, health: a.health, flags: a.flags, removed: a.removed ? "yes" : "no", added: a.addedAt, removed_at: a.removedAt }))
                 )
               }
             />
@@ -206,22 +271,52 @@ export default function UserDetailView({ data }: { data: UserDetailData }) {
                     <th>Account</th>
                     <th>Health</th>
                     <th>Flags</th>
+                    <th>Added / Removed</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.accounts.length === 0 && (
-                    <tr><td colSpan={3} className="text-muted">No connected accounts</td></tr>
+                  {data.accounts.filter((a) => !a.removed).length === 0 && (
+                    <tr><td colSpan={4} className="text-muted">No connected accounts</td></tr>
                   )}
-                  {data.accounts.map((a) => (
+                  {data.accounts.filter((a) => !a.removed).map((a) => (
                     <tr key={a.id}>
                       <td className="font-medium">{a.email}<span className="text-muted font-normal"> · {a.provider}</span></td>
                       <td className="text-muted">{a.health}</td>
                       <td className="text-muted">{a.flags}</td>
+                      <td className="text-muted text-xs">{a.addedAt}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {data.accounts.filter((a) => a.removed).length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-[13px] font-medium text-muted-2 uppercase tracking-wide mb-2">
+                  Removed ({data.accounts.filter((a) => a.removed).length})
+                </h3>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Account</th>
+                        <th>Added</th>
+                        <th>Removed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.accounts.filter((a) => a.removed).map((a) => (
+                        <tr key={a.id}>
+                          <td className="font-medium text-muted line-through">{a.email}<span className="font-normal"> · {a.provider}</span></td>
+                          <td className="text-muted text-xs">{a.addedAt}</td>
+                          <td className="text-muted text-xs text-red-600">{a.removedAt}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

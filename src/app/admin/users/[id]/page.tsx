@@ -28,6 +28,10 @@ export default async function AdminUserDetailPage({
       riskFlags: true,
       riskStatus: true,
       signupIp: true,
+      signupCountry: true,
+      signupSource: true,
+      signupReferrer: true,
+      signupUserAgent: true,
       bachsCustomerId: true,
       bachsSubscriptionId: true,
       createdAt: true,
@@ -97,6 +101,8 @@ export default async function AdminUserDetailPage({
         healthScore: true,
         isPaused: true,
         warmupEnabled: true,
+        deletedAt: true,
+        createdAt: true,
       },
     }),
     prisma.bounceEvent.findMany({
@@ -147,16 +153,19 @@ export default async function AdminUserDetailPage({
       : "no linked lead";
 
   const data: UserDetailData = {
+    id: user.id,
     displayName: user.name || user.email,
     email: user.email,
     plan: user.plan,
     role: user.role,
+    riskStatus: user.riskStatus,
+    trialVoided: user.trialVoided,
     deleted: !!user.deletedAt,
     metrics: [
       {
         label: "Risk",
         value: user.riskStatus,
-        sub: `score ${user.riskScore}${user.trialVoided ? " · trial voided" : ""}${user.signupIp ? ` · ${user.signupIp}` : ""}`,
+        sub: `score ${user.riskScore}${user.trialVoided ? " · trial voided" : ""}${user.signupIp ? ` · ${user.signupIp}` : ""}${user.signupCountry ? ` · ${user.signupCountry}` : ""}`,
       },
       {
         label: "Credit balance",
@@ -176,7 +185,7 @@ export default async function AdminUserDetailPage({
       {
         label: "Accounts",
         value: String(accounts.length),
-        sub: `${accounts.filter((a) => a.isPaused).length} paused · ${accounts.filter((a) => a.healthState !== "healthy").length} unhealthy`,
+        sub: `${accounts.filter((a) => a.healthState !== "healthy").length} unhealthy · ${accounts.filter((a) => a.deletedAt).length} removed`,
       },
     ],
     payments: payments.map((p) => ({
@@ -206,6 +215,9 @@ export default async function AdminUserDetailPage({
       provider: a.provider,
       health: `${a.healthState} · ${Math.round(a.healthScore)}`,
       flags: [a.isPaused && "paused", a.warmupEnabled && "warmup"].filter(Boolean).join(" · ") || "—",
+      removed: !!a.deletedAt,
+      addedAt: a.createdAt.toLocaleString(),
+      removedAt: a.deletedAt ? a.deletedAt.toLocaleString() : "",
     })),
     bounces: bounces.map((b) => ({
       id: b.id,
@@ -227,6 +239,12 @@ export default async function AdminUserDetailPage({
     }),
     facts: [
       { label: "Joined", value: user.createdAt.toLocaleString() },
+      { label: "Country", value: user.signupCountry ?? "—" },
+      {
+        label: "Source",
+        value: [user.signupSource, user.signupReferrer].filter(Boolean).join(" · ") || "—",
+      },
+      { label: "User agent", value: user.signupUserAgent ?? "—" },
       {
         label: "Trial ends",
         value: `${user.trialEndsAt?.toLocaleString() ?? "—"}${user.trialVoided ? ` (voided: ${user.trialVoidReason ?? "no reason"})` : ""}`,
@@ -256,6 +274,11 @@ export default async function AdminUserDetailPage({
             <span className="badge draft">free</span>
           )}
           <span className={`badge ${data.role === "admin" ? "active" : "draft"}`}>{data.role}</span>
+          {user.signupCountry && (
+            <span className="text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full whitespace-nowrap">
+              {user.signupCountry}
+            </span>
+          )}
           {data.deleted && (
             <span className="text-[11px] font-medium text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full whitespace-nowrap">
               Deleted

@@ -52,7 +52,7 @@ async function tick() {
     // Reply detection runs regardless of campaign status — leads can
     // reply after their campaign has finished.
     const accounts = await prisma.emailAccount.findMany({
-      where: { status: "active" },
+      where: { status: "active", deletedAt: null },
       select: { userId: true },
       distinct: ["userId"],
     });
@@ -145,7 +145,7 @@ async function tick() {
       lastHealthCheckHour = new Date().getHours();
       try {
         const accounts = await prisma.emailAccount.findMany({
-          where: { warmupEnabled: true, status: "active", user: { plan: { not: "free" } } },
+          where: { warmupEnabled: true, status: "active", deletedAt: null, user: { plan: { not: "free" } } },
           select: { id: true },
         });
         for (const a of accounts) {

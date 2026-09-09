@@ -262,7 +262,7 @@ export async function assertInboxCapacity(userId: string): Promise<void> {
   });
   const plan = getPlan(user?.plan);
 
-  const count = await prisma.emailAccount.count({ where: { userId } });
+  const count = await prisma.emailAccount.count({ where: { userId, deletedAt: null } });
   if (count >= plan.inboxLimit) {
     const label =
       plan.inboxLimit === 1 ? "1 connected inbox" : plan.inboxLimit === 2 ? "2 connected inboxes" : "unlimited inboxes";

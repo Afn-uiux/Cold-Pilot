@@ -17,6 +17,8 @@ interface AdminUser {
   trialVoided: boolean;
   trialVoidReason: string | null;
   signupIp: string | null;
+  signupCountry: string | null;
+  signupSource: string | null;
   reviewedAt: string | null;
   plan: string;
   creditBalance: number;
@@ -173,6 +175,8 @@ export default function AdminUsersPage() {
                 <th>Campaigns</th>
                 <th>Leads</th>
                 <th>Accounts</th>
+                <th>Country</th>
+                <th>Source</th>
                 <th>Joined</th>
                 <th>Status</th>
                 <th></th>
@@ -181,11 +185,11 @@ export default function AdminUsersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="text-center text-muted-2 py-12">Loading...</td>
+                  <td colSpan={13} className="text-center text-muted-2 py-12">Loading...</td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="text-center text-muted-2 py-12">No users found</td>
+                  <td colSpan={13} className="text-center text-muted-2 py-12">No users found</td>
                 </tr>
               ) : (
                 users.map((u) => {
@@ -237,6 +241,17 @@ export default function AdminUsersPage() {
                       <td>{u._count.campaigns}</td>
                       <td>{u._count.leads}</td>
                       <td>{u._count.emailAccounts}</td>
+                      <td className="text-muted">{new Date(u.createdAt).toLocaleDateString()}</td>
+                      <td className="text-muted text-xs whitespace-nowrap" title={u.signupIp ?? ""}>
+                        {u.signupCountry ? (
+                          <span className="inline-flex items-center gap-0.5">{u.signupCountry}<span className="text-[10px] text-muted-2">{u.signupIp ? ` · ${u.signupIp}` : ""}</span></span>
+                        ) : u.signupIp ? (
+                          <span className="text-[10px] text-muted-2">{u.signupIp}</span>
+                        ) : (
+                          <span className="text-muted-2">—</span>
+                        )}
+                      </td>
+                      <td className="text-muted text-xs">{u.signupSource || "—"}</td>
                       <td className="text-muted">{new Date(u.createdAt).toLocaleDateString()}</td>
                       <td>
                         {u.deletedAt ? (

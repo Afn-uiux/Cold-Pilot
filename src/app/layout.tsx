@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import JsonLd from "@/components/seo-jsonld";
+import SignupSourceTracker from "@/components/signup-source-tracker";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL || "https://usecoldpilot.com";
 
@@ -90,6 +91,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full">
         {<JsonLd data={orgSchema} />}
+        {<SignupSourceTracker />}
         {<Providers>{children}</Providers>}
         {/* Cloudflare Web Analytics beacon (manual install; see .env.example). */}
         <script

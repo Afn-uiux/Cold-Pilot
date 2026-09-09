@@ -47,6 +47,17 @@ model User {
   riskStatus          String   @default("none")
   deviceFingerprint   String?
   signupIp            String?
+  // Signup provenance — where the account came from. Captured for email
+  // signups at registration (UTM cookie + edge country header) and backfilled
+  // for Google signups at the first verification-click (they can't read
+  // request headers in the signIn callback, and must verify before use).
+  signupCountry       String?
+  signupSource        String?
+  signupReferrer      String?
+  signupUtmSource     String?
+  signupUtmMedium     String?
+  signupUtmCampaign   String?
+  signupUserAgent     String?
   reviewedAt          DateTime?
 
   campaigns     Campaign[]
@@ -245,6 +256,7 @@ model EmailAccount {
   status         String  @default("active")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
 
   user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   emailLogs     EmailLog[]
