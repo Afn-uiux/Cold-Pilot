@@ -117,6 +117,25 @@ export async function POST(req: Request) {
     data: { userId: currentUserId, role: "user", content: message },
   });
 
+  // Check if admin has disabled AI for this conversation (human takeover).
+  let aiDisabled = false;
+  try {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "ChatSettings" ("userId" TEXT NOT NULL PRIMARY KEY, "aiDisabled" BOOLEAN NOT NULL DEFAULT false, "updatedAt" DATETIME NOT NULL)`
+    );
+    const chatSettings = await prisma.chatSettings.findUnique({
+      where: { userId: currentUserId },
+      select: { aiDisabled: true },
+    });
+    aiDisabled = chatSettings?.aiDisabled ?? false;
+  } catch {
+    // Default to AI on.
+  }
+  if (aiDisabled) {
+    // AI is off — just save the user message (already done above), no AI response.
+    return NextResponse.json({ reply: "" }, { status: 200 });
+  }
+
   async function persistAssistant(content: string) {
     await prisma.chatMessage.create({
       data: { userId: currentUserId, role: "assistant", content },

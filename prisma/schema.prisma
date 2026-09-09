@@ -82,6 +82,7 @@ model User {
   signupSignals      SignupSignal[]
   userSessions       UserSession[]
   chatMessages       ChatMessage[]
+  chatSettings       ChatSettings?
 }
 
 // Permanent history of every connected mailbox. Keyed on the immutable
@@ -777,4 +778,14 @@ model ChatMessage {
 
   @@index([userId, createdAt])
   @@index([createdAt])
+}
+
+// Per-mailbox AI-chat control. aiDisabled lets a support admin (or the user)
+// force the support chat into human-only mode so replies come from the staff.
+model ChatSettings {
+  userId     String   @id
+  aiDisabled Boolean  @default(false)
+  updatedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

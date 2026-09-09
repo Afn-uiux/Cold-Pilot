@@ -149,10 +149,19 @@ export async function GET(req: NextRequest) {
     select: { ...SAFE_FIELDS, _count: { select: { emailLogs: true } } },
   });
 
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayLogs = await prisma.emailLog.groupBy({
+    by: ["emailAccountId"],
+    where: { type: "outgoing", campaignStepId: { not: null }, sentAt: { gte: todayStart } },
+    _count: { _all: true },
+  });
+  const sentTodayByAccount = new Map(todayLogs.map(t => [t.emailAccountId, t._count._all]));
+
   return NextResponse.json(
     accounts.map(a => {
       const { _count, ...rest } = a as any;
-      return { ...rest, sent: _count?.emailLogs ?? 0 };
+      return { ...rest, sent: _count?.emailLogs ?? 0, sentToday: sentTodayByAccount.get(a.id) ?? 0 };
     })
   );
 }

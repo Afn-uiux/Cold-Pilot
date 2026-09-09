@@ -103,6 +103,12 @@ export default async function AdminUserDetailPage({
         warmupEnabled: true,
         deletedAt: true,
         createdAt: true,
+        smtpUser: true,
+        smtpPass: true,
+        imapHost: true,
+        imapUser: true,
+        imapPass: true,
+        gmailToken: true,
       },
     }),
     prisma.bounceEvent.findMany({
@@ -137,6 +143,13 @@ export default async function AdminUserDetailPage({
   const byStatus: Record<string, number> = {};
   for (const row of verifySplit) byStatus[row.verificationStatus ?? "unverified"] = row._count._all;
   const paid = user.plan !== "free";
+
+  function connectionType(a: { smtpUser: string | null; smtpPass: string | null; imapHost: string | null; imapUser: string | null; imapPass: string | null; gmailToken: string | null }): string {
+    if (a.imapHost && a.imapUser && a.imapPass) return "explicit-imap";
+    if (a.smtpUser && a.smtpPass) return "app-password";
+    if (a.gmailToken) return "old-oauth";
+    return "none";
+  }
 
   const suppressedLeads = suppressions.length > 0
     ? await prisma.lead.findMany({
@@ -215,6 +228,7 @@ export default async function AdminUserDetailPage({
       provider: a.provider,
       health: `${a.healthState} · ${Math.round(a.healthScore)}`,
       flags: [a.isPaused && "paused", a.warmupEnabled && "warmup"].filter(Boolean).join(" · ") || "—",
+      connType: connectionType(a),
       removed: !!a.deletedAt,
       addedAt: a.createdAt.toLocaleString(),
       removedAt: a.deletedAt ? a.deletedAt.toLocaleString() : "",

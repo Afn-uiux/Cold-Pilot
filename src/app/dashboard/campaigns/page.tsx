@@ -8,6 +8,7 @@ import { PauseIcon } from "@/components/icons/pause";
 import { PlayIcon } from "@/components/icons/play";
 import { Search01Icon } from "@/components/icons/search-01";
 import { Mail01Icon } from "@/components/icons/mail-01";
+import { Edit02Icon } from "@/components/icons/edit-02";
 import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
 import { ArrowRight02Icon } from "@/components/icons/arrow-right-02";
 
@@ -29,6 +30,7 @@ type Campaign = {
   status: string;
   leads: number;
   steps: number;
+  createdAt?: string;
   metrics?: CampaignMetrics;
 };
 
@@ -70,6 +72,8 @@ export default function CampaignsPage() {
   const [newName, setNewName] = useState("My Campaign");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [actionConfirm, setActionConfirm] = useState<{ id: string; action: string; name: string } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   const fetchCampaigns = useCallback(() => {
     fetch("/api/campaigns")
@@ -82,6 +86,7 @@ export default function CampaignsPage() {
             status: c.status,
             leads: c._count?.leads || 0,
             steps: c._count?.steps || 0,
+            createdAt: c.createdAt,
             metrics: c.metrics || undefined,
           })));
         } else {
@@ -109,7 +114,7 @@ export default function CampaignsPage() {
         const data = await res.json();
         setShowCreate(false);
         setNewName("My Campaign");
-        setCampaigns(prev => [{ id: data.id, name: data.name, status: data.status, leads: 0, steps: data.steps?.length || 0 }, ...prev]);
+        setCampaigns(prev => [{ id: data.id, name: data.name, status: data.status, leads: 0, steps: data.steps?.length || 0, createdAt: data.createdAt }, ...prev]);
       }
     } catch {}
   }
@@ -119,6 +124,19 @@ export default function CampaignsPage() {
     const res = await fetch(`/api/campaigns?id=${deleteId}`, { method: "DELETE" });
     if (res.ok) setCampaigns(prev => prev.filter(c => c.id !== deleteId));
     setDeleteId(null);
+  }
+
+  async function handleRename(id: string) {
+    const trimmed = editName.trim();
+    if (trimmed) {
+      const res = await fetch(`/api/campaigns?id=${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (res.ok) setCampaigns(prev => prev.map(c => c.id === id ? { ...c, name: trimmed } : c));
+    }
+    setEditingId(null);
   }
 
   function handleAction(id: string, action: string) {
@@ -221,6 +239,7 @@ export default function CampaignsPage() {
                 <tr>
                   <th>Name</th>
                   <th>Status</th>
+                  <th>Created</th>
                   <th>Progress</th>
                   <th>Sent</th>
                   <th>Click</th>
@@ -231,31 +250,46 @@ export default function CampaignsPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center text-muted-2 py-12">No campaigns match your filters</td></tr>
+                  <tr><td colSpan={9} className="text-center text-muted-2 py-12">No campaigns match your filters</td></tr>
                 ) : filtered.map(c => {
                   const m = c.metrics;
                   const isDraft = c.status === "draft";
                   return (
                     <tr key={c.id} className="cursor-pointer" onClick={() => router.push(`/dashboard/campaigns/${c.id}`)}>
-                      <td className="font-medium">{c.name}</td>
-                      <td><StatusBadge status={c.status} /></td>
-                      <td>
-                        {isDraft || !m ? (
-                          <span className="text-muted-2">-</span>
+                      <td className="font-medium">
+                      <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                        {editingId === c.id ? (
+                          <input
+                            autoFocus
+                            value={editName}
+                            onChange={e => setEditName(e.target.value)}
+                            onBlur={() => handleRename(c.id)}
+                            onKeyDown={e => { if (e.key === "Enter") handleRename(c.id); if (e.key === "Escape") setEditingId(null); }}
+                            className="bg-transparent border-b border-border outline-none focus:border-blue-accent transition-colors text-sm font-medium"
+                          />
                         ) : (
-                          <ProgressBar value={m.progress} />
+                          <>
+                            {c.name}
+                            <button onClick={() => { setEditingId(c.id); setEditName(c.name); }} className="text-muted-2 hover:text-blue-accent transition-colors" title="Rename campaign">
+                              <Edit02Icon size={13} />
+                            </button>
+                          </>
                         )}
-                      </td>
-                      <td>{isDraft || !m ? <span className="text-muted-2">-</span> : m.sentCount}</td>
-                      <td>{isDraft || !m ? <span className="text-muted-2">-</span> : m.clickCount}</td>
+                      </div>
+                    </td>
+                    <td><StatusBadge status={c.status} /></td>
+                    <td className="text-muted whitespace-nowrap">
+                      {c.createdAt ? new Date(c.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                    </td>
                       <td>
-                        {isDraft || !m ? (
-                          <span className="text-muted-2">-</span>
-                        ) : (
-                          <span>{m.repliedLeads} <span className="text-muted-2">| {m.replyRate}%</span></span>
-                        )}
+                        <ProgressBar value={m?.progress ?? 0} />
                       </td>
-                      <td>{isDraft || !m ? 0 : m.opportunities}</td>
+                      <td>{m?.sentCount ?? 0}</td>
+                      <td>{m?.clickCount ?? 0}</td>
+                      <td>
+                        <span>{m?.repliedLeads ?? 0} <span className="text-muted-2">| {m?.replyRate ?? 0}%</span></span>
+                      </td>
+                      <td>{m?.opportunities ?? 0}</td>
                       <td>
                         <div className="flex items-center justify-end gap-2">
                           <ActionIcon campaign={c} />

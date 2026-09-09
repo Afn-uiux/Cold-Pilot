@@ -25,7 +25,7 @@ export interface UserDetailData {
   payments: PaymentRow[];
   transactions: { id: string; amount: string; reason: string; when: string }[];
   campaigns: { id: string; name: string; status: string; leads: string; updated: string }[];
-  accounts: { id: string; email: string; provider: string; health: string; flags: string; removed: boolean; addedAt: string; removedAt: string }[];
+  accounts: { id: string; email: string; provider: string; health: string; flags: string; connType: string; removed: boolean; addedAt: string; removedAt: string }[];
   bounces: { id: string; email: string; type: string; lead: string; detail: string; when: string }[];
   suppressions: { id: string; email: string; reason: string; lead: string; when: string }[];
   facts: { label: string; value: string }[];
@@ -269,6 +269,7 @@ export default function UserDetailView({ data }: { data: UserDetailData }) {
                 <thead>
                   <tr>
                     <th>Account</th>
+                    <th>Connection</th>
                     <th>Health</th>
                     <th>Flags</th>
                     <th>Added / Removed</th>
@@ -276,11 +277,21 @@ export default function UserDetailView({ data }: { data: UserDetailData }) {
                 </thead>
                 <tbody>
                   {data.accounts.filter((a) => !a.removed).length === 0 && (
-                    <tr><td colSpan={4} className="text-muted">No connected accounts</td></tr>
+                    <tr><td colSpan={5} className="text-muted">No connected accounts</td></tr>
                   )}
                   {data.accounts.filter((a) => !a.removed).map((a) => (
                     <tr key={a.id}>
                       <td className="font-medium">{a.email}<span className="text-muted font-normal"> · {a.provider}</span></td>
+                      <td>
+                        <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
+                          a.connType === "app-password" ? "text-green-700 bg-green-50 border border-green-200"
+                          : a.connType === "explicit-imap" ? "text-blue-700 bg-blue-50 border border-blue-200"
+                          : a.connType === "old-oauth" ? "text-amber-700 bg-amber-50 border border-amber-200"
+                          : "text-red-600 bg-red-50 border border-red-200"
+                        }`}>
+                          {a.connType === "app-password" ? "App Password" : a.connType === "explicit-imap" ? "IMAP Creds" : a.connType === "old-oauth" ? "Old OAuth" : "No Auth"}
+                        </span>
+                      </td>
                       <td className="text-muted">{a.health}</td>
                       <td className="text-muted">{a.flags}</td>
                       <td className="text-muted text-xs">{a.addedAt}</td>
@@ -300,6 +311,7 @@ export default function UserDetailView({ data }: { data: UserDetailData }) {
                     <thead>
                       <tr>
                         <th>Account</th>
+                        <th>Connection</th>
                         <th>Added</th>
                         <th>Removed</th>
                       </tr>
@@ -308,6 +320,16 @@ export default function UserDetailView({ data }: { data: UserDetailData }) {
                       {data.accounts.filter((a) => a.removed).map((a) => (
                         <tr key={a.id}>
                           <td className="font-medium text-muted line-through">{a.email}<span className="font-normal"> · {a.provider}</span></td>
+                          <td>
+                            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
+                              a.connType === "app-password" ? "text-green-700 bg-green-50 border border-green-200"
+                              : a.connType === "explicit-imap" ? "text-blue-700 bg-blue-50 border border-blue-200"
+                              : a.connType === "old-oauth" ? "text-amber-700 bg-amber-50 border border-amber-200"
+                              : "text-red-600 bg-red-50 border border-red-200"
+                            }`}>
+                              {a.connType === "app-password" ? "App Password" : a.connType === "explicit-imap" ? "IMAP Creds" : a.connType === "old-oauth" ? "Old OAuth" : "No Auth"}
+                            </span>
+                          </td>
                           <td className="text-muted text-xs">{a.addedAt}</td>
                           <td className="text-muted text-xs text-red-600">{a.removedAt}</td>
                         </tr>

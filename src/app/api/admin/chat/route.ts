@@ -28,7 +28,20 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "asc" },
       select: { id: true, role: true, byAdmin: true, content: true, createdAt: true },
     });
-    return NextResponse.json({ messages });
+    let aiDisabled = false;
+    try {
+      await prisma.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "ChatSettings" ("userId" TEXT NOT NULL PRIMARY KEY, "aiDisabled" BOOLEAN NOT NULL DEFAULT false, "updatedAt" DATETIME NOT NULL)`
+      );
+      const settings = await prisma.chatSettings.findUnique({
+        where: { userId },
+        select: { aiDisabled: true },
+      });
+      aiDisabled = settings?.aiDisabled ?? false;
+    } catch {
+      // Default to AI on.
+    }
+    return NextResponse.json({ messages, aiDisabled });
   }
 
   // Conversation list: every user with at least one message, with the most
@@ -88,6 +101,25 @@ export async function POST(req: NextRequest) {
   if (guard.error) return NextResponse.json(guard.error, { status: guard.status });
 
   const body = await req.json();
+
+  // Toggle AI on/off for a conversation.
+  if (typeof body.userId === "string" && typeof body.aiDisabled === "boolean") {
+    const user = await prisma.user.findUnique({ where: { id: body.userId }, select: { id: true } });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    try {
+      await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "ChatSettings" ("userId" TEXT NOT NULL PRIMARY KEY, "aiDisabled" BOOLEAN NOT NULL DEFAULT false, "updatedAt" DATETIME NOT NULL)`;
+      await prisma.chatSettings.upsert({
+        where: { userId: body.userId },
+        update: { aiDisabled: body.aiDisabled },
+        create: { userId: body.userId, aiDisabled: body.aiDisabled },
+      });
+    } catch (e) {
+      console.error("[admin-chat] toggle AI failed:", e);
+      return NextResponse.json({ error: "Failed to toggle AI", detail: String(e) }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, aiDisabled: body.aiDisabled });
+  }
+
   const userId = typeof body.userId === "string" ? body.userId : "";
   const content = typeof body.content === "string" ? body.content.trim().slice(0, 2000) : "";
   if (!userId || !content) {

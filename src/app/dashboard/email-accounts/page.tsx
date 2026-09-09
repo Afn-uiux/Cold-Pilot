@@ -7,7 +7,7 @@ import ConfirmModal from "@/components/confirm-modal";
 import ReconnectModal from "@/components/reconnect-modal";
 import AccountsConnector from "@/components/accounts-connector";
 
-type Account = { id: string; email: string; provider: string; sent: number; dailySendLimit: number; warmupEnabled: boolean; warmupSent?: number; health?: number; healthScore?: number; status: string; smtpUser?: string | null; smtpHost?: string | null; smtpPort?: number | null; imapHost?: string | null; imapPort?: number | null; imapUser?: string | null; };
+type Account = { id: string; email: string; provider: string; sent: number; sentToday?: number; dailySendLimit: number; warmupEnabled: boolean; warmupSent?: number; health?: number; healthScore?: number; status: string; smtpUser?: string | null; smtpHost?: string | null; smtpPort?: number | null; imapHost?: string | null; imapPort?: number | null; imapUser?: string | null; };
 
 export default function EmailAccountsPage() {
   const router = useRouter();
@@ -75,8 +75,7 @@ export default function EmailAccountsPage() {
                 <tr>
                   <th>Email</th>
                   <th>Status</th>
-                  <th>Emails Sent</th>
-                  <th>Daily Limit</th>
+                  <th className="whitespace-nowrap">Emails Sent</th>
                   <th>Warmup</th>
                   <th>Health Score</th>
                   <th></th>
@@ -95,8 +94,10 @@ export default function EmailAccountsPage() {
                         {a.status === "error" ? "Needs reconnection" : "Active"}
                       </span>
                     </td>
-                    <td className="text-muted">{a.sent ?? 0}</td>
-                    <td className="text-muted">{a.dailySendLimit}</td>
+                    <td className="text-muted">
+                      <span className="font-medium text-ink">{a.sentToday ?? 0}</span>
+                      <span className="text-muted-2">/30</span>
+                    </td>
                     <td>
                       <button onClick={e => { e.stopPropagation(); handleWarmupToggle(a.id); }} disabled={toggling.has(a.id)}
                         className={`relative w-9 h-5 rounded-full transition-colors align-middle ${a.warmupEnabled ? "bg-blue-accent" : "bg-border"} ${toggling.has(a.id) ? "opacity-50" : ""}`}>

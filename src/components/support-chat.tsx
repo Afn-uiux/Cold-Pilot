@@ -110,6 +110,10 @@ export default function SupportChat() {
         body: JSON.stringify({ message: trimmed }),
       });
       const data = await res.json().catch(() => ({}));
+      // Empty reply means admin disabled AI (human takeover) — don't show a bubble.
+      if (typeof data.reply === "string" && data.reply.trim() === "") {
+        return;
+      }
       const reply = data.reply || "Sorry, I hit a snag. Try again in a moment — or reach us at hello@usecoldpilot.com.";
       setMessages((m) => [...m, { role: "assistant", content: reply }]);
     } catch {

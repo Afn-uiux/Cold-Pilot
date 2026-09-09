@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import ConfirmModal from "@/components/confirm-modal";
 import Select from "@/components/select";
 import { Search01Icon } from "@/components/icons/search-01";
@@ -73,6 +73,7 @@ function getEmailProvider(email: string) {
 
 export default function LeadsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const urlCampaignId = searchParams.get("campaignId") || "";
   const { toast } = useToast();
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -241,7 +242,7 @@ export default function LeadsPage() {
         body: JSON.stringify({ leads: lines.map(email => ({ email })), campaignId: importCampaignId || undefined }),
       });
       const result = await res.json();
-      if (result.imported > 0) {
+      if (!result.error && !result.firstError) {
         setResultAndClose(result);
         const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
         const fresh = await fetch(freshUrl).then(r => r.json());
@@ -256,10 +257,13 @@ export default function LeadsPage() {
     }
   }
 
-  function setResultAndClose(result: { imported: number }) {
-    if (result.imported > 0) {
+  function setResultAndClose(result: { imported?: number; error?: string; firstError?: string }) {
+    if (!result.error && !result.firstError) {
       setShowImport(false);
       setImportResult(null);
+      setImportCampaignId("");
+      toast(`${result.imported ?? 0} lead${(result.imported ?? 0) === 1 ? "" : "s"} imported`, "success");
+      if (urlCampaignId) router.replace(`/dashboard/campaigns/${urlCampaignId}?tab=leads`);
     } else {
       setImportResult(result);
     }
@@ -275,7 +279,7 @@ export default function LeadsPage() {
       if (importCampaignId) formData.append("campaignId", importCampaignId);
       const res = await fetch("/api/leads/import", { method: "POST", body: formData });
       const result = await res.json();
-      if (result.imported > 0) {
+      if (!result.error && !result.firstError) {
         setResultAndClose(result);
         const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
         const fresh = await fetch(freshUrl).then(r => r.json());
@@ -301,7 +305,7 @@ export default function LeadsPage() {
         body: JSON.stringify({ url: linkUrl, campaignId: importCampaignId || undefined }),
       });
       const result = await res.json();
-      if (result.imported > 0) {
+      if (!result.error && !result.firstError) {
         setResultAndClose(result);
         const freshUrl = urlCampaignId ? `/api/leads?campaignId=${urlCampaignId}` : "/api/leads";
         const fresh = await fetch(freshUrl).then(r => r.json());

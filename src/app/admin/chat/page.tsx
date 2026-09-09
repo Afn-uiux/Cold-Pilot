@@ -33,6 +33,8 @@ export default function AdminChatPage() {
   const [threadLoading, setThreadLoading] = useState(false);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [aiDisabled, setAiDisabled] = useState(false);
+  const [togglingAI, setTogglingAI] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,6 +59,7 @@ export default function AdminChatPage() {
     const res = await fetch(`/api/admin/chat?userId=${encodeURIComponent(userId)}`);
     const data = await res.json();
     setMessages(data.messages || []);
+    setAiDisabled(data.aiDisabled ?? false);
     setThreadLoading(false);
   }
 
@@ -94,6 +97,31 @@ export default function AdminChatPage() {
   }
 
   const active = conversations.find((c) => c.userId === selected) ?? null;
+
+  async function toggleAI() {
+    if (!selected || togglingAI) return;
+    setTogglingAI(true);
+    try {
+      const next = !aiDisabled;
+      const res = await fetch("/api/admin/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selected, aiDisabled: next }),
+      });
+      const text = await res.text();
+      let data: Record<string, unknown> = {};
+      try { data = JSON.parse(text); } catch { /* non-JSON */ }
+      if (data.ok) {
+        setAiDisabled(next);
+      } else {
+        console.error("[admin-chat] toggle failed:", res.status, text);
+      }
+    } catch (e) {
+      console.error("[admin-chat] toggle error:", e);
+    } finally {
+      setTogglingAI(false);
+    }
+  }
 
   return (
     <div>
@@ -168,12 +196,32 @@ export default function AdminChatPage() {
                   <p className="text-sm font-medium">{active.name || active.email}</p>
                   <p className="text-[11px] text-muted-2">{active.email}</p>
                 </div>
-                <a
-                  href={`/admin/users/${active.userId}`}
-                  className="btn btn-ghost btn-xs"
-                >
-                  View user
-                </a>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleAI}
+                    disabled={togglingAI}
+                    className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50"
+                    style={{ background: aiDisabled ? "#d1d5db" : "#22c55e" }}
+                    aria-label={aiDisabled ? "Enable AI" : "Disable AI"}
+                  >
+                    <span
+                      className={cn(
+                        "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out",
+                        aiDisabled ? "translate-x-0" : "translate-x-4"
+                      )}
+                    />
+                  </button>
+                  <span className="text-[11px] text-muted-2 whitespace-nowrap">
+                    {aiDisabled ? "AI off" : "AI on"}
+                  </span>
+                  <a
+                    href={`/admin/users/${active.userId}`}
+                    className="btn btn-ghost btn-xs"
+                  >
+                    View user
+                  </a>
+                </div>
               </div>
 
               <div ref={scrollRef} className="flex-1 min-h-[360px] max-h-[460px] overflow-y-auto px-4 py-4 space-y-3 bg-slate-50">
@@ -183,13 +231,13 @@ export default function AdminChatPage() {
                   <p className="text-center text-sm text-muted-2 py-10">Thread is empty.</p>
                 ) : (
                   messages.map((m) => (
-                    <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+                    <div key={m.id} className={cn("flex", m.role === "user" ? "justify-start" : "justify-end")}>
                       <div
                         className={cn(
                           "max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap",
                           m.role === "user"
-                            ? "bg-blue-600 text-white rounded-br-sm"
-                            : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm"
+                            ? "bg-white border border-slate-200 text-slate-800 rounded-bl-sm"
+                            : "bg-blue-600 text-white rounded-br-sm"
                         )}
                       >
                         {m.content}
@@ -215,10 +263,13 @@ export default function AdminChatPage() {
                 className="flex items-center gap-2 border-t px-3 py-2.5 bg-white"
                 style={{ borderColor: "var(--color-border)" }}
               >
+                {aiDisabled && (
+                  <span className="text-[11px] text-amber-600 whitespace-nowrap shrink-0">AI off — you&apos;re replying as Shola</span>
+                )}
                 <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Reply as support…"
+                  placeholder={aiDisabled ? "Reply manually…" : "Reply as support…"}
                   disabled={sending}
                   className="flex-1 text-sm outline-none placeholder:text-muted-2 disabled:opacity-60"
                 />

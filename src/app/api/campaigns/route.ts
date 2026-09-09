@@ -119,7 +119,7 @@ export async function PATCH(req: NextRequest) {
   ])];
 
   // Combined settings save — collect all known campaign fields
-  const campaignFields = ["status","accountIds","openTracking","clickTracking","dailySendLimit","slowRamp","rampStart","stopOnReply","plainTextOnly","firstEmailPlainText","crmOwner","customTags","minTimeBetween","randomExtraTime","maxNewLeads","prioritizeNewLeads","autoOptimizeAB","abWinningMetric","providerMatching","espRouting","stopOnCompanyReply","stopOnAutoReply","unsubscribeHeader","enableRiskyEmails","disableBounceProtect","ccAddresses","bccAddresses","startDate","endDate","noEndDate"];
+  const campaignFields = ["name","status","accountIds","openTracking","clickTracking","dailySendLimit","slowRamp","rampStart","stopOnReply","plainTextOnly","firstEmailPlainText","crmOwner","customTags","minTimeBetween","randomExtraTime","maxNewLeads","prioritizeNewLeads","autoOptimizeAB","abWinningMetric","providerMatching","espRouting","stopOnCompanyReply","stopOnAutoReply","unsubscribeHeader","enableRiskyEmails","disableBounceProtect","ccAddresses","bccAddresses","startDate","endDate","noEndDate"];
   const campaignData: any = {};
   for (const key of campaignFields) {
     if (body[key] !== undefined) {
