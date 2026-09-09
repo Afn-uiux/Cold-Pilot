@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  byAdmin?: boolean;
 }
 
 const SUGGESTIONS = [
@@ -17,28 +18,6 @@ const SUGGESTIONS = [
   "What costs credits?",
 ];
 
-function storageKey(userId?: string) {
-  return userId ? `coldpilot-chat:${userId}` : "coldpilot-chat:anon";
-}
-
-function loadHistory(userId?: string): ChatMessage[] {
-  try {
-    const raw = localStorage.getItem(storageKey(userId));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (m): m is ChatMessage =>
-        !!m &&
-        typeof m === "object" &&
-        (m.role === "user" || m.role === "assistant") &&
-        typeof m.content === "string"
-    );
-  } catch {
-    return [];
-  }
-}
-
 export default function SupportChat() {
   const { data: session } = useSession();
   const userId = session?.user?.id;
@@ -46,21 +25,36 @@ export default function SupportChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // History is stored server-side (so support can review it) — load it fresh
+  // so any admin replies show up here too.
   useEffect(() => {
-    setMessages(loadHistory(userId));
-    setLoaded(true);
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/support-chat");
+        const data = await res.json();
+        if (active && Array.isArray(data.messages)) {
+          const raw = data.messages as Array<{ role?: unknown; content?: unknown; byAdmin?: unknown }>;
+          setMessages(
+            raw
+              .filter(
+                (m): m is ChatMessage =>
+                  !!m &&
+                  (m.role === "user" || m.role === "assistant") &&
+                  typeof m.content === "string"
+              )
+              .map((m) => ({ role: m.role, content: m.content, byAdmin: !!m.byAdmin }))
+          );
+        }
+      } catch {}
+    })();
+    return () => {
+      active = false;
+    };
   }, [userId]);
-
-  useEffect(() => {
-    if (!loaded) return;
-    try {
-      localStorage.setItem(storageKey(userId), JSON.stringify(messages));
-    } catch {}
-  }, [messages, loaded, userId]);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -96,7 +90,7 @@ export default function SupportChat() {
           }
         }}
         aria-label="Open support chat"
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl shadow-blue-600/25 hover:bg-blue-700 transition-colors flex items-center justify-center"
+        className="fixed bottom-24 right-6 z-50 h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl shadow-blue-600/25 hover:bg-blue-700 transition-colors flex items-center justify-center"
       >
         <Message01Icon size={24} className="text-white" />
       </button>
@@ -126,7 +120,7 @@ export default function SupportChat() {
   }
 
   return (
-    <div ref={panelRef} className="fixed bottom-6 right-6 z-50 w-[calc(100vw-2rem)] max-w-sm">
+    <div ref={panelRef} className="fixed bottom-24 right-6 z-50 w-[calc(100vw-2rem)] max-w-sm">
       <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white">
           <div className="flex items-center gap-2.5">
@@ -153,16 +147,19 @@ export default function SupportChat() {
         <div ref={scrollRef} className="h-80 overflow-y-auto px-4 py-4 space-y-3 bg-slate-50">
           {messages.map((m, i) => (
             <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-              <div
-                className={cn(
-                  "max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap",
-                  m.role === "user"
-                    ? "bg-blue-600 text-white rounded-br-sm"
-                    : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm"
-                )}
-              >
-                {m.content}
-              </div>
+<div
+                  className={cn(
+                    "max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap",
+                    m.role === "user"
+                      ? "bg-blue-600 text-white rounded-br-sm"
+                      : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm"
+                  )}
+                >
+                  {m.content}
+                  {m.byAdmin && (
+                    <span className="block mt-1 text-[10px] text-muted-2">Shola</span>
+                  )}
+                </div>
             </div>
           ))}
           {loading && (

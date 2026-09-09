@@ -137,66 +137,92 @@ function receiverWeight(seedId: string): number {
   return 0.85 + u * 0.5;
 }
 
-async function pickWeightedSeed(
-  candidates: Array<{ id: string; email: string }>,
-): Promise<{ id: string; email: string }> {
-  const weights = candidates.map(c => receiverWeight(c.id));
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
-  for (let i = 0; i < candidates.length; i++) {
-    r -= weights[i];
-    if (r <= 0) return { id: candidates[i].id, email: candidates[i].email };
-  }
-  return { id: candidates[candidates.length - 1].id, email: candidates[candidates.length - 1].email };
-}
-
 async function receivedToday(seedId: string, todayStart: Date): Promise<number> {
   return prisma.warmupLog.count({
     where: { seedInboxId: seedId, receivedAt: { gte: todayStart } },
   });
 }
 
+async function peerReceivedToday(peerId: string, todayStart: Date): Promise<number> {
+  return prisma.warmupLog.count({
+    where: { seedMailboxId: peerId, sentAt: { gte: todayStart } },
+  });
+}
+
+// Peer (customer) inbound cap derived from their own warmup ramp — a mailbox's
+// inbox should never receive more warmup per day than its own warmup ceiling
+// (clamped to a modest, conservative band).
+function peerReceiveCap(peer: { warmupMax?: number; currentDailyVolume?: number }): number {
+  const max = Math.max(2, peer.warmupMax || peer.currentDailyVolume || 10);
+  return Math.min(15, max);
+}
+
+// Receivers are drawn from BOTH the platform seed pool and every eligible
+// warmup-enabled customer mailbox, so seeds and customer inboxes warm each
+// other in both directions. Seeds carry a mild weight bias — the owned pool
+// stays the self-sustaining backbone even with zero customers — but customers
+// are always in the running once their warmup is on.
 async function pickReceiver(
   excludeIds: Set<string>,
   _seedsCount: number,
   receiveCap: number,
   todayStart: Date,
 ): Promise<Receiver | null> {
-  // May send to another seed OR an eligible customer mailbox.
   const seeds = await prisma.seedInbox.findMany({
     where: { status: "active" },
     select: { id: true, email: true, lastUsedAt: true },
     orderBy: { lastUsedAt: "asc" },
   });
   // Exclude receivers already at their receive cap so no seed gets flooded.
-  const candidates = [];
+  const seedPool: Array<{ id: string; email: string }> = [];
   for (const s of seeds) {
     if (excludeIds.has(s.id)) continue;
     if (await receivedToday(s.id, todayStart) >= receiveCap) continue;
-    candidates.push(s);
-  }
-  if (candidates.length > 0) {
-    const s = await pickWeightedSeed(candidates);
-    return { kind: "seed", id: s.id, email: s.email };
+    seedPool.push({ id: s.id, email: s.email });
   }
 
+  // Eligible customer mailboxes: warmup on, entitled (trial/paid), healthy as
+  // receivers, not used recently, and under their own inbound cap.
   const peers = await prisma.emailAccount.findMany({
     where: { status: "active", warmupEnabled: true, deletedAt: null, user: { deletedAt: null } },
     select: {
       id: true,
       email: true,
+      warmupMax: true,
+      currentDailyVolume: true,
       healthScore: true,
       healthState: true,
       warmupBounceFlag: true,
       user: { select: { plan: true, trialEndsAt: true, trialVoided: true, deletedAt: true } },
     },
   });
-  const eligiblePeers = peers.filter(
-    p => !excludeIds.has(p.id) && isEntitledToWarmup(p.user) && isHealthyPeerReceiver(p),
-  );
-  if (eligiblePeers.length === 0) return null;
-  const p = eligiblePeers[Math.floor(Math.random() * eligiblePeers.length)];
-  return { kind: "peer", id: p.id, email: p.email };
+  const peerPool: Array<{ id: string; email: string }> = [];
+  for (const p of peers) {
+    if (excludeIds.has(p.id)) continue;
+    if (!isEntitledToWarmup(p.user) || !isHealthyPeerReceiver(p)) continue;
+    if (await peerReceivedToday(p.id, todayStart) >= peerReceiveCap(p)) continue;
+    peerPool.push({ id: p.id, email: p.email });
+  }
+
+  if (seedPool.length === 0 && peerPool.length === 0) return null;
+
+  // Weighted pick across the merged pool. All mailbox types share the equal
+  // per-id weighting — the selection split follows the actual pool composition,
+  // so seeds dominate when the platform is idle and customers carry more of the
+  // traffic as their numbers grow. Flooding is already bounded by the per-type
+  // receive caps above, so no extra bias is needed.
+  const pool = [
+    ...seedPool.map(c => ({ c, weight: receiverWeight(c.id), kind: "seed" as const })),
+    ...peerPool.map(c => ({ c, weight: receiverWeight(c.id), kind: "peer" as const })),
+  ];
+  const total = pool.reduce((a, p) => a + p.weight, 0);
+  let r = Math.random() * total;
+  for (const p of pool) {
+    r -= p.weight;
+    if (r <= 0) return { kind: p.kind, id: p.c.id, email: p.c.email };
+  }
+  const last = pool[pool.length - 1];
+  return { kind: last.kind, id: last.c.id, email: last.c.email };
 }
 
 export async function processSeedSends(): Promise<{ sent: number; failed: number }> {
@@ -250,19 +276,19 @@ export async function processSeedSends(): Promise<{ sent: number; failed: number
     const target = rampedDailyTarget(seed);
     if (sentToday >= target) continue;
 
-    // Humanizing cadence: only send if this seed is behind its smooth
-    // daily pace, so sends come in irregular bursts rather than on a
-    // fixed clockwork interval. Skip sending when it is at or ahead of
-    // the pace it should be at for this point in the schedule window.
-    const endMin = parseTimeOfDay(seed.scheduleEnd || "17:00");
+    // Slot-based cadence: spread the day's target evenly across the schedule
+    // window instead of dumping sends in the first minutes. Each send fires
+    // near its slot offset (with jitter), so seeds look human — a couple of
+    // sends in the morning, the rest trickling through the window.
     const startMin = parseTimeOfDay(seed.scheduleStart || "09:00");
-    const windowLen = Math.max(60, endMin - startMin);
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    const fraction = Math.max(0, Math.min(1, (nowMin - startMin) / windowLen));
-    const expectsByNow = fraction * target;
-    const slack = Math.max(1, Math.round(expectsByNow * 0.4));
-    if (sentToday > expectsByNow + slack) {
-      // Already ahead of pace — let some time pass without sending.
+    const endMin = parseTimeOfDay(seed.scheduleEnd || "17:00");
+    const windowLen = endMin === startMin ? 1440 : ((endMin - startMin) + 1440) % 1440;
+    const slotMinutes = windowLen / Math.max(1, target);
+    let slotOffset = (sentToday + 0.5) * slotMinutes;
+    slotOffset += (Math.random() - 0.5) * slotMinutes * 0.3; // ±15% slot jitter
+    const nowOffset = ((now.getHours() * 60 + now.getMinutes()) - startMin + 1440) % 1440;
+    if (nowOffset < slotOffset) {
+      // This slot hasn't come yet — let the day proceed.
       continue;
     }
 

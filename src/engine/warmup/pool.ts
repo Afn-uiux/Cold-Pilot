@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
-import { THROTTLED_MAX } from "./health";
 
 // A warmup recipient can be either a platform-owned SeedInbox or another
 // user's eligible mailbox ("peer"). This file owns the logic for picking a
@@ -25,12 +24,11 @@ export function isEntitledToWarmup(user: {
   return !!user.trialEndsAt && user.trialEndsAt.getTime() > Date.now();
 }
 
-// A sender's warmup only pairs with a healthy peer receiver. A mailbox with a
-// measured degraded placement (<60%) or a hard-bounce flag (>=1.8%) is kept
-// OUT of the peer-receiver pool so it recovers by sending to platform seeds
-// only — healthy senders never pair with a bad-reputation mailbox, mirroring
-// the industry "below 60% is broken" and "bounce rate pauses the inbox" rules.
-// A mailbox that has simply not sent yet (no measurement) is fine to receive.
+// Warmup exists to BUILD reputation, so a mailbox's own placement score never
+// disqualifies it from the pool — a low score is a reason to participate more,
+// not less. The only receiver exclusion is the hard bounce-protection flag
+// (>=1.8% hard-bounce rate): such a mailbox is paused from pairing with peers
+// so it doesn't poison other senders' reputation, and recovers via seeds only.
 export function isHealthyPeerReceiver(m: {
   healthState?: string | null;
   healthScore?: number | null;
@@ -39,12 +37,6 @@ export function isHealthyPeerReceiver(m: {
   // Hard-bounce flagged mailboxes recover via seeds only — don't route peer
   // warmup into an inbox whose bounce signal has tripped.
   if (m.warmupBounceFlag) return false;
-  if (m.healthState === "throttled") return false;
-  if (typeof m.healthScore === "number" && Number.isFinite(m.healthScore)) {
-    // Only gate on measured placement (score>0 implies the mailbox has sent in
-    // the window). A 0 score means "not yet measured" — acceptable as receiver.
-    if (m.healthScore > 0 && m.healthScore < THROTTLED_MAX) return false;
-  }
   return true;
 }
 

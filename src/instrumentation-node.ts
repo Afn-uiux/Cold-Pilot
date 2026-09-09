@@ -17,8 +17,24 @@ const { sweepPlanExpiries } = await import("@/lib/plan-expiry");
 const leaderToken = newLeaderToken();
 let lastSummaryDate = "";
 let lastHealthCheckHour = -1;
+// Re-entrancy guard: setInterval fires every 2 minutes regardless of whether
+// the previous async tick has finished. A tick that runs long (IMAP scans,
+// seed sends with randomized bleed times, campaign sends) must never overlap
+// the next one — overlapping ticks race the min-wait / daily-count checks and
+// duplicate sends. When a tick is still in flight, skip the new one entirely.
+let tickInFlight = false;
 
 async function tick() {
+  if (tickInFlight) return;
+  tickInFlight = true;
+  try {
+    await tickInner();
+  } finally {
+    tickInFlight = false;
+  }
+}
+
+async function tickInner() {
   try {
     // Leader election: only the instance holding the live lease may run
     // background work. Without this, every deployed instance would execute

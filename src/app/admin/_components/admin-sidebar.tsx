@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { forwardRef, useRef } from "react";
+import { forwardRef, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Logo from "@/components/logo";
 import { Home01Icon } from "@/components/icons/home-01";
@@ -13,24 +13,53 @@ import { AlertCircleIcon } from "@/components/icons/alert-circle";
 import { SentIcon } from "@/components/icons/sent";
 import { TrendUpIcon } from "@/components/icons/trend-up";
 import { Mail01Icon } from "@/components/icons/mail-01";
+import { Message01Icon } from "@/components/icons/message-01";
 import { ArrowLeft02Icon } from "@/components/icons/arrow-left-02";
+import { ChevronDownIcon } from "@/components/icons/chevron-down";
 import { IconTarget } from "@/components/icon-target";
 import type { AnimatedIconHandle } from "@/lib/use-icon-animation";
 
-const LINKS = [
+type NavLink = { href: string; label: string; icon: string };
+
+const MAIN_LINKS: NavLink[] = [
   { href: "/admin", label: "Overview", icon: "home" },
   { href: "/admin/users", label: "Users", icon: "users" },
-  { href: "/admin/verification", label: "Verification", icon: "verify" },
-  { href: "/admin/deliverability", label: "Deliverability", icon: "shield" },
-  { href: "/admin/sending", label: "Sending", icon: "sent" },
+  { href: "/admin/chat", label: "Chat", icon: "message" },
   { href: "/admin/credits", label: "Credits", icon: "trend" },
-  { href: "/admin/seeds", label: "Seeds", icon: "inbox" },
-  { href: "/admin/email-previews", label: "Templates", icon: "mail" },
-  { href: "/admin/login-attempts", label: "Login attempts", icon: "alert" },
+];
+
+const GROUPS: { key: string; label: string; links: NavLink[] }[] = [
+  {
+    key: "campaigns",
+    label: "Campaigns",
+    links: [
+      { href: "/admin/sending", label: "Sending", icon: "sent" },
+      { href: "/admin/deliverability", label: "Deliverability", icon: "shield" },
+      { href: "/admin/email-previews", label: "Templates", icon: "mail" },
+      { href: "/admin/seeds", label: "Seeds", icon: "inbox" },
+    ],
+  },
+  {
+    key: "security",
+    label: "Security",
+    links: [
+      { href: "/admin/verification", label: "Verification", icon: "verify" },
+      { href: "/admin/login-attempts", label: "Login attempts", icon: "alert" },
+    ],
+  },
 ];
 
 export default function AdminSidebar() {
   const pathname = usePathname();
+  const [open, setOpen] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    for (const g of GROUPS) {
+      init[g.key] = g.links.some(
+        (l) => pathname === l.href || pathname.startsWith(l.href)
+      );
+    }
+    return init;
+  });
 
   return (
     <aside
@@ -42,10 +71,8 @@ export default function AdminSidebar() {
         <span className="text-[10px] tracking-widest uppercase text-muted-2 ml-2">Admin</span>
       </div>
 
-      <div className="font-medium text-[10px] tracking-widest uppercase text-muted-2 px-6 pb-2">Menu</div>
-
-      <nav className="flex flex-col gap-0.5 flex-1">
-        {LINKS.map((link) => {
+      <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
+        {MAIN_LINKS.map((link) => {
           const isActive = pathname === link.href || (link.href !== "/admin" && pathname.startsWith(link.href));
           return (
             <AdminNavLink
@@ -55,6 +82,47 @@ export default function AdminSidebar() {
               icon={<NavIcon name={link.icon} />}
               isActive={isActive}
             />
+          );
+        })}
+
+        {GROUPS.map((group) => {
+          const isOpen = open[group.key];
+          const hasActive = group.links.some(
+            (l) => pathname === l.href || pathname.startsWith(l.href)
+          );
+          return (
+            <div key={group.key} className="mt-1.5">
+              <button
+                type="button"
+                onClick={() => setOpen((o) => ({ ...o, [group.key]: !o[group.key] }))}
+                className={`flex items-center gap-3 w-full px-6 py-2 text-xs font-medium tracking-wide uppercase transition-colors ${
+                  hasActive ? "text-blue-accent" : "text-muted-2 hover:text-blue-accent"
+                }`}
+              >
+                <span className="flex-1 text-left">{group.label}</span>
+                <ChevronDownIcon
+                  size={12}
+                  className={`transition-transform duration-200 ${isOpen ? "" : "-rotate-90"}`}
+                />
+              </button>
+              {isOpen && (
+                <div className="flex flex-col gap-0.5">
+                  {group.links.map((link) => {
+                    const isActive = pathname === link.href || pathname.startsWith(link.href);
+                    return (
+                      <AdminNavLink
+                        key={link.href}
+                        href={link.href}
+                        label={link.label}
+                        icon={<NavIcon name={link.icon} />}
+                        isActive={isActive}
+                        nested
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </nav>
@@ -77,18 +145,20 @@ function AdminNavLink({
   label,
   icon,
   isActive,
+  nested,
 }: {
   href: string;
   label: string;
   icon: React.ReactNode;
   isActive: boolean;
+  nested?: boolean;
 }) {
   const iconRef = useRef<AnimatedIconHandle>(null);
   return (
     <Link
       href={href}
       onMouseEnter={() => iconRef.current?.startAnimation()}
-      className={`flex items-center gap-3 px-6 py-2.5 text-sm relative transition-colors ${
+      className={`flex items-center gap-3 ${nested ? "pl-10 pr-6" : "px-6"} py-2 text-sm relative transition-colors ${
         isActive ? "text-blue-accent" : "text-muted hover:text-blue-accent"
       }`}
     >
@@ -111,6 +181,7 @@ const NavIcon = forwardRef<AnimatedIconHandle, { name: string }>(({ name }, ref)
     case "sent": return <SentIcon ref={ref} size={16} />;
     case "trend": return <TrendUpIcon ref={ref} size={16} />;
     case "mail": return <Mail01Icon ref={ref} size={16} />;
+    case "message": return <Message01Icon ref={ref} size={16} />;
     case "alert": return <AlertCircleIcon ref={ref} size={16} />;
     default: return null;
   }

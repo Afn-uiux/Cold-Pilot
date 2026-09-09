@@ -51,6 +51,20 @@ async function callAI(messages: { role: string; content: string }[]): Promise<st
   throw new Error("AI rate limit exceeded");
 }
 
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const messages = await prisma.chatMessage.findMany({
+    where: { userId: session.user.id },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, role: true, byAdmin: true, content: true, createdAt: true },
+  });
+  return NextResponse.json({ messages });
+}
+
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -60,6 +74,7 @@ export async function POST(req: Request) {
   // Support chat is a free, always-on feature (no credits spent) but still
   // needs a burst cap so the shared DeepSeek key isn't hammered.
   const rl = await rateLimitAsync(`support:${session.user.id}`, { max: 20, windowMs: 60_000 });
+  const currentUserId = session.user.id;
   if (!rl.ok) {
     return NextResponse.json(
       { error: "You're messaging us very quickly. Slow down a moment and try again." },
@@ -97,14 +112,22 @@ export async function POST(req: Request) {
     });
   }
 
+  // Persist the user's message so the thread is visible in the admin inbox.
+  await prisma.chatMessage.create({
+    data: { userId: currentUserId, role: "user", content: message },
+  });
+
+  async function persistAssistant(content: string) {
+    await prisma.chatMessage.create({
+      data: { userId: currentUserId, role: "assistant", content },
+    });
+  }
+
   if (!AI_API_KEY) {
-    return NextResponse.json(
-      {
-        reply:
-          "Thanks for reaching out! I'd normally answer right here, but our AI assistant isn't configured on this instance yet. Please email support at hello@usecoldpilot.com and we'll get back to you quickly. You can also keep this chat open — it'll work as soon as AI is connected.",
-      },
-      { status: 200 }
-    );
+    const reply =
+      "Thanks for reaching out! I'd normally answer right here, but our AI assistant isn't configured on this instance yet. Please email support at hello@usecoldpilot.com and we'll get back to you quickly. You can also keep this chat open — it'll work as soon as AI is connected.";
+    await persistAssistant(reply);
+    return NextResponse.json({ reply }, { status: 200 });
   }
 
   const plan = getPlan(user?.plan);
@@ -151,15 +174,13 @@ export async function POST(req: Request) {
       { role: "system", content: systemPrompt },
       { role: "user", content: message },
     ]);
+    await persistAssistant(reply);
     return NextResponse.json({ reply });
   } catch (err) {
     console.error("[support-chat] AI call failed:", (err as Error).message);
-    return NextResponse.json(
-      {
-        reply:
-          "I'm having a quick technical hiccup on my side — give me a few seconds and try again. If it keeps happening, you can always reach us directly at hello@usecoldpilot.com and we'll take care of you quickly!",
-      },
-      { status: 200 }
-    );
+    const reply =
+      "I'm having a quick technical hiccup on my side — give me a few seconds and try again. If it keeps happening, you can always reach us directly at hello@usecoldpilot.com and we'll take care of you quickly!";
+    await persistAssistant(reply);
+    return NextResponse.json({ reply }, { status: 200 });
   }
 }

@@ -54,8 +54,43 @@ export async function refreshMicrosoftAccessToken(refreshToken: string): Promise
   }
 }
 
-// Resolve the IMAP identity for an account: plain SMTP/IMAP creds when present,
-// otherwise OAuth XOAUTH2 (Gmail or Microsoft refresh token -> access token).
+// Infer a provider from the account email domain. Used when the stored
+// `provider` field is null/"other" or the account only carries SMTP creds.
+function providerFromEmail(email: string): string {
+  const domain = (email.split("@")[1] || "").toLowerCase();
+  if (domain.includes("gmail") || domain.includes("googlemail")) return "gmail";
+  if (domain.includes("outlook") || domain.includes("hotmail") || domain.includes("live")) return "outlook";
+  if (domain.includes("yahoo")) return "yahoo";
+  if (domain.includes("proton")) return "proton";
+  return "other";
+}
+
+// Provider default IMAP endpoints. App-password / SMTP-only accounts don't
+// store IMAP fields, but the same app password authenticates IMAP for the
+// major providers, so we derive the endpoint from the provider.
+function imapDefaultsFor(provider: string): { host: string; port: number } | null {
+  switch (provider.toLowerCase()) {
+    case "gmail":
+      return { host: "imap.gmail.com", port: 993 };
+    case "outlook":
+    case "microsoft":
+    case "exchange":
+      return { host: "outlook.office365.com", port: 993 };
+    case "yahoo":
+      return { host: "imap.mail.yahoo.com", port: 993 };
+    case "proton":
+      return null; // Proton requires the Bridge — no plain IMAP.
+    default:
+      return null;
+  }
+}
+
+// Resolve the IMAP identity for an account. Handles every way a mailbox can
+// be attached:
+//   1. Plain IMAP creds (host/user/pass present)  -> direct login
+//   2. Gmail OAuth (gmailToken)                   -> XOAUTH2 access token
+//   3. Microsoft OAuth (microsoft token)          -> XOAUTH2 access token
+//   4. App-password / SMTP-only accounts          -> same creds to provider IMAP
 // Returns null when the account can't be reached — callers should skip it.
 export async function resolveImapAuth(account: DecryptedAccount): Promise<{
   host: string;
@@ -64,7 +99,12 @@ export async function resolveImapAuth(account: DecryptedAccount): Promise<{
 } | null> {
   if (!account.email) return null;
 
-  if (account.provider === "Gmail" && account.gmailToken) {
+  const provider = (account.provider || providerFromEmail(account.email)).toLowerCase();
+  const isGmail = provider === "gmail" || providerFromEmail(account.email) === "gmail";
+  const isMicrosoft =
+    provider === "outlook" || provider === "microsoft" || provider === "exchange";
+
+  if (isGmail && account.gmailToken) {
     const accessToken = await refreshGoogleAccessToken(account.gmailToken);
     if (!accessToken) return null;
     return {
@@ -74,7 +114,7 @@ export async function resolveImapAuth(account: DecryptedAccount): Promise<{
     };
   }
 
-  if (account.microsoftToken || account.microsoftRefreshToken) {
+  if ((account.microsoftToken || account.microsoftRefreshToken) && isMicrosoft) {
     const accessToken = await refreshMicrosoftAccessToken(account.microsoftRefreshToken);
     if (!accessToken) return null;
     return {
@@ -84,12 +124,28 @@ export async function resolveImapAuth(account: DecryptedAccount): Promise<{
     };
   }
 
-  if (!account.imapHost || !account.imapUser || !account.imapPass) return null;
-  return {
-    host: account.imapHost,
-    port: account.imapPort || 993,
-    auth: { user: account.imapUser, pass: account.imapPass },
-  };
+  // Explicit IMAP creds always win.
+  if (account.imapHost && account.imapUser && account.imapPass) {
+    return {
+      host: account.imapHost,
+      port: account.imapPort || 993,
+      auth: { user: account.imapUser, pass: account.imapPass },
+    };
+  }
+
+  // App-password / SMTP-only accounts: reuse the SMTP identity against the
+  // provider's IMAP endpoint. App passwords work across SMTP + IMAP.
+  if (account.smtpUser && account.smtpPass) {
+    const defaults = imapDefaultsFor(provider);
+    if (!defaults) return null;
+    return {
+      host: defaults.host,
+      port: defaults.port,
+      auth: { user: account.smtpUser, pass: account.smtpPass },
+    };
+  }
+
+  return null;
 }
 
 // Open an IMAP connection to a mailbox using its stored creds or OAuth. SSRF-

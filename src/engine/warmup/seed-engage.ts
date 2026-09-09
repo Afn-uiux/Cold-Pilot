@@ -71,12 +71,17 @@ async function connect(account: { imapHost: string; imapPort: number; imapUser: 
 // openImap handles both; returns null when unreachable so the loop skips it.
 async function connectForRead(account: any): Promise<ImapFlow | null> {
   if (account.imapUser && account.imapPass) {
-    return connect({
-      imapHost: account.imapHost,
-      imapPort: account.imapPort,
-      imapUser: account.imapUser,
-      imapPass: account.imapPass,
-    });
+    try {
+      return await connect({
+        imapHost: account.imapHost,
+        imapPort: account.imapPort,
+        imapUser: account.imapUser,
+        imapPass: account.imapPass,
+      });
+    } catch {
+      // Stale/incorrect IMAP creds — fall through to the SMTP/OAuth path,
+      // which may still hold a working app password or refresh token.
+    }
   }
   return openImap(account);
 }

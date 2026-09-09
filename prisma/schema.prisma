@@ -8,79 +8,80 @@ datasource db {
 }
 
 model User {
-  id                  String   @id @default(cuid())
-  name                String?
-  email               String   @unique
-  emailVerified       DateTime?
-  image               String?
-  password            String?
-  role                String   @default("user")
-  completedOnboarding Boolean  @default(false)
-  onboardingSource    String?
-  onboardingWebsite   String?
-  onboardingGoals     String?
-  totpSecret          String?
-    plan                String   @default("free")
-    billingCurrency     String   @default("NGN")
-    creditBalance       Float    @default(0)
-    // Portion of creditBalance that came from the signup bonus (free, revocable
-    // at trial expiry) as opposed to purchased credits (never expire). Spends
-    // draw down the free reserve FIRST so purchased credits survive the trial.
-    freeCreditReserve   Float    @default(0)
-    signupCreditsGranted Boolean @default(false)
-    trialEndsAt         DateTime?
-    planExpiresAt       DateTime?
-    planReminderSentDays Int     @default(0)
-    bachsCustomerId     String?
-    bachsSubscriptionId String?
-  deletedAt           DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                   String    @id @default(cuid())
+  name                 String?
+  email                String    @unique
+  emailVerified        DateTime?
+  image                String?
+  password             String?
+  role                 String    @default("user")
+  completedOnboarding  Boolean   @default(false)
+  onboardingSource     String?
+  onboardingWebsite    String?
+  onboardingGoals      String?
+  totpSecret           String?
+  plan                 String    @default("free")
+  billingCurrency      String    @default("NGN")
+  creditBalance        Float     @default(0)
+  // Portion of creditBalance that came from the signup bonus (free, revocable
+  // at trial expiry) as opposed to purchased credits (never expire). Spends
+  // draw down the free reserve FIRST so purchased credits survive the trial.
+  freeCreditReserve    Float     @default(0)
+  signupCreditsGranted Boolean   @default(false)
+  trialEndsAt          DateTime?
+  planExpiresAt        DateTime?
+  planReminderSentDays Int       @default(0)
+  bachsCustomerId      String?
+  bachsSubscriptionId  String?
+  deletedAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   // Trial abuse detection. trialVoided is sticky: once set the account never
   // gets a trial again. riskScore/riskStatus come from the signup risk gate.
-  trialVoided         Boolean  @default(false)
-  trialVoidReason     String?
-  trialVoidedAt       DateTime?
-  riskScore           Int      @default(0)
-  riskFlags           String   @default("[]")
-  riskStatus          String   @default("none")
-  deviceFingerprint   String?
-  signupIp            String?
+  trialVoided       Boolean   @default(false)
+  trialVoidReason   String?
+  trialVoidedAt     DateTime?
+  riskScore         Int       @default(0)
+  riskFlags         String    @default("[]")
+  riskStatus        String    @default("none")
+  deviceFingerprint String?
+  signupIp          String?
   // Signup provenance — where the account came from. Captured for email
   // signups at registration (UTM cookie + edge country header) and backfilled
   // for Google signups at the first verification-click (they can't read
   // request headers in the signIn callback, and must verify before use).
-  signupCountry       String?
-  signupSource        String?
-  signupReferrer      String?
-  signupUtmSource     String?
-  signupUtmMedium     String?
-  signupUtmCampaign   String?
-  signupUserAgent     String?
-  reviewedAt          DateTime?
+  signupCountry     String?
+  signupSource      String?
+  signupReferrer    String?
+  signupUtmSource   String?
+  signupUtmMedium   String?
+  signupUtmCampaign String?
+  signupUserAgent   String?
+  reviewedAt        DateTime?
 
-  campaigns     Campaign[]
-  leads         Lead[]
-  emailAccounts EmailAccount[]
-  templates     Template[]
-  apiKeys       ApiKey[]
-  webhooks      Webhook[]
-  integrations  Integration[]
-  pipelines     Pipeline[]
-  deals         Deal[]
-  tasks         Task[]
-  notifications Notification[]
-  suppressions  Suppression[]
-  accounts      Account[]
-  sessions      Session[]
+  campaigns          Campaign[]
+  leads              Lead[]
+  emailAccounts      EmailAccount[]
+  templates          Template[]
+  apiKeys            ApiKey[]
+  webhooks           Webhook[]
+  integrations       Integration[]
+  pipelines          Pipeline[]
+  deals              Deal[]
+  tasks              Task[]
+  notifications      Notification[]
+  suppressions       Suppression[]
+  accounts           Account[]
+  sessions           Session[]
   creditTransactions CreditTransaction[]
-  paymentEvents PaymentEvent[]
+  paymentEvents      PaymentEvent[]
   // No relation to GlobalLeadIntel: the shared registry is keyed by email
   // across all users, never owned by one.
-  mailboxIdentities MailboxIdentity[]
+  mailboxIdentities  MailboxIdentity[]
   signupSignals      SignupSignal[]
-  userSessions      UserSession[]
+  userSessions       UserSession[]
+  chatMessages       ChatMessage[]
 }
 
 // Permanent history of every connected mailbox. Keyed on the immutable
@@ -88,15 +89,15 @@ model User {
 // disconnects and account deletion. The profile that first claims a mailbox
 // owns it: any other profile reusing it gets its trial voided.
 model MailboxIdentity {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   provider          String
   providerAccountId String
   email             String
   firstSeenUserId   String
-  firstSeenAt       DateTime @default(now())
-  lastConnectedAt   DateTime @default(now())
+  firstSeenAt       DateTime  @default(now())
+  lastConnectedAt   DateTime  @default(now())
   disconnectedAt    DateTime?
-  disconnectCount   Int      @default(0)
+  disconnectCount   Int       @default(0)
 
   user User @relation(fields: [firstSeenUserId], references: [id], onDelete: Cascade)
 
@@ -202,234 +203,236 @@ model UserSession {
 }
 
 model EmailAccount {
-  id             String  @id @default(cuid())
-  userId         String
-  email          String
-  provider       String
-  smtpHost       String?
-  smtpPort       Int?
-  smtpUser       String?
-  smtpPass       String?
-  imapHost       String?
-  imapPort       Int?
-  imapUser       String?
-  imapPass       String?
-  gmailClientId  String?
-  gmailSecret    String?
-  gmailToken     String?
-  microsoftToken String?
-  microsoftRefreshToken String?
-  displayName    String?
-  domain         String?
-  warmupEnabled  Boolean @default(false)
-  warmupBase     Int     @default(2)
-  warmupIncrease Int     @default(2)
-  warmupMax      Int     @default(10)
-  warmupDays     Int     @default(127)
-  warmupFilterTag    String  @default("")
-  disableSlowWarmup  Boolean @default(false)
-  warmupReplyRate    Int     @default(30)
-  readEmulation       Boolean @default(false)
-  warmupOpenRate      Int     @default(100)
-  warmupSpamProtection Int    @default(100)
-  warmupMarkImportant  Int    @default(0)
-  customTrackingDomain     String  @default("")
+  id                         String  @id @default(cuid())
+  userId                     String
+  email                      String
+  provider                   String
+  smtpHost                   String?
+  smtpPort                   Int?
+  smtpUser                   String?
+  smtpPass                   String?
+  imapHost                   String?
+  imapPort                   Int?
+  imapUser                   String?
+  imapPass                   String?
+  gmailClientId              String?
+  gmailSecret                String?
+  gmailToken                 String?
+  microsoftToken             String?
+  microsoftRefreshToken      String?
+  displayName                String?
+  domain                     String?
+  warmupEnabled              Boolean @default(false)
+  warmupBase                 Int     @default(2)
+  warmupIncrease             Int     @default(2)
+  warmupMax                  Int     @default(10)
+  warmupDays                 Int     @default(127)
+  warmupFilterTag            String  @default("")
+  disableSlowWarmup          Boolean @default(false)
+  warmupReplyRate            Int     @default(30)
+  readEmulation              Boolean @default(false)
+  warmupOpenRate             Int     @default(100)
+  warmupSpamProtection       Int     @default(100)
+  warmupMarkImportant        Int     @default(0)
+  customTrackingDomain       String  @default("")
   warmupCustomTrackingDomain Boolean @default(false)
-  warmupStartTime    String  @default("08:00")
-  warmupEndTime   String @default("17:00")
-  minWaitTime    Int     @default(60)
-  timezone       String  @default("UTC")
+  warmupStartTime            String  @default("08:00")
+  warmupEndTime              String  @default("17:00")
+  minWaitTime                Int     @default(60)
+  timezone                   String  @default("UTC")
 
-  warmupAiEnabled Boolean @default(false)
-  healthScore    Float   @default(100)
-  healthState    String  @default("healthy")
-  warmupBounceRate Float  @default(0)
-  warmupBounceFlag  Boolean @default(false)
-  isPaused       Boolean @default(false)
-  warmupWeek     Int     @default(1)
-  currentDailyVolume Int  @default(5)
-  targetDailyVolume Int  @default(50)
-  dailySendLimit    Int       @default(30)
-  warmupStartedAt DateTime?
-  lastHealthCheckAt DateTime?
-  lastSentUid      Int?
-  status         String  @default("active")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  deletedAt      DateTime?
+  warmupAiEnabled    Boolean   @default(false)
+  healthScore        Float     @default(100)
+  healthState        String    @default("healthy")
+  warmupBounceRate   Float     @default(0)
+  warmupBounceFlag   Boolean   @default(false)
+  isPaused           Boolean   @default(false)
+  warmupWeek         Int       @default(1)
+  currentDailyVolume Int       @default(5)
+  targetDailyVolume  Int       @default(50)
+  dailySendLimit     Int       @default(30)
+  warmupStartedAt    DateTime?
+  lastHealthCheckAt  DateTime?
+  lastSentUid        Int?
+  status             String    @default("active")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
 
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  emailLogs     EmailLog[]
-  sentWarmupLogs    WarmupLog[] @relation("sentWarmupLogs")
-  receivedWarmupLogs WarmupLog[] @relation("receivedWarmupLogs")
-  sentWarmupContent WarmupContent[] @relation("sentWarmupContent")
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailLogs             EmailLog[]
+  sentWarmupLogs        WarmupLog[]     @relation("sentWarmupLogs")
+  receivedWarmupLogs    WarmupLog[]     @relation("receivedWarmupLogs")
+  sentWarmupContent     WarmupContent[] @relation("sentWarmupContent")
   receivedWarmupContent WarmupContent[] @relation("receivedWarmupContent")
-  bounceEvents  BounceEvent[]
+  bounceEvents          BounceEvent[]
 }
 
 model WarmupLog {
-  id               String    @id @default(cuid())
-  senderMailboxId  String?
-  senderInboxId    String?
-  seedMailboxId    String?
-  seedInboxId      String?
-  messageId        String?
-  subject          String?
-  bodyPreview      String?
-  bodyHtml         String?
-  sentAt           DateTime?
-  receivedAt       DateTime?
-  repliedAt        DateTime?
-  foundInSpam      Boolean   @default(false)
-  rescuedFromSpam  Boolean   @default(false)
-  markedImportant  Boolean   @default(false)
-  replyReceived    Boolean   @default(false)
-  bounceType       String?   // hard_bounce | soft_bounce | connection_error | auth_error | suppressed (warmup sends only)
-  status           String    @default("sent")
-  createdAt        DateTime  @default(now())
+  id              String    @id @default(cuid())
+  senderMailboxId String?
+  senderInboxId   String?
+  seedMailboxId   String?
+  seedInboxId     String?
+  messageId       String?
+  subject         String?
+  bodyPreview     String?
+  bodyHtml        String?
+  sentAt          DateTime?
+  receivedAt      DateTime?
+  repliedAt       DateTime?
+  foundInSpam     Boolean   @default(false)
+  rescuedFromSpam Boolean   @default(false)
+  markedImportant Boolean   @default(false)
+  replyReceived   Boolean   @default(false)
+  bounceType      String? // hard_bounce | soft_bounce | connection_error | auth_error | suppressed (warmup sends only)
+  status          String    @default("sent")
+  createdAt       DateTime  @default(now())
 
   // The sender is EITHER a user's mailbox (senderMailboxId) OR a platform seed
   // (senderInboxId) — one of the two is set.
   senderMailbox EmailAccount? @relation("sentWarmupLogs", fields: [senderMailboxId], references: [id], onDelete: SetNull)
-  senderInbox   SeedInbox? @relation("sentSeedWarmupLogs", fields: [senderInboxId], references: [id], onDelete: SetNull)
+  senderInbox   SeedInbox?    @relation("sentSeedWarmupLogs", fields: [senderInboxId], references: [id], onDelete: SetNull)
   // The receiver is EITHER another user's mailbox (peer warmup, seedMailboxId)
   // OR a platform-owned seed inbox (seedInboxId). One of the two is set.
   seedMailbox   EmailAccount? @relation("receivedWarmupLogs", fields: [seedMailboxId], references: [id], onDelete: SetNull)
-  seedInbox     SeedInbox? @relation("receivedSeedWarmupLogs", fields: [seedInboxId], references: [id], onDelete: SetNull)
+  seedInbox     SeedInbox?    @relation("receivedSeedWarmupLogs", fields: [seedInboxId], references: [id], onDelete: SetNull)
 }
+
 model WarmupContent {
-    id              String   @id @default(cuid())
-    senderMailboxId String
-    seedMailboxId   String?
-    seedInboxId     String?
-    contentHash     String
-    subjectPreview  String
-    bodyPreview     String
-    contentSource   String   @default("templates")
-    usedAt          DateTime @default(now())
+  id              String   @id @default(cuid())
+  senderMailboxId String
+  seedMailboxId   String?
+  seedInboxId     String?
+  contentHash     String
+  subjectPreview  String
+  bodyPreview     String
+  contentSource   String   @default("templates")
+  usedAt          DateTime @default(now())
 
-    senderMailbox EmailAccount @relation("sentWarmupContent", fields: [senderMailboxId], references: [id], onDelete: Cascade)
-    seedMailbox   EmailAccount? @relation("receivedWarmupContent", fields: [seedMailboxId], references: [id], onDelete: SetNull)
-    seedInbox     SeedInbox? @relation("receivedSeedWarmupContent", fields: [seedInboxId], references: [id], onDelete: SetNull)
+  senderMailbox EmailAccount  @relation("sentWarmupContent", fields: [senderMailboxId], references: [id], onDelete: Cascade)
+  seedMailbox   EmailAccount? @relation("receivedWarmupContent", fields: [seedMailboxId], references: [id], onDelete: SetNull)
+  seedInbox     SeedInbox?    @relation("receivedSeedWarmupContent", fields: [seedInboxId], references: [id], onDelete: SetNull)
 
-    @@unique([senderMailboxId, seedMailboxId, contentHash])
-    @@unique([senderMailboxId, seedInboxId, contentHash])
-    @@index([senderMailboxId])
-  }
+  @@unique([senderMailboxId, seedMailboxId, contentHash])
+  @@unique([senderMailboxId, seedInboxId, contentHash])
+  @@index([senderMailboxId])
+}
+
 model Campaign {
-  accountIds       String  @default("[]")
-  id               String   @id @default(cuid())
-  userId           String
-  name             String
-  status           String   @default("draft")
-  openTracking     Boolean  @default(false)
-  clickTracking    Boolean  @default(false)
-  conversionValue  Float    @default(0)
-  dailySendLimit   Int      @default(30)
-  slowRamp         Boolean  @default(false)
-  rampStart        DateTime?
-  startDate         DateTime?
-  endDate           DateTime?
-  noEndDate         Boolean  @default(true)
-  stopOnReply       Boolean  @default(true)
-  plainTextOnly     Boolean  @default(false)
-  firstEmailPlainText Boolean @default(false)
-  crmOwner          String   @default("")
-  customTags        String   @default("[]")
-  minTimeBetween    Int      @default(15)
-  randomExtraTime   Int      @default(9)
-  maxNewLeads       Int?
-  prioritizeNewLeads Boolean @default(false)
-  providerMatching  Boolean  @default(false)
-  espRouting        Boolean  @default(false)
-  stopOnCompanyReply Boolean @default(false)
-  stopOnAutoReply   Boolean  @default(false)
-  unsubscribeHeader Boolean  @default(true)
-  enableRiskyEmails Boolean  @default(false)
-  disableBounceProtect Boolean @default(false)
-  ccAddresses       String   @default("")
-  bccAddresses      String   @default("")
-  nextAllowedSendAt DateTime?
+  accountIds           String    @default("[]")
+  id                   String    @id @default(cuid())
+  userId               String
+  name                 String
+  status               String    @default("draft")
+  openTracking         Boolean   @default(false)
+  clickTracking        Boolean   @default(false)
+  conversionValue      Float     @default(0)
+  dailySendLimit       Int       @default(30)
+  slowRamp             Boolean   @default(false)
+  rampStart            DateTime?
+  startDate            DateTime?
+  endDate              DateTime?
+  noEndDate            Boolean   @default(true)
+  stopOnReply          Boolean   @default(true)
+  plainTextOnly        Boolean   @default(false)
+  firstEmailPlainText  Boolean   @default(false)
+  crmOwner             String    @default("")
+  customTags           String    @default("[]")
+  minTimeBetween       Int       @default(15)
+  randomExtraTime      Int       @default(9)
+  maxNewLeads          Int?
+  prioritizeNewLeads   Boolean   @default(false)
+  providerMatching     Boolean   @default(false)
+  espRouting           Boolean   @default(false)
+  stopOnCompanyReply   Boolean   @default(false)
+  stopOnAutoReply      Boolean   @default(false)
+  unsubscribeHeader    Boolean   @default(true)
+  enableRiskyEmails    Boolean   @default(false)
+  disableBounceProtect Boolean   @default(false)
+  ccAddresses          String    @default("")
+  bccAddresses         String    @default("")
+  nextAllowedSendAt    DateTime?
   // True when the engine auto-paused this campaign because the user ran out of
   // credits. On the next credit purchase it resumes automatically.
-  resumeOnFunding Boolean  @default(false)
-  deletedAt       DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  resumeOnFunding      Boolean   @default(false)
+  deletedAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   steps     CampaignStep[]
   leads     Lead[]
   schedules CampaignSchedule[]
 }
 
 model CampaignSchedule {
-  id              String   @id @default(cuid())
-  campaignId      String
-  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  name            String   @default("New schedule")
-  startTime       String   @default("09:00")
-  endTime         String   @default("18:00")
-  timezone        String   @default("America/New_York")
-  days            String   @default("[true,true,true,true,true,false,false]")
-  order           Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name       String   @default("New schedule")
+  startTime  String   @default("09:00")
+  endTime    String   @default("18:00")
+  timezone   String   @default("America/New_York")
+  days       String   @default("[true,true,true,true,true,false,false]")
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model CampaignStep {
-  id               String  @id @default(cuid())
-  campaignId       String
-  order            Int
-  type             String
-  subject          String?
-  bodyHtml         String?
-  delayDays        Int?
-  delayUnit        String  @default("days")
-  conditions       String?
-  templateId       String?
+  id         String  @id @default(cuid())
+  campaignId String
+  order      Int
+  type       String
+  subject    String?
+  bodyHtml   String?
+  delayDays  Int?
+  delayUnit  String  @default("days")
+  conditions String?
+  templateId String?
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 }
 
 model Lead {
-  id              String   @id @default(cuid())
-  userId          String
-  campaignId      String?
-  email           String
-  firstName       String?
-  lastName        String?
-  company         String?
-  title           String?
-  phone           String?
-  personalization String?
-  website         String?
-  location        String?
-  status          String   @default("pending")
-  currentStep     Int      @default(0)
-  sendingAccountId String?
-  lastSentAt      DateTime?
-  lastReadAt      DateTime?
-  notes           String?
-  customFields    String?
+  id                 String    @id @default(cuid())
+  userId             String
+  campaignId         String?
+  email              String
+  firstName          String?
+  lastName           String?
+  company            String?
+  title              String?
+  phone              String?
+  personalization    String?
+  website            String?
+  location           String?
+  status             String    @default("pending")
+  currentStep        Int       @default(0)
+  sendingAccountId   String?
+  lastSentAt         DateTime?
+  lastReadAt         DateTime?
+  notes              String?
+  customFields       String?
   verificationStatus String?
   verificationReason String?
   provider           String?
   verifiedAt         DateTime?
-  deletedAt       DateTime?
+  deletedAt          DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaign  Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  emailLogs EmailLog[]
-  deals     Deal[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign     Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  emailLogs    EmailLog[]
+  deals        Deal[]
   bounceEvents BounceEvent[]
 }
 
 model EmailLog {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   leadId         String
   campaignStepId String?
   emailAccountId String?
@@ -439,15 +442,15 @@ model EmailLog {
   bodyHtml       String?
   threadId       String?
   messageId      String?
-  sentAt         DateTime @default(now())
+  sentAt         DateTime  @default(now())
   openedAt       DateTime?
   repliedAt      DateTime?
   clickedAt      DateTime?
   error          String?
   bounceCategory String?
 
-  lead         Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  emailAccount EmailAccount?  @relation(fields: [emailAccountId], references: [id], onDelete: SetNull)
+  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  emailAccount EmailAccount? @relation(fields: [emailAccountId], references: [id], onDelete: SetNull)
 }
 
 model Pipeline {
@@ -482,15 +485,15 @@ model Deal {
 }
 
 model Task {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   dealId    String?
   title     String
-  done      Boolean  @default(false)
+  done      Boolean   @default(false)
   dueDate   DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   deal Deal? @relation(fields: [dealId], references: [id], onDelete: SetNull)
 }
 
@@ -510,27 +513,27 @@ model Integration {
 }
 
 model Webhook {
-  id        String   @id @default(cuid())
-  userId    String
-  url       String
-  events    String   @default("[\"open\",\"click\",\"reply\",\"bounce\"]")
-  secret    String?
-  active    Boolean  @default(true)
+  id         String   @id @default(cuid())
+  userId     String
+  url        String
+  events     String   @default("[\"open\",\"click\",\"reply\",\"bounce\"]")
+  secret     String?
+  active     Boolean  @default(true)
   lastStatus Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ApiKey {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  key       String   @unique
-  scopes    String   @default("read")
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  key        String    @unique
+  scopes     String    @default("read")
   lastUsedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -574,18 +577,18 @@ model Template {
 }
 
 model DomainReputation {
-  id             String   @id @default(cuid())
-  domain         String   @unique
-  totalSent      Int      @default(0)
-  totalBounced   Int      @default(0)
-  bounceRate     Float    @default(0)
-  lastBouncedAt  DateTime?
+  id            String    @id @default(cuid())
+  domain        String    @unique
+  totalSent     Int       @default(0)
+  totalBounced  Int       @default(0)
+  bounceRate    Float     @default(0)
+  lastBouncedAt DateTime?
   // Throttle for bounce/reputation alert emails: at most one per domain per
   // day. Without this, every bounce (and every verification touching a bad
   // domain) fired its own email — a notification storm out of one incident.
-  lastAlertAt    DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  lastAlertAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model BounceEvent {
@@ -623,123 +626,123 @@ model CreditTransaction {
   userId    String
   amount    Float
   reason    String
-    refId     String?
+  refId     String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId])
-  }
-  
-  // Deduplication ledger for inbound payment webhooks. Bachs delivers events
-  // at-least-once, so the same event id may arrive more than once. Recording
-  // processed ids here makes fulfilment idempotent even if the inbound webhook
-  // is replayed or retried.
-  model BachsWebhookEvent {
-    id        String   @id
-    type      String
-    processedAt DateTime @default(now())
-  
-    @@index([processedAt])
-  }
+  @@index([userId])
+}
 
-  // Payment history ledger (the "water meter" on the billing pipe). Every
-  // payment-related webhook writes one row here, so the platform remembers
-  // who paid what and when — including lapses (paid March, missed April).
-  // Current state lives on User (plan, subscription ids); the story of how
-  // it got there lives here.
-  model PaymentEvent {
-    id             String   @id @default(cuid())
-    userId         String
-    type           String   // payment_succeeded | subscription_started | subscription_renewed | subscription_past_due | subscription_canceled | plan_downgraded
-    amount         Float?   // major units, null when the event carries no charge
-    currency       String   @default("NGN")
-    plan           String?  // plan the event relates to, if known
-    subscriptionId String?
-    providerEventId String  @unique // Bachs event id: replays can't double-record
-    createdAt      DateTime @default(now())
+// Deduplication ledger for inbound payment webhooks. Bachs delivers events
+// at-least-once, so the same event id may arrive more than once. Recording
+// processed ids here makes fulfilment idempotent even if the inbound webhook
+// is replayed or retried.
+model BachsWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([processedAt])
+}
 
-    @@index([userId])
-    @@index([type])
-    @@index([createdAt])
-  }
-  
-  // Shared bad-lead registry (platform memory). When any user's verification
-  // proves an address dead (mailbox_not_found) or any send hard-bounces, the
-  // email + verdict is recorded here ONCE. Any other user's list containing
-  // the same address then resolves instantly without spending a probe or a
-  // credit. ONLY definitive verdicts are stored — never risky/unknown. Rows
-  // expire (dead addresses get recycled) and expiry refreshes on re-hit.
-  // Privacy: email + verdict only. No names, companies, campaigns, and no
-  // record of which user reported it.
-  model GlobalLeadIntel {
-    id          String   @id @default(cuid())
-    email       String   @unique
-    verdict     String   // invalid (only definitive verdicts are stored)
-    reason      String   // mailbox_not_found | hard_bounce
-    source      String   // verification | bounce
-    hitCount    Int      @default(1)
-    firstSeenAt DateTime @default(now())
-    lastSeenAt  DateTime @default(now())
-    expiresAt   DateTime
+// Payment history ledger (the "water meter" on the billing pipe). Every
+// payment-related webhook writes one row here, so the platform remembers
+// who paid what and when — including lapses (paid March, missed April).
+// Current state lives on User (plan, subscription ids); the story of how
+// it got there lives here.
+model PaymentEvent {
+  id              String   @id @default(cuid())
+  userId          String
+  type            String // payment_succeeded | subscription_started | subscription_renewed | subscription_past_due | subscription_canceled | plan_downgraded
+  amount          Float? // major units, null when the event carries no charge
+  currency        String   @default("NGN")
+  plan            String? // plan the event relates to, if known
+  subscriptionId  String?
+  providerEventId String   @unique // Bachs event id: replays can't double-record
+  createdAt       DateTime @default(now())
 
-    @@index([expiresAt])
-    @@index([reason])
-  }
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Platform-owned warmup seed inboxes (the backbone of the warmup network).
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// Shared bad-lead registry (platform memory). When any user's verification
+// proves an address dead (mailbox_not_found) or any send hard-bounces, the
+// email + verdict is recorded here ONCE. Any other user's list containing
+// the same address then resolves instantly without spending a probe or a
+// credit. ONLY definitive verdicts are stored — never risky/unknown. Rows
+// expire (dead addresses get recycled) and expiry refreshes on re-hit.
+// Privacy: email + verdict only. No names, companies, campaigns, and no
+// record of which user reported it.
+model GlobalLeadIntel {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  verdict     String // invalid (only definitive verdicts are stored)
+  reason      String // mailbox_not_found | hard_bounce
+  source      String // verification | bounce
+  hitCount    Int      @default(1)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  expiresAt   DateTime
+
+  @@index([expiresAt])
+  @@index([reason])
+}
+
+// Platform-owned warmup seed inboxes (the backbone of the warmup network).
 // These are inboxes operated by the platform that user mailboxes warm against.
 // The user-facing receivers also participate (see EmailAccount.warmupEnabled),
 // but this model holds the operator-owned pool that is always available.
 model SeedInbox {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  provider  String   @default("other")
-  smtpHost  String?
-  smtpPort  Int?
-  smtpUser  String?
-  smtpPass  String?
-  imapHost  String?
-  imapPort  Int?
-  imapUser  String?
-  imapPass  String?
-  gmailToken String?
-  microsoftToken String?
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  provider              String    @default("other")
+  smtpHost              String?
+  smtpPort              Int?
+  smtpUser              String?
+  smtpPass              String?
+  imapHost              String?
+  imapPort              Int?
+  imapUser              String?
+  imapPass              String?
+  gmailToken            String?
+  microsoftToken        String?
   microsoftRefreshToken String?
-  displayName String?
-  status    String  @default("active") // active | paused | quarantined
+  displayName           String?
+  status                String    @default("active") // active | paused | quarantined
   // Warmup content tags (JSON array, e.g. ["fintech","lagos"]). The warmup
   // engine spins one at random into each subject line and appends the set at
   // the end of the body, so every warmup email carries unique content.
-  tags      String  @default("[]")
+  tags                  String    @default("[]")
   // Per-seed tracking code, mirroring EmailAccount.warmupFilterTag: unique,
   // auto-generated at creation, admin-editable. Rides every subject line and
   // body end so a seed's warmup mail is findable/filterable in any inbox.
   // Never enters the spin pool (identifiers must not be dealt around).
-  filterTag String  @default("")
-  healthScore Float  @default(100)
-  healthState String  @default("healthy")
-  lastUsedAt DateTime?
-  note      String?
-  dailyTarget    Int     @default(10)
-  warmupBase     Int     @default(2)
-  warmupIncrease Int     @default(2)
-  warmupStartedAt DateTime?
-  scheduleStart  String  @default("09:00")
-  scheduleEnd    String  @default("17:00")
-  minWaitMinutes Int     @default(10)
-  replyRate      Int     @default(75)
-  openRate       Int     @default(100)
-  spamProtection Int     @default(100)
-  markImportant  Int     @default(10)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  filterTag             String    @default("")
+  healthScore           Float     @default(100)
+  healthState           String    @default("healthy")
+  lastUsedAt            DateTime?
+  note                  String?
+  dailyTarget           Int       @default(10)
+  warmupBase            Int       @default(2)
+  warmupIncrease        Int       @default(2)
+  warmupStartedAt       DateTime?
+  scheduleStart         String    @default("09:00")
+  scheduleEnd           String    @default("17:00")
+  minWaitMinutes        Int       @default(10)
+  replyRate             Int       @default(75)
+  openRate              Int       @default(100)
+  spamProtection        Int       @default(100)
+  markImportant         Int       @default(10)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  receivedWarmupLogs WarmupLog[] @relation("receivedSeedWarmupLogs")
+  receivedWarmupLogs    WarmupLog[]     @relation("receivedSeedWarmupLogs")
   receivedWarmupContent WarmupContent[] @relation("receivedSeedWarmupContent")
-  sentWarmupLogs WarmupLog[] @relation("sentSeedWarmupLogs")
+  sentWarmupLogs        WarmupLog[]     @relation("sentSeedWarmupLogs")
 
   @@index([status])
   @@index([email])
@@ -755,5 +758,23 @@ model WaitlistEntry {
   source    String   @default("waitlist")
   createdAt DateTime @default(now())
 
+  @@index([createdAt])
+}
+
+// Support-chat history persisted server-side so admins can review a user's
+// conversation with Ava and reply (continue) it. role is "user" (customer) or
+// "assistant" (Ava or an admin reply). byAdmin distinguishes a human admin
+// reply from a normal AI message so the UI can tell them apart.
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String   @default("user")
+  byAdmin   Boolean  @default(false)
+  content   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
   @@index([createdAt])
 }

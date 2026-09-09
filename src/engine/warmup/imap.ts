@@ -118,12 +118,17 @@ async function connectToAccount(account: {
 // reached; the reader simply skips that mailbox.
 async function connectForRead(account: any): Promise<ImapFlow | null> {
   if (account.imapUser && account.imapPass) {
-    return connectToAccount({
-      imapHost: account.imapHost,
-      imapPort: account.imapPort,
-      imapUser: account.imapUser,
-      imapPass: account.imapPass,
-    });
+    try {
+      return await connectToAccount({
+        imapHost: account.imapHost,
+        imapPort: account.imapPort,
+        imapUser: account.imapUser,
+        imapPass: account.imapPass,
+      });
+    } catch {
+      // Stale/incorrect IMAP creds — fall through to the SMTP/OAuth path,
+      // which may still hold a working app password or refresh token.
+    }
   }
   return openImap(account);
 }
@@ -173,9 +178,19 @@ export async function processSeedInboxes(): Promise<{
   });
   const accounts = rawAccounts.map(a => decryptAccount(a) as typeof a);
 
-  const senderEmails = accounts.map(a => a.email);
+  // Warmup mail also arrives from platform-owned seeds (network self-warm and
+  // seed-to-customer sends), so seed inboxes are senders too.
+  const rawSeeds = await prisma.seedInbox.findMany({ where: { status: "active" } });
+  const seeds = rawSeeds.map(s => decryptAccount(s) as typeof s);
+
+  const senderEmails = [...accounts.map(a => a.email), ...seeds.map(s => s.email)];
   const senderIdByEmail = new Map(accounts.map(a => [a.email, a.id]));
+  const seedIdByEmail = new Map(seeds.map(s => [s.email, s.id]));
   const senderSettings = new Map(accounts.map(a => [a.id, { openRate: a.warmupOpenRate ?? 100, spamProtection: a.warmupSpamProtection ?? 100, markImportant: a.warmupMarkImportant ?? 0, readEmulation: a.readEmulation ?? false, replyRate: a.warmupReplyRate ?? 30 }]));
+  // Seed senders use their own engagement percentages.
+  for (const s of seeds) {
+    senderSettings.set(s.id, { openRate: s.openRate ?? 100, spamProtection: s.spamProtection ?? 100, markImportant: s.markImportant ?? 10, readEmulation: false, replyRate: s.replyRate ?? 75 });
+  }
 
   let received = 0;
   let replied = 0;
@@ -189,19 +204,30 @@ export async function processSeedInboxes(): Promise<{
       client = await connectForRead(account);
       if (!client) continue;
 
+      // Sender → warmup log match scope. Mail from another customer mailbox is
+      // captured via senderMailboxId; mail from a platform seed via senderInboxId.
+      function logScopeFor(senderEmail: string): { senderMailboxId: string } | { senderInboxId: string } | null {
+        const accountId = senderIdByEmail.get(senderEmail);
+        if (accountId && accountId !== account.id) return { senderMailboxId: accountId };
+        const seedId = seedIdByEmail.get(senderEmail);
+        if (seedId) return { senderInboxId: seedId };
+        return null;
+      }
+
       // 1. Check INBOX for warmup emails
       const inboxResults = await searchFolderForSenders(client, "INBOX", senderEmails);
 
       for (const [senderEmail, msgs] of inboxResults) {
-        const senderId = senderIdByEmail.get(senderEmail);
-        if (!senderId || senderId === account.id) continue;
+        const scope = logScopeFor(senderEmail);
+        if (!scope) continue;
+        const senderId = "senderMailboxId" in scope ? scope.senderMailboxId : scope.senderInboxId;
         const settings = senderSettings.get(senderId);
         const openRate = settings?.openRate ?? 100;
 
         for (const msg of msgs) {
           const log = await prisma.warmupLog.findFirst({
             where: {
-              senderMailboxId: senderId,
+              ...scope,
               seedMailboxId: account.id,
               status: "sent",
               receivedAt: null,
@@ -256,15 +282,16 @@ export async function processSeedInboxes(): Promise<{
         const spamResults = await searchFolderForSenders(client, spamFolder, senderEmails);
 
         for (const [senderEmail, msgs] of spamResults) {
-          const senderId = senderIdByEmail.get(senderEmail);
-          if (!senderId || senderId === account.id) continue;
+          const scope = logScopeFor(senderEmail);
+          if (!scope) continue;
+          const senderId = "senderMailboxId" in scope ? scope.senderMailboxId : scope.senderInboxId;
           const settings = senderSettings.get(senderId);
           const spamProtection = settings?.spamProtection ?? 100;
 
           for (const msg of msgs) {
             const log = await prisma.warmupLog.findFirst({
               where: {
-                senderMailboxId: senderId,
+                ...scope,
                 seedMailboxId: account.id,
                 status: "sent",
                 foundInSpam: false,
@@ -323,13 +350,13 @@ export async function processSeedInboxes(): Promise<{
           const promoResults = await searchFolderForSenders(client, promoFolder, senderEmails);
 
           for (const [senderEmail, msgs] of promoResults) {
-            const senderId = senderIdByEmail.get(senderEmail);
-            if (!senderId || senderId === account.id) continue;
+            const scope = logScopeFor(senderEmail);
+            if (!scope) continue;
 
             for (const msg of msgs) {
               const log = await prisma.warmupLog.findFirst({
                 where: {
-                  senderMailboxId: senderId,
+                  ...scope,
                   seedMailboxId: account.id,
                   status: "sent",
                   foundInSpam: false,
