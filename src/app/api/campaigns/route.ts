@@ -49,14 +49,13 @@ export async function GET(req: NextRequest) {
     const completedLeads = await prisma.lead.count({
       where: { campaignId: c.id, status: "completed", deletedAt: null },
     });
-    // Count deals whose leadId belongs to this campaign
-    const campaignLeadIds = (await prisma.lead.findMany({
-      where: { campaignId: c.id, deletedAt: null },
-      select: { id: true },
-    })).map(l => l.id);
-    const opportunities = campaignLeadIds.length > 0
-      ? await prisma.deal.count({ where: { leadId: { in: campaignLeadIds } } })
-      : 0;
+    // Count deals whose lead belongs to this campaign. Uses the relation filter
+    // (not leadId: { in: [...] }) so the query stays small even when a campaign
+    // has tens of thousands of leads — an `in` list that large overflows the
+    // SQLite bind-parameter limit and 500s the whole list endpoint.
+    const opportunities = await prisma.deal.count({
+      where: { lead: { campaignId: c.id, deletedAt: null } },
+    });
 
     // Weighted progress: each lead contributes based on currentStep
     // Terminal states (completed, replied, bounced, suppressed) = 100%
