@@ -107,6 +107,37 @@ async function markSeen(client: ImapFlow, folder: string, uids: number[]): Promi
   } catch {}
 }
 
+// Pair a physical inbox message to ITS warmup log. Search results come back
+// oldest-first but logs were matched newest-first, which skewed when a sender
+// has several warmup emails in the folder. Message-ID linking is exact (the
+// nodemailer Message-ID survives to the IMAP envelope), so prefer it; a reply
+// (In-Reply-To pointing at a known warmup) is a follow-up, not a new delivery,
+// and is skipped; only truly unknown mail falls back to the oldest-unread log.
+async function matchLogForMessage(
+  msg: FoundMessage,
+  where: Record<string, unknown>,
+): Promise<any> {
+  const mid = msg.messageId && !msg.messageId.startsWith("unknown-") ? msg.messageId : null;
+  if (mid) {
+    const byMid = await prisma.warmupLog.findFirst({
+      where: { ...where, status: "sent", receivedAt: null, messageId: mid },
+      orderBy: { sentAt: "desc" },
+    });
+    if (byMid) return byMid;
+  }
+  if (msg.inReplyTo) {
+    const parent = await prisma.warmupLog.findFirst({
+      where: { ...where, messageId: msg.inReplyTo },
+      orderBy: { sentAt: "desc" },
+    });
+    if (parent) return null;
+  }
+  return prisma.warmupLog.findFirst({
+    where: { ...where, status: "sent", receivedAt: null },
+    orderBy: { sentAt: "desc" },
+  });
+}
+
 async function connectToAccount(account: {
   imapHost: string;
   imapPort: number;
@@ -147,13 +178,20 @@ async function connectForRead(account: any): Promise<ImapFlow | null> {
   return openImap(account);
 }
 
+type FoundMessage = {
+  uid: number;
+  messageId: string;
+  inReplyTo?: string | null;
+  receivedAt: Date;
+};
+
 async function searchFolderForSenders(
   client: ImapFlow,
   folder: string,
   senderEmails: string[],
   tagsByEmail: Map<string, string>,
-): Promise<Map<string, { uid: number; messageId: string; receivedAt: Date }[]>> {
-  const results = new Map<string, { uid: number; messageId: string; receivedAt: Date }[]>();
+): Promise<Map<string, FoundMessage[]>> {
+  const results = new Map<string, FoundMessage[]>();
 
   try {
     const lock = await client.getMailboxLock(folder);
@@ -173,9 +211,10 @@ async function searchFolderForSenders(
         }
 
         if (searchResult.length > 0) {
-          const items = searchResult.map(msg => ({
+          const items: FoundMessage[] = searchResult.map(msg => ({
             uid: msg.uid,
             messageId: msg.envelope?.messageId || `unknown-${msg.uid}`,
+            inReplyTo: msg.envelope?.inReplyTo || null,
             receivedAt: msg.internalDate || new Date(),
           }));
           results.set(sender, items);
@@ -251,14 +290,9 @@ export async function processSeedInboxes(): Promise<{
         const openRate = settings?.openRate ?? 100;
 
         for (const msg of msgs) {
-          const log = await prisma.warmupLog.findFirst({
-            where: {
-              ...scope,
-              seedMailboxId: account.id,
-              status: "sent",
-              receivedAt: null,
-            },
-            orderBy: { sentAt: "desc" },
+          const log = await matchLogForMessage(msg, {
+            ...scope,
+            seedMailboxId: account.id,
           });
 
           if (!log) continue;
@@ -325,14 +359,10 @@ export async function processSeedInboxes(): Promise<{
           const spamProtection = settings?.spamProtection ?? 100;
 
           for (const msg of msgs) {
-            const log = await prisma.warmupLog.findFirst({
-              where: {
-                ...scope,
-                seedMailboxId: account.id,
-                status: "sent",
-                foundInSpam: false,
-              },
-              orderBy: { sentAt: "desc" },
+            const log = await matchLogForMessage(msg, {
+              ...scope,
+              seedMailboxId: account.id,
+              foundInSpam: false,
             });
 
             if (!log) continue;
@@ -398,14 +428,10 @@ export async function processSeedInboxes(): Promise<{
             if (!scope) continue;
 
             for (const msg of msgs) {
-              const log = await prisma.warmupLog.findFirst({
-                where: {
-                  ...scope,
-                  seedMailboxId: account.id,
-                  status: "sent",
-                  foundInSpam: false,
-                },
-                orderBy: { sentAt: "desc" },
+              const log = await matchLogForMessage(msg, {
+                ...scope,
+                seedMailboxId: account.id,
+                foundInSpam: false,
               });
 
               if (!log) continue;

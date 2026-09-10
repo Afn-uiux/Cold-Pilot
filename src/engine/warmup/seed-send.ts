@@ -192,16 +192,18 @@ function dailySendSchedule(
   endMin: number,
 ): number[] {
   if (target <= 0) return [];
-  let from = startMin - WARMUP_RESET_MIN;
-  let to = (endMin > startMin ? endMin : endMin + 1440) - WARMUP_RESET_MIN;
-  if (from < 0) from = 0;
-  if (to > 1440) to = 1440;
-  const windowLen = Math.max(1, to - from);
+  // Window is wall-clock, the day resets at 09:00: express both edges in
+  // minutes-after-reset (mod 1440) so windows before 09:00 (00:00-08:59) and
+  // overnight windows (22:00-07:00) map onto the right slice of the warmup day.
+  const from = ((startMin - WARMUP_RESET_MIN) % 1440 + 1440) % 1440;
+  let to = ((endMin - WARMUP_RESET_MIN) % 1440 + 1440) % 1440;
+  if (to <= from) to += 1440; // window wraps past midnight (in reset-relative time)
+  const windowLen = Math.max(1, Math.min(1440, to - from));
   const rnd = mulberry32(fnv1a(`${seedId}|send|${dateKey}`));
   const out: number[] = [];
   for (let i = 0; i < target; i++) {
     const slotLen = windowLen / target;
-    out.push(Math.floor(from + i * slotLen + rnd() * slotLen));
+    out.push(Math.min(1439, Math.floor(from + i * slotLen + rnd() * slotLen)));
   }
   return out;
 }
@@ -349,8 +351,11 @@ export async function processSeedSends(): Promise<{ sent: number; failed: number
     if (!inSchedule(seed, now)) continue;
 
     // Respect min wait between sends: at least 30 minutes, randomized 30-60min.
+    // The floor only binds WITHIN a warmup day — last night's 22:30 send must
+    // not block this morning's first slot after the 09:00 reset, or seeding
+    // drifts to midnight and custom windows become unreachable.
     const lastAt = await lastSeedSendAt(seed.id);
-    if (lastAt && now.getTime() < nextSeedSendAt(seed.id, lastAt, seed.minWaitMinutes).getTime()) continue;
+    if (lastAt && lastAt >= todayStart && now.getTime() < nextSeedSendAt(seed.id, lastAt, seed.minWaitMinutes).getTime()) continue;
 
     // Respect daily target (ramped: starts low, grows to cap)
     const sentToday = await seedSentToday(seed.id, todayStart);

@@ -87,8 +87,15 @@ async function connectForRead(account: any): Promise<ImapFlow | null> {
   return openImap(account);
 }
 
+type FoundMessage = {
+  uid: number;
+  messageId: string;
+  inReplyTo?: string | null;
+  receivedAt: Date;
+};
+
 async function searchFolder(client: ImapFlow, folder: string, senderEmails: string[], tagsByEmail: Map<string, string>) {
-  const results = new Map<string, { uid: number; messageId: string; receivedAt: Date }[]>();
+  const results = new Map<string, FoundMessage[]>();
   try {
     const lock = await client.getMailboxLock(folder);
     try {
@@ -108,6 +115,7 @@ async function searchFolder(client: ImapFlow, folder: string, senderEmails: stri
           results.set(sender, list.map(m => ({
             uid: m.uid,
             messageId: m.envelope?.messageId || `unknown-${m.uid}`,
+            inReplyTo: m.envelope?.inReplyTo || null,
             receivedAt: m.internalDate || new Date(),
           })));
         }
@@ -132,6 +140,35 @@ async function markSeen(client: ImapFlow, folder: string, uids: number[]): Promi
       lock.release();
     }
   } catch {}
+}
+
+// Pair a physical inbox message to ITS warmup log by Message-ID (exact), skip
+// replies to already-delivered warmup threads, and only fall back to the
+// oldest-unread log for genuinely unknown mail. `where` pins the receiver to
+// this seed (and the sender) — see call sites.
+async function matchLogForMessage(
+  msg: FoundMessage,
+  where: Record<string, unknown>,
+): Promise<any> {
+  const mid = msg.messageId && !msg.messageId.startsWith("unknown-") ? msg.messageId : null;
+  if (mid) {
+    const byMid = await prisma.warmupLog.findFirst({
+      where: { ...where, status: "sent", receivedAt: null, messageId: mid },
+      orderBy: { sentAt: "desc" },
+    });
+    if (byMid) return byMid;
+  }
+  if (msg.inReplyTo) {
+    const parent = await prisma.warmupLog.findFirst({
+      where: { ...where, messageId: msg.inReplyTo },
+      orderBy: { sentAt: "desc" },
+    });
+    if (parent) return null;
+  }
+  return prisma.warmupLog.findFirst({
+    where: { ...where, status: "sent", receivedAt: null },
+    orderBy: { sentAt: "desc" },
+  });
 }
 
 async function sendSeedReply(
@@ -202,28 +239,12 @@ export async function processSeedInboxEngagement(): Promise<{
       if (!client) continue;
 
       // Match a sender email to the warmup log that used THIS seed as receiver.
-      async function findLog(senderEmail: string, senderIsUser: boolean) {
+      function logWhere(senderEmail: string, senderIsUser: boolean) {
         if (senderIsUser) {
-          return prisma.warmupLog.findFirst({
-            where: {
-              seedInboxId: seed.id,
-              senderMailbox: { email: senderEmail },
-              status: "sent",
-              receivedAt: null,
-            },
-            orderBy: { sentAt: "desc" },
-          });
+          return { seedInboxId: seed.id, senderMailbox: { email: senderEmail } };
         }
         // Sender is another seed (network self-warm) — match by seed sender.
-        return prisma.warmupLog.findFirst({
-          where: {
-            seedInboxId: seed.id,
-            senderInbox: { email: senderEmail },
-            status: "sent",
-            receivedAt: null,
-          },
-          orderBy: { sentAt: "desc" },
-        });
+        return { seedInboxId: seed.id, senderInbox: { email: senderEmail } };
       }
 
       // INBOX: mark delivered / reply
@@ -231,7 +252,7 @@ export async function processSeedInboxEngagement(): Promise<{
       for (const [senderEmail, msgs] of inbox) {
         const senderIsUser = userAccounts.some(a => a.email === senderEmail);
         for (const msg of msgs) {
-          const log = await findLog(senderEmail, senderIsUser);
+          const log = await matchLogForMessage(msg, logWhere(senderEmail, senderIsUser));
           if (!log) continue;
           if (!log.sentAt) continue;
 
@@ -270,29 +291,47 @@ export async function processSeedInboxEngagement(): Promise<{
         for (const [senderEmail, msgs] of found) {
           const senderIsUser = userAccounts.some(a => a.email === senderEmail);
           for (const msg of msgs) {
-            const log = await findLog(senderEmail, senderIsUser);
+            const log = await matchLogForMessage(msg, logWhere(senderEmail, senderIsUser));
             if (!log) continue;
             // Short rescue window (20-90min): pull from junk promptly while
             // still stamping a simulated received time for human-looking gaps.
             if (!log.sentAt) continue;
             const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
             if (Date.now() < openAt.getTime()) continue;
-            if (!shouldApply(seed.spamProtection ?? 100)) continue; // leave some in spam
-            try {
-              const lock = await client.getMailboxLock(folder);
+
+            // Always record that this warmup landed in junk; whether we pull it
+            // back out depends on the seed's spam-protection rate.
+            if (shouldApply(seed.spamProtection ?? 100)) {
+              let moved = false;
               try {
-                await client.messageFlagsAdd([msg.uid], ["\\Seen"], { uid: true });
-                await client.messageCopy([msg.uid], "INBOX", { uid: true });
-                await client.messageDelete([msg.uid], { uid: true }).catch(() => {});
-              } finally {
-                lock.release();
+                const lock = await client.getMailboxLock(folder);
+                try {
+                  await client.messageFlagsAdd([msg.uid], ["\\Seen"], { uid: true });
+                  await client.messageCopy([msg.uid], "INBOX", { uid: true });
+                  moved = true; // copy to INBOX landed; deletion is best-effort
+                  await client.messageDelete([msg.uid], { uid: true }).catch(() => {});
+                } finally {
+                  lock.release();
+                }
+              } catch {}
+              if (moved) {
+                await prisma.warmupLog.update({
+                  where: { id: log.id },
+                  data: { foundInSpam: true, rescuedFromSpam: true, receivedAt: openAt, status: "delivered" },
+                });
+                rescued++;
+              } else {
+                await prisma.warmupLog.update({
+                  where: { id: log.id },
+                  data: { foundInSpam: true },
+                });
               }
-            } catch {}
-            await prisma.warmupLog.update({
-              where: { id: log.id },
-              data: { foundInSpam: true, rescuedFromSpam: true, receivedAt: openAt, status: "delivered" },
-            });
-            rescued++;
+            } else {
+              await prisma.warmupLog.update({
+                where: { id: log.id },
+                data: { foundInSpam: true },
+              });
+            }
           }
         }
       }

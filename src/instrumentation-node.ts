@@ -127,7 +127,7 @@ async function tickInner() {
 
     try {
       const imap = await processSeedInboxes();
-      if (imap && ((imap as any).spamRescued > 0 || (imap as any).processed > 0)) {
+      if (imap && (imap.rescued > 0 || imap.received > 0 || imap.replied > 0)) {
         console.log("[scheduler] warmup imap:", JSON.stringify(imap));
       }
     } catch (e) {

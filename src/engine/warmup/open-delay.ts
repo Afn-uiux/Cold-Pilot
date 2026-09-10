@@ -7,7 +7,7 @@ import { createHash } from "crypto";
 // value is stable across ticks/restarts (the reader holds a message until the
 // wall clock passes sentAt + delay, then marks it received/read exactly once).
 //
-// INBOX reads use a longer window (40min .. ~4.6h); spam/promo RESCUES use a
+// INBOX reads use a longer window (40min .. ~4h); spam/promo RESCUES use a
 // shorter one (20min .. 90min) so recovery from junk still happens promptly.
 export function openDelayMinutes(logId: string, min = 40, max = 240): number {
   const h = createHash("sha256").update(`warmup-open:${min}:${max}:${logId}`).digest();
