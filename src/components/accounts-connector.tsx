@@ -311,10 +311,10 @@ export default function AccountsConnector({
             <div className="bg-blue-light border border-blue-accent/20 rounded-lg p-4 mb-5">
               <h4 className="text-xs font-medium text-blue-accent mb-2">How to get your Google App Password</h4>
               <ol className="text-xs text-muted space-y-1.5 list-decimal ml-4">
-                <li>Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-accent hover:underline font-medium">Google App Passwords</a> (opens in new tab)</li>
-                <li>Turn on <span className="text-ink font-medium">2-Step Verification</span> if not already enabled</li>
-                <li>Select <span className="text-ink font-medium">Mail</span> as the app and <span className="text-ink font-medium">Other</span> as the device</li>
-                <li>Copy the generated 16-character password and paste it below</li>
+                <li>Turn on <span className="text-ink font-medium">2-Step Verification</span> first (required) at <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="text-blue-accent hover:underline font-medium">myaccount.google.com/security</a></li>
+                <li>Open <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-accent hover:underline font-medium">Google App Passwords</a> (opens in new tab)</li>
+                <li>Type any label in the box (e.g. <span className="text-ink font-medium">Mail</span>) and click <span className="text-ink font-medium">Create</span></li>
+                <li>Copy the <span className="text-ink font-medium">16-character</span> code from the yellow box and paste it below</li>
               </ol>
             </div>
             <div className="space-y-4">

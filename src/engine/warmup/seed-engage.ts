@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
 import { assertSafeMailTarget } from "@/lib/ssrf";
 import { openImap } from "@/lib/oauth-connect";
+import { openDelayMinutes } from "./open-delay";
 
 // Seed engagement engine: makes platform-owned seed inboxes behave like real,
 // live mailboxes. Seeds RECEIVE warmup (from user mailboxes and other seeds),
@@ -86,16 +87,21 @@ async function connectForRead(account: any): Promise<ImapFlow | null> {
   return openImap(account);
 }
 
-async function searchFolder(client: ImapFlow, folder: string, senderEmails: string[]) {
+async function searchFolder(client: ImapFlow, folder: string, senderEmails: string[], tagsByEmail: Map<string, string>) {
   const results = new Map<string, { uid: number; messageId: string; receivedAt: Date }[]>();
   try {
     const lock = await client.getMailboxLock(folder);
     try {
       for (const sender of senderEmails) {
-        const uids = await client.search({ from: sender }, { uid: true });
+        // Identify warmup mail precisely: sender's filter tag is stamped into
+        // the subject of every warmup they send (seedContent/reconciler), so
+        // require it in the search to avoid tagging a real non-warmup email.
+        const tag = (tagsByEmail.get(sender) || "").trim();
+        const criteria = tag ? { from: sender, subject: tag } : { from: sender };
+        const uids = await client.search(criteria, { uid: true });
         if (!uids || uids.length === 0) continue;
         const list: any[] = [];
-        for await (const msg of client.fetch(uids, { uid: true, envelope: true, internalDate: true })) {
+        for await (const msg of client.fetch(uids, { envelope: true, internalDate: true, flags: true }, { uid: true })) {
           list.push(msg);
         }
         if (list.length > 0) {
@@ -113,6 +119,19 @@ async function searchFolder(client: ImapFlow, folder: string, senderEmails: stri
     // Folder may not exist
   }
   return results;
+}
+
+// Best-effort mark a message as read (\Seen) so warmup mail actually looks
+// opened in the real mailbox. UID-scoped; failures must not break processing.
+async function markSeen(client: ImapFlow, folder: string, uids: number[]): Promise<void> {
+  try {
+    const lock = await client.getMailboxLock(folder);
+    try {
+      await client.messageFlagsAdd([...uids], ["\\Seen"], { uid: true });
+    } finally {
+      lock.release();
+    }
+  } catch {}
 }
 
 async function sendSeedReply(
@@ -161,12 +180,15 @@ export async function processSeedInboxEngagement(): Promise<{
   // Potential senders: any active user mailbox (customers) plus other seeds.
   const userAccounts = await prisma.emailAccount.findMany({
     where: { status: "active", deletedAt: null },
-    select: { email: true },
+    select: { email: true, warmupFilterTag: true },
   });
   const senderEmails = [
     ...userAccounts.map(a => a.email),
     ...seeds.map(s => s.email),
   ];
+  const senderTags = new Map<string, string>();
+  for (const a of userAccounts) if (a.warmupFilterTag) senderTags.set(a.email, String(a.warmupFilterTag));
+  for (const s of seeds) if (s.filterTag) senderTags.set(s.email, String(s.filterTag));
 
   let received = 0;
   let replied = 0;
@@ -205,17 +227,25 @@ export async function processSeedInboxEngagement(): Promise<{
       }
 
       // INBOX: mark delivered / reply
-      const inbox = await searchFolder(client, "INBOX", senderEmails);
+      const inbox = await searchFolder(client, "INBOX", senderEmails, senderTags);
       for (const [senderEmail, msgs] of inbox) {
         const senderIsUser = userAccounts.some(a => a.email === senderEmail);
         for (const msg of msgs) {
           const log = await findLog(senderEmail, senderIsUser);
           if (!log) continue;
+          if (!log.sentAt) continue;
 
-          const data: any = { receivedAt: msg.receivedAt, status: "delivered" };
+          // Human inbox-checking gap: this email is only "opened" at a fixed
+          // simulated check-time well after the sender fired, so the mailbox's
+          // received/read activity lands hours apart from its own sends.
+          const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id) * 60_000);
+          if (Date.now() < openAt.getTime()) continue;
+
+          const data: any = { receivedAt: openAt, status: "delivered" };
           if (shouldApply(seed.markImportant ?? 10)) data.markedImportant = true;
           await prisma.warmupLog.update({ where: { id: log.id }, data });
           received++;
+          await markSeen(client, "INBOX", [msg.uid]);
 
           if (!log.repliedAt && seed.smtpHost && seed.smtpPort && seed.smtpUser && seed.smtpPass && msg.messageId && shouldApply(seed.replyRate ?? 75)) {
             await new Promise(r => setTimeout(r, 30000 + Math.random() * 150000));
@@ -236,25 +266,31 @@ export async function processSeedInboxEngagement(): Promise<{
       // Spam/Promotions: rescue to INBOX
       const folders = [...getSpamFolders(provider), "[Gmail]/Promotions", "Promotions"];
       for (const folder of folders) {
-        const found = await searchFolder(client, folder, senderEmails);
+        const found = await searchFolder(client, folder, senderEmails, senderTags);
         for (const [senderEmail, msgs] of found) {
           const senderIsUser = userAccounts.some(a => a.email === senderEmail);
           for (const msg of msgs) {
             const log = await findLog(senderEmail, senderIsUser);
             if (!log) continue;
+            // Short rescue window (20-90min): pull from junk promptly while
+            // still stamping a simulated received time for human-looking gaps.
+            if (!log.sentAt) continue;
+            const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
+            if (Date.now() < openAt.getTime()) continue;
             if (!shouldApply(seed.spamProtection ?? 100)) continue; // leave some in spam
             try {
               const lock = await client.getMailboxLock(folder);
               try {
-                await client.messageCopy([msg.uid], "INBOX");
-                await client.messageDelete([msg.uid]).catch(() => {});
+                await client.messageFlagsAdd([msg.uid], ["\\Seen"], { uid: true });
+                await client.messageCopy([msg.uid], "INBOX", { uid: true });
+                await client.messageDelete([msg.uid], { uid: true }).catch(() => {});
               } finally {
                 lock.release();
               }
             } catch {}
             await prisma.warmupLog.update({
               where: { id: log.id },
-              data: { foundInSpam: true, rescuedFromSpam: true, receivedAt: msg.receivedAt, status: "delivered" },
+              data: { foundInSpam: true, rescuedFromSpam: true, receivedAt: openAt, status: "delivered" },
             });
             rescued++;
           }

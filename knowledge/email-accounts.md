@@ -1,14 +1,24 @@
 # Coldpilot — Connecting and managing email accounts (inboxes)
 
 Email accounts (inboxes) are the real mailboxes Coldpilot sends from. You
-connect your own Gmail or Outlook mailboxes.
+connect mailboxes from a wide range of providers — not just Gmail and Outlook.
 
 ## Connecting
 
-- Go to **Email Accounts** in your dashboard and connect a Gmail or Outlook
-  mailbox.
-- You can connect via Google/Outlook OAuth (the recommended, most reliable
-  route) or with SMTP/IMAP credentials (for setups that need them).
+- Go to **Email Accounts** in your dashboard and connect a mailbox.
+- **Gmail and Microsoft (Outlook/Hotmail)** can be connected with one-click
+  OAuth — that's the smoothest route for those two providers, and it's why you
+  see those buttons.
+- **Every other provider works too** — Yahoo, Zoho, iCloud, Proton (via the
+  app with a bridge), and any custom-domain mailbox (your own domain's email
+  host). Connect these with SMTP/IMAP credentials:
+  - Incoming (IMAP) server, port 993
+  - Outgoing (SMTP) server and port (usually 465 or 587)
+  - Your mailbox email and an app password
+- Use an **app-specific password** (not your regular login password) for
+  providers that require one, such as Yahoo and Gmail. Enable IMAP access on
+  the provider if it isn't already on.
+- **How to get a Google app password, briefly:** turn on 2-Step Verification first at myaccount.google.com/security (required). Then open myaccount.google.com/apppasswords, type any label in the box (e.g. Mail) and click Create, then copy the 16-character code from the yellow box and paste it into Coldpilot (spaces are fine). Always use the app password, never your regular Gmail login password.
 - Your credentials are **encrypted at rest** and never exposed to the browser
   after connect — only safe, non-secret fields come back to the client.
 

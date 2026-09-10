@@ -1121,7 +1121,7 @@ async function checkImapAccountBounces(account: any): Promise<number> {
       const bounceSenderPattern = /mailer-daemon|postmaster|mail delivery subsystem|mail-delivery|no-?reply.*delivery|delivery.*status.*notification/i;
       let bounceCandidates = 0;
 
-      for await (const msg of client.fetch(uids, { uid: true, source: true })) {
+      for await (const msg of client.fetch(uids, { source: true }, { uid: true })) {
         const rawSource = msg.source?.toString() || "";
         if (!rawSource) continue;
 
@@ -1539,7 +1539,7 @@ async function checkImapAccountReplies(account: any): Promise<number> {
       // regex match — it worked for simple plain-text emails but leaked
       // raw MIME boundary markers and base64 payloads into the reply body
       // for anything multipart (which is most real-world mail clients).
-      for await (const msg of client.fetch(uids, { uid: true, source: true })) {
+      for await (const msg of client.fetch(uids, { source: true }, { uid: true })) {
         checkedCount++;
         if (!msg.source) continue;
 

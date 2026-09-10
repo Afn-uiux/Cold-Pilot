@@ -1,7 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmailSafe } from "./email/send";
 
-const GLOBAL_MIN_WAIT_MS = 60 * 1000; // 60 seconds between any sends from same account
+const GLOBAL_MIN_WAIT_MS = 60 * 1000; // 60s floor between any sends from same account
+const GLOBAL_JITTER_MS = 120 * 1000; // + up to 2min random jitter → 60-180s total gap
+
+// Deterministic jitter for the inter-send gap, derived from the last send's
+// timestamp: every retry reports the SAME required wait until a real send
+// lands, so a skip-and-retry loop can never squeeze a send in earlier.
+function jitterFor(lastSentAt: number): number {
+  let h = (lastSentAt ^ 0x9e3779b9) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+  h ^= h >>> 16;
+  return (h >>> 0) % GLOBAL_JITTER_MS;
+}
 
 export interface CanSendResult {
   allowed: boolean;
@@ -83,12 +95,13 @@ export async function canSendFromAccount(
   }
 
   if (lastSentAt) {
+    const minWait = GLOBAL_MIN_WAIT_MS + jitterFor(lastSentAt.getTime());
     const elapsed = now.getTime() - lastSentAt.getTime();
-    if (elapsed < GLOBAL_MIN_WAIT_MS) {
+    if (elapsed < minWait) {
       return {
         allowed: false,
-        reason: `Min wait not met (${Math.ceil((GLOBAL_MIN_WAIT_MS - elapsed) / 1000)}s remaining)`,
-        retryAfterMs: GLOBAL_MIN_WAIT_MS - elapsed,
+        reason: `Min wait not met (${Math.ceil((minWait - elapsed) / 1000)}s remaining)`,
+        retryAfterMs: minWait - elapsed,
       };
     }
   }

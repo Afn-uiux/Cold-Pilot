@@ -8,8 +8,8 @@ of spam.
 
 - New or low-volume sending inboxes have little reputation with mail providers.
 - Without warmup, cold emails are far more likely to be filtered to spam.
-- Warmup "trains" the mailbox by sending and receiving a modest, growing volume
-  of mail between real accounts, which builds trust with Gmail/Outlook.
+- Warmup builds the mailbox's trust by sending and receiving a modest, growing
+  volume of mail between real accounts.
 
 ## How it works
 
@@ -19,12 +19,24 @@ of spam.
   - **Warmup increase** — how much volume ramps up per day.
   - **Warmup max** — the ceiling it grows toward.
   - **Warmup days** — how long the warmup plan runs.
-  - **Start/end time** — the active sending window (default business hours).
-  - **Timezone** — which timezone the schedule uses.
+  - **Start/end time** — a custom active window, if you want one.
 - Volume ramps up **gradually** (never all at once) toward the target, with
   safe day-to-day pacing.
-- Warmup only sends within the configured time window (by default 08:00–17:00),
-  so it feels like natural human activity.
+- A warmup day starts each morning at **09:00** and that day's sends spread
+  naturally across the following 24 hours, so activity looks like real human
+  use of the mailbox.
+
+## How the timing looks
+
+- **Send times are randomized daily.** Each day the inbox gets a fresh set of
+  send times, so no two days look the same. At a low daily volume the sends are
+  many hours apart; at a higher daily volume they're more frequent but still
+  spread out.
+- Sends are spaced out with **natural-looking gaps** — like a real person
+  checking and writing email — never a burst of sends at the same moment.
+- Warmup won't fire alongside other sending from the same mailbox: it stays
+  spaced away from your campaign sends too, so the mailbox's activity stays
+  even and human.
 
 ## What warmup monitors
 

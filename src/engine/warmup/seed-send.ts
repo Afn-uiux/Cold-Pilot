@@ -9,7 +9,17 @@ function parseTimeOfDay(str: string): number {
   return parseInt(p[0]) * 60 + (parseInt(p[1]) || 0);
 }
 
+// Warmup day resets at 09:00 (server/Nigerian time) and a day's warmups trickle
+// out across the following 24 hours — instantly.ai does the same with a
+// 12:00 AM UTC reset. Daily-schedule offsets below are measured in
+// minutes-after-this-reset (0..1440).
+export const WARMUP_RESET_MIN = 9 * 60;
+
 function inSchedule(seed: any, now: Date): boolean {
+  // Default: trickle across the full 24h warmup day (no hard window). An
+  // explicitly-set scheduleStart/scheduleEnd still narrows it to a tighter
+  // window for that seed.
+  if (typeof seed.scheduleStart !== "string" && typeof seed.scheduleEnd !== "string") return true;
   const minutes = now.getHours() * 60 + now.getMinutes();
   const start = parseTimeOfDay(seed.scheduleStart);
   const end = parseTimeOfDay(seed.scheduleEnd);
@@ -109,9 +119,12 @@ function rampedDailyTarget(seed: Sender): number {
   return Math.min(base + daysWarming * increase, cap);
 }
 
-function randomDelayMs(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
+// Hard floor between ANY two seed warmup sends, no matter which seed or tick
+// fires them. Without this, seeds share the same schedule window and can all
+// send within the same minute (a spam-filter "blast" signal). Consecutive
+// SMTP sends are therefore >1 minute apart, always.
+const MIN_SEED_GAP_MS = 60_000;
+let lastGridSendAt = 0;
 
 type Receiver =
   | { kind: "seed"; id: string; email: string }
@@ -135,6 +148,73 @@ function receiverWeight(seedId: string): number {
   // Narrow band ~0.85 .. 1.35 (max ~1.6x the average) — a mild skew, not a flood.
   const u = (h % 10000) / 10000; // 0..1
   return 0.85 + u * 0.5;
+}
+
+// Most recent warmup sent from ANY seed within the gap window. Enforced before
+// each actual SMTP send so cross-seed spacing holds across ticks/restarts, not
+// just within a single run of this function.
+async function latestSeedSendAt(gapMs: number): Promise<Date | null> {
+  const log = await prisma.warmupLog.findFirst({
+    where: {
+      senderInboxId: { not: null },
+      sentAt: { gte: new Date(Date.now() - gapMs) },
+    },
+    orderBy: { sentAt: "desc" },
+    select: { sentAt: true },
+  });
+  return log?.sentAt ?? null;
+}
+
+// Small deterministic PRNG (mulberry32) so a seed's daily schedule is stable
+// per seed+date but pseudo-random across seeds and days.
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Deterministic per-seed send times for a warmup day, as minutes-after-reset
+// (0..1440 across the 24h day that starts at 09:00). The day is split into
+// `target` equal slots and one random offset is drawn per slot, so a seed's
+// sends are hours apart (e.g. target 2 → ~12h apart; target 10 → ~2.4h) and
+// trickle throughout the day like instantly.ai. Different seeds and days get
+// different draws, so no two seeds are ever synchronized. An explicit per-seed
+// window (scheduleStart/scheduleEnd) narrows the trickle to those hours.
+function dailySendSchedule(
+  seedId: string,
+  dateKey: string,
+  target: number,
+  startMin: number,
+  endMin: number,
+): number[] {
+  if (target <= 0) return [];
+  let from = startMin - WARMUP_RESET_MIN;
+  let to = (endMin > startMin ? endMin : endMin + 1440) - WARMUP_RESET_MIN;
+  if (from < 0) from = 0;
+  if (to > 1440) to = 1440;
+  const windowLen = Math.max(1, to - from);
+  const rnd = mulberry32(fnv1a(`${seedId}|send|${dateKey}`));
+  const out: number[] = [];
+  for (let i = 0; i < target; i++) {
+    const slotLen = windowLen / target;
+    out.push(Math.floor(from + i * slotLen + rnd() * slotLen));
+  }
+  return out;
+}
+
+// Minimum gap between one seed's own sends: at least 30 minutes, randomized
+// 30-60min (deterministic per seed + last send time, so the chosen gap never
+// shifts while the tick loop retries). Honors a higher configured
+// minWaitMinutes.
+function nextSeedSendAt(seedId: string, lastAt: Date, configuredMin?: number | null): Date {
+  const floor = Math.max(30, configuredMin ?? 30);
+  const rnd = mulberry32(fnv1a(`${seedId}|gap|${lastAt.getTime()}`));
+  const gapMin = Math.floor(floor + rnd() * Math.max(1, 60 - floor));
+  return new Date(lastAt.getTime() + gapMin * 60_000);
 }
 
 async function receivedToday(seedId: string, todayStart: Date): Promise<number> {
@@ -257,45 +337,40 @@ export async function processSeedSends(): Promise<{ sent: number; failed: number
   let sent = 0;
   let failed = 0;
   const now = new Date();
+  // Warmup day = the most recent 09:00 (server/Nigerian time). Counts and the
+  // daily schedule both reset here; the day's warmups then trickle over the
+  // next 24h, instantly.ai style.
   const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
+  todayStart.setHours(9, 0, 0, 0);
+  if (todayStart.getTime() > now.getTime()) todayStart.setDate(todayStart.getDate() - 1);
 
   for (const seed of seeds) {
     // Respect warmup schedule window
     if (!inSchedule(seed, now)) continue;
 
-    // Respect min wait between sends
+    // Respect min wait between sends: at least 30 minutes, randomized 30-60min.
     const lastAt = await lastSeedSendAt(seed.id);
-    if (lastAt) {
-      const minWait = (seed.minWaitMinutes ?? 10) * 60 * 1000;
-      if (now.getTime() - lastAt.getTime() < minWait) continue;
-    }
+    if (lastAt && now.getTime() < nextSeedSendAt(seed.id, lastAt, seed.minWaitMinutes).getTime()) continue;
 
     // Respect daily target (ramped: starts low, grows to cap)
     const sentToday = await seedSentToday(seed.id, todayStart);
     const target = rampedDailyTarget(seed);
     if (sentToday >= target) continue;
 
-    // Slot-based cadence: spread the day's target evenly across the schedule
-    // window instead of dumping sends in the first minutes. Each send fires
-    // near its slot offset (with jitter), so seeds look human — a couple of
-    // sends in the morning, the rest trickling through the window.
-    const startMin = parseTimeOfDay(seed.scheduleStart || "09:00");
-    const endMin = parseTimeOfDay(seed.scheduleEnd || "17:00");
-    const windowLen = endMin === startMin ? 1440 : ((endMin - startMin) + 1440) % 1440;
-    const slotMinutes = windowLen / Math.max(1, target);
-    let slotOffset = (sentToday + 0.5) * slotMinutes;
-    slotOffset += (Math.random() - 0.5) * slotMinutes * 0.3; // ±15% slot jitter
-    const nowOffset = ((now.getHours() * 60 + now.getMinutes()) - startMin + 1440) % 1440;
-    if (nowOffset < slotOffset) {
-      // This slot hasn't come yet — let the day proceed.
+    // Daily cadence: each seed has deterministic send times for its 24h warmup
+    // day, drawn randomly one-per-slot across the whole window (default: the
+    // full 24h from 09:00). Different seeds and days get different draws, and
+    // sends land hours apart — no synchronized blast. sentToday tells us which
+    // scheduled slot is next.
+    const startMin = seed.scheduleStart ? parseTimeOfDay(seed.scheduleStart) : WARMUP_RESET_MIN;
+    const endMin = seed.scheduleEnd ? parseTimeOfDay(seed.scheduleEnd) : WARMUP_RESET_MIN + 1440;
+    const dateKey = `${todayStart.getFullYear()}-${todayStart.getMonth() + 1}-${todayStart.getDate()}`;
+    const schedule = dailySendSchedule(seed.id, dateKey, target, startMin, endMin);
+    if (sentToday >= schedule.length) continue;
+    const nowOffset = ((now.getHours() * 60 + now.getMinutes()) - WARMUP_RESET_MIN + 1440) % 1440;
+    if (nowOffset < schedule[sentToday]) {
+      // This scheduled time hasn't come yet — let the day proceed.
       continue;
-    }
-
-    // Random bleed-time before the actual send so multiple seeds (or a
-    // seed sending again later) don't fire at the same instant.
-    if (Math.random() < 0.8) {
-      await new Promise(r => setTimeout(r, randomDelayMs(0, 120_000)));
     }
 
     const exclude = recentBySeed.get(seed.id) || new Set<string>();
@@ -304,6 +379,17 @@ export async function processSeedSends(): Promise<{ sent: number; failed: number
     // inbox ever gets flooded. Stays modest (well below a flood signal).
     const receiver = await pickReceiver(exclude, seeds.length, 15, todayStart);
     if (!receiver) continue;
+
+    // Cross-seed spacing floor: wait until the grid is free before actually
+    // firing, so multiple due seeds never transmit in the same second. The
+    // in-process clock plus the DB's most-recent send cover restarts and
+    // overlapping ticks alike.
+    const dbLatest = await latestSeedSendAt(MIN_SEED_GAP_MS);
+    const waitUntil = Math.max(lastGridSendAt, dbLatest ? dbLatest.getTime() : 0) + MIN_SEED_GAP_MS;
+    if (waitUntil > Date.now()) {
+      await new Promise(r => setTimeout(r, waitUntil - Date.now()));
+    }
+    lastGridSendAt = Date.now();
 
     const { subject, body } = seedContent(
       seed.displayName || seed.email,

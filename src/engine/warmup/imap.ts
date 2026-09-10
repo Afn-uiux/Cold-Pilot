@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
 import { assertSafeMailTarget } from "@/lib/ssrf";
 import { openImap } from "@/lib/oauth-connect";
+import { openDelayMinutes } from "./open-delay";
 
 const SPAM_FOLDERS: Record<string, string[]> = {
   gmail: ["[Gmail]/Spam", "Spam"],
@@ -93,6 +94,19 @@ function providerFromEmail(email: string): string {
   return "other";
 }
 
+// Best-effort mark a message as read (\Seen) so warmup mail actually looks
+// opened in the real mailbox. UID-scoped; failures must not break processing.
+async function markSeen(client: ImapFlow, folder: string, uids: number[]): Promise<void> {
+  try {
+    const lock = await client.getMailboxLock(folder);
+    try {
+      await client.messageFlagsAdd([...uids], ["\\Seen"], { uid: true });
+    } finally {
+      lock.release();
+    }
+  } catch {}
+}
+
 async function connectToAccount(account: {
   imapHost: string;
   imapPort: number;
@@ -137,6 +151,7 @@ async function searchFolderForSenders(
   client: ImapFlow,
   folder: string,
   senderEmails: string[],
+  tagsByEmail: Map<string, string>,
 ): Promise<Map<string, { uid: number; messageId: string; receivedAt: Date }[]>> {
   const results = new Map<string, { uid: number; messageId: string; receivedAt: Date }[]>();
 
@@ -144,10 +159,16 @@ async function searchFolderForSenders(
     const lock = await client.getMailboxLock(folder);
     try {
       for (const sender of senderEmails) {
-        const uids = await client.search({ from: sender }, { uid: true });
+        // Identify warmup mail precisely: sender's own filter tag is stamped
+        // into the subject of every warmup they send (reconciler/seedContent),
+        // so require it in the search. Without the tag a real non-warmup email
+        // from the same sender could be mistaken for warmup.
+        const tag = (tagsByEmail.get(sender) || "").trim();
+        const criteria = tag ? { from: sender, subject: tag } : { from: sender };
+        const uids = await client.search(criteria, { uid: true });
         if (!uids || uids.length === 0) continue;
         const searchResult: any[] = [];
-        for await (const msg of client.fetch(uids, { uid: true, envelope: true, internalDate: true })) {
+        for await (const msg of client.fetch(uids, { envelope: true, internalDate: true, flags: true }, { uid: true })) {
           searchResult.push(msg);
         }
 
@@ -188,6 +209,9 @@ export async function processSeedInboxes(): Promise<{
   const senderEmails = [...accounts.map(a => a.email), ...seeds.map(s => s.email)];
   const senderIdByEmail = new Map(accounts.map(a => [a.email, a.id]));
   const seedIdByEmail = new Map(seeds.map(s => [s.email, s.id]));
+  const senderTags = new Map<string, string>();
+  for (const a of accounts) if (a.warmupFilterTag) senderTags.set(a.email, String(a.warmupFilterTag));
+  for (const s of seeds) if (s.filterTag) senderTags.set(s.email, String(s.filterTag));
   const senderSettings = new Map(accounts.map(a => [a.id, { openRate: a.warmupOpenRate ?? 100, spamProtection: a.warmupSpamProtection ?? 100, markImportant: a.warmupMarkImportant ?? 0, readEmulation: a.readEmulation ?? false, replyRate: a.warmupReplyRate ?? 30 }]));
   // Seed senders use their own engagement percentages.
   for (const s of seeds) {
@@ -217,7 +241,7 @@ export async function processSeedInboxes(): Promise<{
       }
 
       // 1. Check INBOX for warmup emails
-      const inboxResults = await searchFolderForSenders(client, "INBOX", senderEmails);
+      const inboxResults = await searchFolderForSenders(client, "INBOX", senderEmails, senderTags);
 
       for (const [senderEmail, msgs] of inboxResults) {
         const scope = logScopeFor(senderEmail);
@@ -237,13 +261,22 @@ export async function processSeedInboxes(): Promise<{
             orderBy: { sentAt: "desc" },
           });
 
-          if (log && shouldApply(openRate)) {
+          if (!log) continue;
+          if (!log.sentAt) continue;
+
+          // Human inbox-checking gap: this email is only "opened" at a fixed
+          // simulated check-time well after the sender fired, so the mailbox's
+          // received/read activity lands hours apart from its own sends.
+          const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id) * 60_000);
+          if (Date.now() < openAt.getTime()) continue;
+
+          if (shouldApply(openRate)) {
             if (settings?.readEmulation) {
               const delayMs = 5000 + Math.random() * 55000;
               await new Promise(r => setTimeout(r, delayMs));
             }
 
-            const data: any = { receivedAt: msg.receivedAt, status: "delivered" };
+            const data: any = { receivedAt: openAt, status: "delivered" };
             const markImportant = settings?.markImportant ?? 0;
             if (shouldApply(markImportant)) {
               data.markedImportant = true;
@@ -254,6 +287,7 @@ export async function processSeedInboxes(): Promise<{
               data,
             });
             received++;
+            await markSeen(client, "INBOX", [msg.uid]);
 
             const replyRate = settings?.replyRate ?? 30;
             if (shouldApply(replyRate) && msg.messageId && !log.repliedAt && account.smtpHost && account.smtpPort && account.smtpUser && account.smtpPass) {
@@ -281,7 +315,7 @@ export async function processSeedInboxes(): Promise<{
       // 2. Check Spam folders for rescued emails
       const spamFolders = getSpamFolders(provider);
       for (const spamFolder of spamFolders) {
-        const spamResults = await searchFolderForSenders(client, spamFolder, senderEmails);
+        const spamResults = await searchFolderForSenders(client, spamFolder, senderEmails, senderTags);
 
         for (const [senderEmail, msgs] of spamResults) {
           const scope = logScopeFor(senderEmail);
@@ -303,14 +337,22 @@ export async function processSeedInboxes(): Promise<{
 
             if (!log) continue;
 
+            // Rescue while the spam window is short (20-90min): pull from junk
+            // promptly, but still stamp the received time at a simulated
+            // check-time so the account's timeline shows human gaps.
+            if (!log.sentAt) continue;
+            const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
+            if (Date.now() < openAt.getTime()) continue;
+
             const updateData: any = { foundInSpam: true };
 
             if (shouldApply(spamProtection)) {
+              await markSeen(client, spamFolder, [msg.uid]);
               try {
                 const lock = await client.getMailboxLock(spamFolder);
                 try {
-                  await client.messageCopy([msg.uid], "INBOX");
-                  await client.messageDelete([msg.uid]);
+                  await client.messageCopy([msg.uid], "INBOX", { uid: true });
+                  await client.messageDelete([msg.uid], { uid: true });
                 } finally {
                   lock.release();
                 }
@@ -318,14 +360,14 @@ export async function processSeedInboxes(): Promise<{
                 try {
                   const lock = await client.getMailboxLock(spamFolder);
                   try {
-                    await client.messageCopy([msg.uid], "INBOX");
+                    await client.messageCopy([msg.uid], "INBOX", { uid: true });
                   } finally {
                     lock.release();
                   }
                 } catch {}
               }
 
-              updateData.receivedAt = msg.receivedAt;
+              updateData.receivedAt = openAt;
               updateData.rescuedFromSpam = true;
               updateData.status = "delivered";
 
@@ -349,7 +391,7 @@ export async function processSeedInboxes(): Promise<{
       const promoFolders = ["[Gmail]/Promotions", "Promotions"];
       for (const promoFolder of promoFolders) {
         try {
-          const promoResults = await searchFolderForSenders(client, promoFolder, senderEmails);
+          const promoResults = await searchFolderForSenders(client, promoFolder, senderEmails, senderTags);
 
           for (const [senderEmail, msgs] of promoResults) {
             const scope = logScopeFor(senderEmail);
@@ -368,10 +410,17 @@ export async function processSeedInboxes(): Promise<{
 
               if (!log) continue;
 
+              // Same short rescue window as spam: pull from Promotions promptly
+              // but stamp a simulated received time for human-looking gaps.
+              if (!log.sentAt) continue;
+              const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
+              if (Date.now() < openAt.getTime()) continue;
+
               try {
                 const lock = await client.getMailboxLock(promoFolder);
                 try {
-                  await client.messageMove([msg.uid], "INBOX");
+                  await client.messageFlagsAdd([msg.uid], ["\\Seen"], { uid: true });
+                  await client.messageMove([msg.uid], "INBOX", { uid: true });
                 } finally {
                   lock.release();
                 }
@@ -379,7 +428,7 @@ export async function processSeedInboxes(): Promise<{
                 await prisma.warmupLog.update({
                   where: { id: log.id },
                   data: {
-                    receivedAt: msg.receivedAt,
+                    receivedAt: openAt,
                     status: "delivered",
                   },
                 });
