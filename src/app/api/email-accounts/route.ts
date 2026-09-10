@@ -191,7 +191,7 @@ export async function POST(req: Request) {
   const existing = await prisma.emailAccount.findFirst({
     where: { email, userId: session.user.id },
   });
-  if (existing) return NextResponse.json({ error: "This email is already connected" }, { status: 409 });
+  if (existing && !existing.deletedAt) return NextResponse.json({ error: "This email is already connected" }, { status: 409 });
 
   const finalImapPort = imapPort ? parseInt(String(imapPort)) : undefined;
   const { imapHost: derivedImapHost, imapPort: derivedImapPortNum, provider: seedProvider } = deriveImapConfig(email, imapHost, finalImapPort, smtpHost);
@@ -200,21 +200,28 @@ export async function POST(req: Request) {
   const finalImapPass = imapPass || smtpPass;
   const finalImapHost = imapHost || derivedImapHost;
 
-  const account = await prisma.emailAccount.create({
-    data: encryptAccount({
-      email, provider,
-      displayName: displayName || null,
-      smtpHost: smtpHost || null, smtpPort: smtpPort ? parseInt(smtpPort) : null,
-      smtpUser: smtpUser || null, smtpPass: smtpPass || null,
-      imapHost: finalImapHost || null, imapPort: finalImapPortVal ? parseInt(String(finalImapPortVal)) : null,
-      imapUser: finalImapUser || null, imapPass: finalImapPass || null,
-      gmailToken: gmailToken || null,
-      dailySendLimit: dailySendLimit || 50,
-      warmupEnabled: provider === "Gmail",
-      warmupFilterTag: generateFilterTag(),
-      userId: session.user.id,
-    }),
+  const connectData = encryptAccount({
+    email, provider,
+    displayName: displayName || null,
+    smtpHost: smtpHost || null, smtpPort: smtpPort ? parseInt(smtpPort) : null,
+    smtpUser: smtpUser || null, smtpPass: smtpPass || null,
+    imapHost: finalImapHost || null, imapPort: finalImapPortVal ? parseInt(String(finalImapPortVal)) : null,
+    imapUser: finalImapUser || null, imapPass: finalImapPass || null,
+    gmailToken: gmailToken || null,
+    dailySendLimit: dailySendLimit || 50,
+    warmupEnabled: existing ? existing.warmupEnabled : provider === "Gmail",
+    warmupFilterTag: existing ? existing.warmupFilterTag : generateFilterTag(),
+    userId: session.user.id,
   });
+
+  // Reconnecting a previously deleted mailbox reactivates the existing row
+  // (keeps its warmup history/filter tag) instead of 409-blocking or duplicating.
+  const account = existing
+    ? await prisma.emailAccount.update({
+        where: { id: existing.id },
+        data: { ...connectData, deletedAt: null, status: "active" },
+      })
+    : await prisma.emailAccount.create({ data: connectData });
 
   // Permanent mailbox fingerprinting: the first profile to claim this mailbox
   // owns it. Reuse on another profile voids that account's trial.
@@ -228,7 +235,7 @@ export async function POST(req: Request) {
 
   // Send onboarding email if this is the user's first account
   const accountCount = await prisma.emailAccount.count({ where: { userId: session.user.id, deletedAt: null } });
-  if (accountCount === 1) {
+  if (!existing && accountCount === 1) {
     sendEmailSafe(email, "onboarding-connect-account");
   }
 

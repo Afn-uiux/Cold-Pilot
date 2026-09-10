@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
           microsoftToken: accessToken,
           microsoftRefreshToken: refreshToken,
           status: "active",
+          deletedAt: null,
         }),
       });
     } else {
