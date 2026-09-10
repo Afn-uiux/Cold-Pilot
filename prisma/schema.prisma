@@ -242,7 +242,7 @@ model EmailAccount {
   minWaitTime                Int     @default(60)
   timezone                   String  @default("UTC")
 
-  warmupAiEnabled    Boolean   @default(false)
+  warmupAiEnabled    Boolean   @default(true)
   healthScore        Float     @default(100)
   healthState        String    @default("healthy")
   warmupBounceRate   Float     @default(0)

@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEEPSEEK_MODEL = "deepseek-chat";
-const AI_TIMEOUT = 15000;
-const AI_MAX_RETRIES = 3;
+const AI_TIMEOUT = 12000;
+const AI_MAX_RETRIES = 2;
 
 const AI_PROMPT = `You are writing a short professional email between two business colleagues.
 Requirements:
@@ -14,6 +14,7 @@ Requirements:
 - Context: {context}
 - Sender name: {sender_name}
 - Invent a small, safe, plausible detail for the situation (a meeting, a schedule, a shared task, some notes) so the email feels real — but never mention specific brands, products, links, prices, currencies, or anything sensitive. Keep it generic and believable.
+- Never reuse the exact phrasing of another message you have seen before; vary structure, sentence length, and small details.
 - No marketing language, no links, no HTML, no emojis
 - Do not start with "I hope this email finds you well"
 - Do not use "synergy", "leverage", "circle back", "touch base", "reaching out"
@@ -40,198 +41,179 @@ const CONTEXTS = [
   "sharing a brief recap of a discussion", "checking in on something the two of you were going to work on together",
 ];
 
-const SUBJECTS = [
-  "Quick question for you", "Following up on this", "Wanted to check in",
-  "Re: our earlier exchange", "Had a thought about this", "One thing I wanted to mention",
-  "Did you get a chance to look at this", "Circling back on this", "Touching base",
-  "Just a quick note", "Checking in with you", "Thought you might find this useful",
-  "Following up from last week", "Re: our last conversation", "Quick update from my end",
-  "Something I wanted to share", "Wanted to get your thoughts", "Reaching out about this",
-  "A few things I wanted to cover", "Any update on your end", "Hope things are going well",
-  "Following up as promised", "Checking on the status of this", "Re: the discussion we had",
-  "Wanted to reconnect", "A quick heads up", "Just checking in", "Wanted to loop you in",
-  "Re: what we talked about", "Following up on my last message", "Wanted to touch base quickly",
-  "Re: moving forward on this", "One quick thing", "Keeping you in the loop",
-  "Wanted to get your input", "Re: the item we discussed", "Just a brief follow-up",
-  "Checking in on this", "Wanted to share a quick update", "Re: next steps",
-  "Had a chance to review this", "Following up before end of week", "Something worth discussing",
-  "Wanted to make sure we are aligned", "Reconnecting on this", "Re: where we left off",
-  "Quick check-in", "Wanted to bring this to your attention", "Following up once more",
-  "Re: our ongoing discussion", "Thought I would reach out", "Wanted to confirm a few things",
-  "Any thoughts on this", "Re: the plan we outlined", "Quick follow-up from my side",
-  "Wanted to revisit this with you", "Checking back in with you", "Re: picking up from last time",
-  "One more thing before we proceed", "Wanted to keep the conversation going",
-];
+// ---------------------------------------------------------------------------
+// Combinatorial template pool.
+//
+// Content is assembled slot-by-slot (greeting x opener x transition x ask x
+// signoff, with a varying timeframe and topic), which yields tens of
+// thousands of distinct, natural-sounding emails instead of a flat list of
+// near-identical check-ins. Every account also gets a deterministic writing
+// "voice" (greeting/signoff style, whether it signs its name, how much courteous
+// padding it uses, whether it jumps straight in without a greeting) so that
+// mailboxes read as distinct people and stay consistent across sends.
+// Never brands, money, links, prices — just ordinary work small talk.
+// ---------------------------------------------------------------------------
 
-const BODIES: string[] = [
-  "Hi {name}, just wanted to touch base this week. Do you have a few minutes to connect? {signoff}",
-  "{greeting}, hope things are going well on your end. I had a quick thought I wanted to run by you when you get a chance. {signoff}, {name}",
-  "{greeting} {name}, wanted to follow up on something we discussed earlier. Would love to hear your thoughts. {signoff}",
-  "Hi there, just checking in to see how things are progressing on your end. Let me know if you need anything from me. {signoff}, {name}",
-  "{greeting}, I wanted to reach out and see if now is a good time to reconnect. {signoff}",
-  "Hi {name}, hope your week is going smoothly. I had a quick question I wanted to ask when you have a moment. {signoff}",
-  "{greeting} {name}, just a quick follow-up from our last conversation. Do you have any updates to share? {signoff}",
-  "Hi, wanted to check in and see where things stand. Let me know if there is anything I can do to help move this forward. {signoff}, {name}",
-  "{greeting} {name}, I was thinking about what we discussed and wanted to share a quick thought. Would be curious to hear your take. {signoff}",
-  "Hi there, hope everything is going well. Just reaching out to see if you had a chance to look into this. {signoff}, {name}",
-  "{greeting}, just a brief note to follow up. Let me know when you have a moment to chat. {signoff}",
-  "Hi {name}, circling back on this one. Any updates from your side? {signoff}",
-  "{greeting} {name}, wanted to make sure this did not fall through the cracks. Let me know if you need anything. {signoff}",
-  "Hi, just checking in quickly. Would be great to reconnect this week if your schedule allows. {signoff}, {name}",
-  "{greeting}, wanted to keep the conversation going from where we left off. Any thoughts on moving forward? {signoff}",
-  "Hi {name}, hope things are good on your end. I had something I wanted to discuss when you get a free moment. {signoff}",
-  "{greeting} {name}, just a quick note to follow up. Let me know your thoughts when you get a chance. {signoff}",
-  "Hi, wanted to reach out and touch base. Do you have a few minutes sometime this week? {signoff}, {name}",
-  "{greeting}, following up as I wanted to make sure we are on the same page. Let me know if you have any questions. {signoff}",
-  "Hi {name}, just checking in to see if there are any updates. Feel free to let me know when you are ready to move forward. {signoff}",
-  "{greeting} {name}, wanted to share a quick update from my end. Let me know if this changes anything on your side. {signoff}",
-  "Hi there, hope the week is going well. Just a brief follow-up to see if you had any thoughts on this. {signoff}, {name}",
-  "{greeting}, I wanted to reconnect and see how things are progressing. Do you have a moment to talk this week? {signoff}",
-  "Hi {name}, just touching base to make sure nothing got lost in the shuffle. Let me know if you need anything from me. {signoff}",
-  "{greeting} {name}, hope you are having a good week. Any chance you had time to look at what I sent over? {signoff}",
-  "Hi, following up from my earlier message. Would love to get your input when you have a free moment. {signoff}, {name}",
-  "{greeting}, just a quick check-in. Let me know if there is anything I can do to help with this. {signoff}",
-  "Hi {name}, wanted to see if you had a chance to review the details. Happy to answer any questions you might have. {signoff}",
-  "{greeting} {name}, reaching out to reconnect. Hope things have been going well since we last spoke. {signoff}",
-  "Hi there, just wanted to send a quick note to follow up. Let me know your thoughts when you get a moment. {signoff}, {name}",
-  "{greeting}, I wanted to check in and see if you are still planning to move forward with this. Just let me know. {signoff}",
-  "Hi {name}, hope your week is off to a good start. I had a quick question I wanted to run by you. {signoff}",
-  "{greeting} {name}, wanted to reach out and keep things moving on our end. Any updates from you? {signoff}",
-  "Hi, just following up on this. Let me know when you have a moment to connect. {signoff}, {name}",
-  "{greeting}, wanted to make sure I had not missed anything. Let me know if there are any next steps I should be aware of. {signoff}",
-  "Hi {name}, hope all is well. Just a quick note to check in and see how things are going on your side. {signoff}",
-  "{greeting} {name}, wanted to circle back and see if you had any further thoughts on this. {signoff}",
-  "Hi there, checking in quickly. Would love to reconnect and compare notes when you have a chance. {signoff}, {name}",
-  "{greeting}, just reaching out to follow up on our last exchange. Let me know if anything has changed. {signoff}",
-  "Hi {name}, wanted to get back to you on this. Do you have time for a quick conversation this week? {signoff}",
-  "{greeting} {name}, hope things are going smoothly. Just wanted to check in and see if there are any updates. {signoff}",
-  "Hi, just a brief note to follow up. Let me know if this is still on your radar. {signoff}, {name}",
-  "{greeting}, wanted to reconnect and see where things stand. Looking forward to hearing from you. {signoff}",
-  "Hi {name}, just checking in to see if there is anything I can help with. Happy to jump on a call if needed. {signoff}",
-  "{greeting} {name}, hope the week has been good so far. Wanted to touch base and see how everything is going. {signoff}",
-  "Hi there, just following up to make sure we are still aligned. Let me know if anything has changed on your end. {signoff}, {name}",
-  "{greeting}, wanted to send a quick note to keep in touch. Let me know if there is anything I should know about. {signoff}",
-  "Hi {name}, just a quick follow-up from our earlier conversation. Any progress to report from your side? {signoff}",
-  "{greeting} {name}, hope things are going well. Just reaching out to touch base and stay connected. {signoff}",
-  "Hi, following up on this one more time. Let me know your thoughts whenever you get a chance. {signoff}, {name}",
-  "{greeting}, checking in to see if there is anything I missed. Happy to help if you need anything. {signoff}",
-  "Hi {name}, just wanted to send a brief note and reconnect. Let me know if now is a good time to catch up. {signoff}",
-  "{greeting} {name}, reaching out to follow up on something from last week. Do you have a moment to chat? {signoff}",
-  "Hi there, hope your week is going well. Just checking in and wanted to see if you had any updates. {signoff}, {name}",
-  "{greeting}, I wanted to keep this moving and see if there is anything new on your side. Let me know. {signoff}",
-  "Hi {name}, just a quick check-in to see how things are progressing. Feel free to reach out whenever you are ready. {signoff}",
-  "{greeting} {name}, wanted to follow up and make sure everything is on track. Let me know if there are any issues. {signoff}",
-  "Hi, just sending a quick note to stay in touch. Hope things are going well on your end. {signoff}, {name}",
-  "{greeting}, wanted to touch base before the end of the week. Let me know if anything needs my attention. {signoff}",
-  "Hi {name}, hope your week is wrapping up well. Just following up to make sure nothing was missed. {signoff}",
-  "{greeting} {name}, just a quick follow-up. Wanted to check in and see if there is anything I can help with. {signoff}",
-  "Hi there, reaching out to reconnect and see how things are going. Let me know if you have a moment to chat. {signoff}, {name}",
-  "{greeting} {name}, hope this week has been treating you well. Just wanted to send a quick note and stay connected. Let me know if you have any updates. {signoff}",
-  "Hi, wanted to check in one more time before the week is out. Always good to stay in touch. Let me know when you have a moment. {signoff}, {name}",
-  "Hi {name}, wanted to circle back one more time. Any news to share from your side? {signoff}",
-  "{greeting}, just checking in to see if you have had a chance to review this yet. No rush, just want to stay in the loop. {signoff}",
-  "Hi {name}, hope things are moving along well. Just wanted to send a quick note and check in. {signoff}",
-  "{greeting} {name}, touching base again to see if there are any updates. Let me know when you are free to connect. {signoff}",
-  "Hi there, following up on my previous message. Happy to answer any questions or provide more context if helpful. {signoff}, {name}",
-  "{greeting}, wanted to reach out and see if there is anything from my side that can help move this forward. {signoff}",
-  "Hi {name}, just a brief follow-up to see how things are going. Let me know if you need anything at all. {signoff}",
-  "{greeting} {name}, hope the week has been productive. Just checking in and wanted to stay connected. {signoff}",
-  "Hi, following up here to see if there are any new developments. Looking forward to hearing back from you. {signoff}, {name}",
-  "{greeting}, just reaching out to touch base. Let me know if there is anything worth discussing when you have a moment. {signoff}",
-  "Hi {name}, wanted to reconnect and check in on this. Please do not hesitate to reach out if you need anything. {signoff}",
-  "{greeting} {name}, hope everything is going smoothly. Just a quick follow-up to stay in the loop. {signoff}",
-  "Hi there, just a brief check-in. Let me know when it is a good time to catch up. {signoff}, {name}",
-  "{greeting}, wanted to keep the lines of communication open. Let me know if there is anything on your end I should be aware of. {signoff}",
-  "Hi {name}, following up once more. Looking forward to reconnecting when you have a free moment. {signoff}",
-  "{greeting} {name}, just checking in to see if there is anything I can do from my side. Let me know. {signoff}",
-  "Hi, hope things are well on your end. Just reaching out to touch base and follow up on this. {signoff}, {name}",
-  "{greeting}, wanted to send a quick note to check in. Let me know how things are progressing from your perspective. {signoff}",
-  "Hi {name}, following up with a quick note. Would love to reconnect when the timing works for you. {signoff}",
-  "{greeting} {name}, just checking in. Let me know if there are any updates I should know about. {signoff}",
-  "Hi there, hope everything is going well. Just a brief follow-up to stay on your radar. {signoff}, {name}",
-  "{greeting}, wanted to reach out and see if you had a chance to think this over. Happy to jump on a call. {signoff}",
-  "Hi {name}, just a quick check-in from my side. Let me know when you have a moment to connect. {signoff}",
-  "{greeting} {name}, wanted to follow up one more time. Please let me know if there is anything I can help with. {signoff}",
-  "Hi, following up briefly. Looking forward to hearing from you when you have a chance. {signoff}, {name}",
-  "{greeting}, just touching base to make sure we are still on track. Let me know if anything comes up. {signoff}",
-  "Hi {name}, hope your week is going well. Wanted to check in and see if there are any updates from your side. {signoff}",
-  "{greeting} {name}, just a quick note to follow up. Let me know your availability for a brief conversation. {signoff}",
-  "Hi there, just checking in one more time. Happy to connect whenever the timing works for you. {signoff}, {name}",
-  "{greeting}, wanted to reach out and keep this on your radar. Let me know if you have any thoughts. {signoff}",
-  "Hi {name}, just following up to see if there is anything I should know about. Feel free to respond when you have a moment. {signoff}",
-  "{greeting} {name}, hope things have been going well. Wanted to touch base and stay in the loop. {signoff}",
-  "Hi, circling back on this. Let me know whenever you are ready to move things forward. {signoff}, {name}",
-  "{greeting}, reaching out with a quick follow-up. Let me know if this is still on your radar. {signoff}",
-  "Hi {name}, wanted to send a final note to check in. Looking forward to reconnecting with you soon. {signoff}",
-  "{greeting} {name}, just a quick follow-up. Would love to hear your thoughts when you have a moment. {signoff}",
-];
-
-const GREETINGS = ["Hi", "Hey", "Hello", "Good morning", "Morning", "Hi there"];
-const SIGNOFFS = ["Best", "Thanks", "Regards", "Cheers", "Talk soon", "Thanks again"];
-
-// Safe, generic "what is this about" phrases that make template emails read as
-// real colleague conversations rather than colourless check-ins. Never brands,
-// money, or links — just ordinary work small talk.
 const TOPICS = [
   "the handoff notes", "the schedule for next week", "the plan we outlined",
-  "the numbers we discussed", "the document I mentioned", "the notes from that call",
-  "the tracker we share", "the follow-up items", "the draft we are reviewing",
-  "the timeline we agreed on", "the summary from last meeting", "the updates from yesterday",
-  "the items we left open", "the list you said you would send",
+  "the tracking doc", "the follow-up items from our call", "the draft summary",
+  "the timeline we agreed on", "the items we left open", "the updated plan",
+  "the notes from Tuesday's meeting", "the list of action points", "the overview for the monthly review",
+  "the numbers we went through", "the roadmap we sketched out", "the hand-over file",
+  "the agenda for the next meeting", "the project calendar", "the working document",
+  "the set of changes we discussed", "the recap from yesterday", "the shared folder",
+  "the plan for the coming weeks", "the next version of the document", "the breakdown of tasks",
+  "the points from our last sync", "the notes I said I would send", "the matrix we started",
+  "the summary of decisions", "the draft outline", "the list of open questions",
 ];
 
-const TOPIC_SUBJECTS = [
-  "A quick note on {topic}", "Your thoughts on {topic}", "Re: {topic}",
-  "One thing on {topic}", "Following up on {topic}", "Quick update on {topic}",
+const TIMES = [
+  "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+  "this week", "early next week", "before the end of the week", "sometime next week",
+  "later this month", "in the next few days", "midweek", "first thing tomorrow",
+  "over the next couple of days", "next week",
 ];
 
-const TOPIC_BODIES = [
-  "Hi {name}, just reviewing {topic}. Wanted to make sure we are on the same page before the week wraps up. {signoff}",
-  "{greeting} {name}, I looked back over {topic}. Do you want to catch up briefly on it? {signoff}",
-  "Hi there, quick one on {topic}. Let me know when you would have time to go over it together. {signoff}, {name}",
-  "{greeting}, I had a thought about {topic}. Worth a quick chat when you are free? {signoff}",
-  "Hi {name}, I have a quick update on {topic}. Happy to walk through it when you have a moment. {signoff}",
-  "Hi there, checking in on {topic}. No rush — just wanted to keep it moving if possible. {signoff}, {name}",
+const GREETING_CASUAL = ["Hey", "Hi", "Hello", "Hey there", "Morning"];
+const GREETING_NEUTRAL = ["Hi", "Hello", "Good morning", "Hi there", "Good afternoon"];
+
+const OPENERS = [
+  "I had a chance to dig back into {topic} earlier.",
+  "I finally got a quiet stretch to go back over {topic}.",
+  "I was re-reading the notes from our last call and {topic} came up again.",
+  "Quick sanity check on {topic}.",
+  "I remembered we were going to loop back on {topic}.",
+  "I put some time aside this morning to look at {topic}.",
+  "Things have been busy on my end, but I wanted to pick up {topic} again.",
+  "I went through {topic} again and a couple of things stood out.",
+  "We agreed to revisit {topic}, and I want to make sure it does not slip.",
+  "I have been meaning to close the loop on {topic}.",
+  "I had another look at {topic} before {time}.",
+  "I was planning ahead for {time} and {topic} crossed my mind.",
 ];
 
-// Extra courteous sentences added to many template bodies so they read like a
-// real person's email (3 sentences) instead of a terse one-liner. Still no
-// links, no offers, no pressure — just ordinary professional small talk.
-const EXTENSIONS = [
+const MID_LINES = [
+  "There is one thing I would like to pin down before we move on.",
+  "I wanted to run a small question by you first.",
+  "Before you review anything, one quick heads-up.",
+  "It is probably simplest to settle this over a short call.",
+  "I am not looking to reopen the whole thing — just one point.",
+  "A few minutes between meetings, so I figured I would write this down now.",
+  "I would rather flag it early than leave it for {time}.",
+  "No need to answer right away, but it would help me plan ahead.",
+  "I just want to be sure we are both working from the same version.",
+  "I had a thought about one part of it while going over the notes.",
+];
+
+const ASKS = [
+  "Does {time} work for a quick call?",
+  "Are you free {time} to walk through it?",
+  "Cast an eye over {topic} when you get a moment?",
+  "Let me know if you have had a chance to look at it yet.",
+  "Can you confirm whether we are still good to proceed?",
+  "Shall I go ahead and fold in the notes and send the updated version around?",
+  "Would you prefer I block out a slot {time}?",
+  "Happy to adjust if mornings or afternoons suit you better.",
+  "Do you want me to send over the updated copy once I have touched it up?",
+  "Just drop me a line whenever suits.",
+  "Does {time} suit, or would another day be better?",
+];
+
+const COURTESY = [
   "I know it has been a busy stretch, so no pressure on timing at all.",
   "If a quick call is easier than going back and forth, happy to set one up.",
-  "I can also pull together any notes you would need to get up to speed.",
-  "If this week does not work, we can simply roll it to next week.",
+  "This can certainly wait until things settle down on your end.",
   "Happy to move this wherever it is easiest for you.",
   "No rush at all — just wanted to keep it on your radar while it is fresh.",
-  "Let me know if anything from my side would help move this along.",
-  "Either way, good to be connected on it.",
-  "It can wait until things settle down on your end, obviously.",
-  "Happy to leave it with you and pick it back up whenever suits.",
+  "Either way, good to stay connected on it.",
+  "I can also pull together any notes you would need to get up to speed.",
+  "It can roll over to next week if that suits you better.",
 ];
+
+const SIGNOFF_CASUAL = ["Cheers", "Thanks", "Talk soon", "Thanks again", "Take care", "Speak soon", "Best"];
+const SIGNOFF_NEUTRAL = ["Best", "Regards", "Thanks", "Best regards", "All the best", "Many thanks"];
+
+// Subjects that hang on a topic/timeframe reference.
+const SUBJECT_TIMED = [
+  "{topic}, {time}", "One question about {topic}", "Confirming {topic}",
+  "{topic} — still on track?", "Before {time}: {topic}", "Checking in on {topic} before {time}",
+];
+// Plain subjects used when no timeframe is referenced.
+const SUBJECT_PLAIN = [
+  "Quick thing on {topic}", "Following up on {topic}", "One thing to settle",
+  "Wanted to loop back", "A few lines", "On {topic}",
+];
+
+const SUBJECT_GENERIC = [
+  "Quick question for you", "Wanted to check in", "Had a thought about this",
+  "One thing I wanted to mention", "Just a quick note", "Checking in with you",
+  "Quick update from my end", "Wanted to get your thoughts", "Re: our last conversation",
+];
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function chance(p: number): boolean {
+  return Math.random() < p;
+}
+
+interface Voice {
+  greeting: string[];
+  signoff: string[];
+  useName: boolean;
+  extChance: number;
+  extraSentence: boolean;
+  bare: boolean; // skip greeting entirely
+}
+
+// Deterministic per-account writing voice so each mailbox sounds like one
+// distinct, consistent person while different mailboxes sound like different
+// people.
+function accountVoice(mailboxId: string): Voice {
+  const h = crypto.createHash("sha256").update(`voice:${mailboxId}`).digest();
+  const n1 = h.readUInt16BE(0);
+  const n2 = h.readUInt16BE(2);
+  return {
+    greeting: n1 % 2 === 0 ? GREETING_CASUAL : GREETING_NEUTRAL,
+    signoff: n2 % 2 === 0 ? SIGNOFF_CASUAL : SIGNOFF_NEUTRAL,
+    useName: n1 % 10 < 7,
+    extChance: [0.3, 0.55, 0.85][n2 % 3],
+    extraSentence: n2 % 10 < 6,
+    bare: n1 % 100 < 12,
+  };
+}
+
+function buildTemplateContent(mailboxId: string, senderName: string): { subject: string; body: string } {
+  const voice = accountVoice(mailboxId);
+  const topic = pick(TOPICS);
+  const time = pick(TIMES);
+  const withTime = chance(0.7);
+
+  const greet = voice.bare ? "" : pick(voice.greeting) + (chance(0.6) && !voice.bare ? ` ${senderName},` : ",");
+  const opener = withTime ? pick(OPENERS) : pick(OPENERS.filter(o => !o.includes("{time}")));
+  const mid = voice.extraSentence ? pick(MID_LINES) : "";
+  const ask = withTime ? pick(ASKS) : pick(ASKS.filter(a => !a.includes("{time}")));
+  const courtesy = chance(voice.extChance) ? pick(COURTESY) : "";
+  const signoff = voice.useName ? `${pick(voice.signoff)},\n${senderName}` : pick(voice.signoff);
+
+  let subject: string;
+  if (withTime && chance(0.6)) {
+    subject = pick(SUBJECT_TIMED).replace("{topic}", topic).replace("{time}", time);
+  } else if (chance(0.2)) {
+    subject = pick(SUBJECT_GENERIC);
+  } else {
+    subject = pick(SUBJECT_PLAIN).replace("{topic}", topic);
+  }
+
+  const sentence = (s: string) => (s ? " " + s.replace("{topic}", topic).replace("{time}", time) : "");
+  const body = `${greet}${sentence(opener)}${sentence(mid)}${sentence(courtesy)}${sentence(ask)}\n\n${signoff}`;
+
+  return { subject, body };
+}
 
 function hashContent(subject: string, body: string): string {
   return crypto.createHash("sha256").update(`${subject.toLowerCase().trim()}|||${body.toLowerCase().trim()}`).digest("hex");
-}
-
-function buildTemplateContent(senderName: string): { subject: string; body: string } {
-  const topicUsed = Math.random() < 0.6;
-  const topic = topicUsed ? TOPICS[Math.floor(Math.random() * TOPICS.length)] : null;
-  const subject = topic && Math.random() < 0.5
-    ? TOPIC_SUBJECTS[Math.floor(Math.random() * TOPIC_SUBJECTS.length)].replace("{topic}", topic)
-    : SUBJECTS[Math.floor(Math.random() * SUBJECTS.length)];
-  const bodySource = topic && Math.random() < 0.4
-    ? TOPIC_BODIES[Math.floor(Math.random() * TOPIC_BODIES.length)]
-    : BODIES[Math.floor(Math.random() * BODIES.length)];
-  const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
-  const signoff = SIGNOFFS[Math.floor(Math.random() * SIGNOFFS.length)];
-  const extension = EXTENSIONS[Math.floor(Math.random() * EXTENSIONS.length)];
-  const body = bodySource
-    .replace(/\{name\}/g, senderName)
-    .replace(/\{greeting\}/g, greeting)
-    .replace(/\{signoff\}/g, (extension ? extension + " " : "") + signoff)
-    .replace(/\{topic\}/g, topic ?? "");
-  return { subject, body };
 }
 
 export async function isDuplicate(
@@ -241,17 +223,24 @@ export async function isDuplicate(
   body: string,
 ): Promise<boolean> {
   const contentHash = hashContent(subject, body);
-  const existing = await prisma.warmupContent.findFirst({
-    where: {
-      senderMailboxId,
-      contentHash,
-      OR: [
-        ...(receiver.seedMailboxId ? [{ seedMailboxId: receiver.seedMailboxId }] : []),
-        ...(receiver.seedInboxId ? [{ seedInboxId: receiver.seedInboxId }] : []),
-      ],
-    },
-  });
-  return existing !== null;
+  // Never reuse copy this sender has already sent anywhere, and never send
+  // copy any other account has already used into this receiver's inbox — that
+  // keeps messages distinct both per-mailbox and per-recipient.
+  const [bySender, byReceiver] = await Promise.all([
+    prisma.warmupContent.findFirst({
+      where: { senderMailboxId, contentHash },
+    }),
+    prisma.warmupContent.findFirst({
+      where: {
+        contentHash,
+        OR: [
+          ...(receiver.seedMailboxId ? [{ seedMailboxId: receiver.seedMailboxId }] : []),
+          ...(receiver.seedInboxId ? [{ seedInboxId: receiver.seedInboxId }] : []),
+        ],
+      },
+    }),
+  ]);
+  return bySender !== null || byReceiver !== null;
 }
 
 export async function recordUsedContent(
@@ -283,7 +272,9 @@ async function getExhaustionStats(senderMailboxId: string): Promise<{ poolExhaus
   const totalUsed = await prisma.warmupContent.count({
     where: { senderMailboxId },
   });
-  const poolSize = SUBJECTS.length * BODIES.length;
+  // Combinatorial pool — effectively huge, so exhaustion-based reset is a
+  // safety net only (brings it to true when an account hits tens of thousands).
+  const poolSize = (TOPICS.length + TIMES.length) * (OPENERS.length + MID_LINES.length + ASKS.length + COURTESY.length) * 8;
   const exhaustionPercent = poolSize > 0 ? Math.min(100, (totalUsed / poolSize) * 100) : 0;
   return { poolExhaustionPercent: exhaustionPercent, totalUsed };
 }
@@ -310,7 +301,7 @@ async function generateViaAI(senderName: string, apiKey: string): Promise<{ subj
         body: JSON.stringify({
           model: DEEPSEEK_MODEL,
           max_tokens: 200,
-          temperature: 0.95,
+          temperature: 1.0,
           messages: [{ role: "user", content: prompt }],
         }),
         signal: controller.signal,
@@ -318,7 +309,7 @@ async function generateViaAI(senderName: string, apiKey: string): Promise<{ subj
       clearTimeout(timeout);
 
       if (!res.ok) {
-        if (attempt < AI_MAX_RETRIES - 1) await new Promise(r => setTimeout(r, 2000));
+        if (attempt < AI_MAX_RETRIES - 1) await new Promise(r => setTimeout(r, 1500));
         continue;
       }
 
@@ -330,7 +321,7 @@ async function generateViaAI(senderName: string, apiKey: string): Promise<{ subj
         return { subject: String(parsed.subject).trim(), body: String(parsed.body).trim() };
       }
     } catch {
-      if (attempt < AI_MAX_RETRIES - 1) await new Promise(r => setTimeout(r, 1000));
+      if (attempt < AI_MAX_RETRIES - 1) await new Promise(r => setTimeout(r, 1500));
     }
   }
   return null;
@@ -368,7 +359,7 @@ export async function generateWarmupContent(
   }
 
   for (let attempt = 0; attempt < 50; attempt++) {
-    const content = buildTemplateContent(senderName);
+    const content = buildTemplateContent(senderMailboxId, senderName);
     const duplicate = await isDuplicate(senderMailboxId, receiver, content.subject, content.body);
     if (!duplicate) {
       await recordUsedContent(senderMailboxId, receiver, content.subject, content.body, "templates");
@@ -377,9 +368,7 @@ export async function generateWarmupContent(
   }
 
   await resetUsedContent(senderMailboxId);
-  const content = buildTemplateContent(senderName);
+  const content = buildTemplateContent(senderMailboxId, senderName);
   await recordUsedContent(senderMailboxId, receiver, content.subject, content.body, "templates");
   return { ...content, source: "templates" };
 }
-
-

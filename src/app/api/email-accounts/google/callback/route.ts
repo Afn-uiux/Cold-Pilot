@@ -87,12 +87,14 @@ export async function GET(req: NextRequest) {
     });
 
     if (existing) {
+      // Reconnect reactivates a previously disconnected (soft-deleted) mailbox.
+      const updateData = encryptAccount({
+        gmailToken: refreshToken,
+        status: "active",
+      });
       await prisma.emailAccount.update({
         where: { id: existing.id },
-        data: encryptAccount({
-          gmailToken: refreshToken,
-          status: "active",
-        }),
+        data: { ...updateData, deletedAt: null },
       });
     } else {
       await prisma.emailAccount.create({

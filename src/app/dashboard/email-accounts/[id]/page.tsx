@@ -89,11 +89,21 @@ export default function EmailAccountDetailPage() {
 
   async function toggleWarmup() {
     if (!data) return;
-    await fetch("/api/warmup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ emailAccountId: data.account.id, action: "toggle" }),
-    });
+    try {
+      const res = await fetch("/api/warmup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailAccountId: data.account.id, action: "toggle" }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setSaveMsg({ type: "error", text: err.error || "Failed to update warmup" });
+        setTimeout(() => setSaveMsg(null), 4000);
+      }
+    } catch {
+      setSaveMsg({ type: "error", text: "Failed to update warmup" });
+      setTimeout(() => setSaveMsg(null), 4000);
+    }
     fetchDetail();
   }
 
