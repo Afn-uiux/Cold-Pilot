@@ -39,6 +39,24 @@ export function isPayAsYouGo(plan?: string | null, creditBalance?: number | null
   return plan === "free" && Number(creditBalance ?? 0) > 0;
 }
 
+// A per-user lead-limit override is honored ONLY while the user's free trial is
+// live (and not voided). It expires with the trial: the moment trialGrantsFeatureAccess
+// goes false (trial over or voided), the plan's regular leadLimit takes over again.
+export function effectiveLeadLimit(user: {
+  plan?: string | null;
+  leadLimitOverride?: number | null;
+  trialEndsAt?: Date | null;
+  trialVoided?: boolean | null;
+}): number {
+  if (
+    user.leadLimitOverride != null &&
+    trialGrantsFeatureAccess(user.plan, user.trialEndsAt ?? null, user.trialVoided ?? false)
+  ) {
+    return user.leadLimitOverride;
+  }
+  return getPlan(user?.plan ?? "free").leadLimit;
+}
+
 // Grants the one-time signup bonus (SIGNUP_CREDITS) the first time the user's
 // balance is touched — but only after their email is verified. Free signup
 // credits are a paid-adjacent asset, so granting them to an unverified address
@@ -86,7 +104,7 @@ export async function getCreditState(userId: string): Promise<CreditState | null
   await ensureSignupCredits(userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, trialEndsAt: true, trialVoided: true, creditBalance: true },
+    select: { plan: true, trialEndsAt: true, trialVoided: true, creditBalance: true, leadLimitOverride: true },
   });
   if (!user) return null;
   const plan = getPlan(user.plan);
@@ -98,10 +116,11 @@ export async function getCreditState(userId: string): Promise<CreditState | null
     plan: plan.id,
     planName: plan.name,
     balance: user.creditBalance,
-    // Hard caps: free (incl. trial) and all paid plans enforce plan.leadLimit.
-    // Pay-as-you-go is intentionally unlimited on leads — the credit cost of
-    // importing/verifying is the throttle (assertLeadCapacity skips PAYG).
-    leadLimit: payg ? Infinity : plan.leadLimit,
+    // Hard caps: free (incl. trial) and all paid plans enforce their lead limit
+    // (a per-user trial override lifts it while the trial runs). Pay-as-you-go
+    // is intentionally unlimited on leads — the credit cost of importing/verifying
+    // is the throttle (assertLeadCapacity skips PAYG).
+    leadLimit: payg ? Infinity : effectiveLeadLimit(user),
     inboxLimit: plan.inboxLimit,
     aiEnabled: plan.aiEnabled || freeTrialActive || payg,
     payg,
@@ -229,7 +248,7 @@ export async function assertLeadCapacity(
 ): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, creditBalance: true },
+    select: { plan: true, creditBalance: true, trialEndsAt: true, trialVoided: true, leadLimitOverride: true },
   });
 
   // Pay-as-you-go users have no hard lead cap — the credit cost of importing is
@@ -237,7 +256,9 @@ export async function assertLeadCapacity(
   // free/trial users who cannot pay per lead.
   if (isPayAsYouGo(user?.plan, user?.creditBalance)) return;
 
-  const plan = getPlan(user?.plan);
+  // A per-user trial override (leadLimitOverride) lifts the cap while the trial
+  // is live; it reverts to the plan cap the moment the trial ends.
+  const leadLimit = effectiveLeadLimit(user ?? {});
 
   // Counts every lead ever created, including deleted ones. Deleting leads is
   // data cleanup, not a limit reset — capacity is consumed permanently.
@@ -245,9 +266,9 @@ export async function assertLeadCapacity(
     where: { userId },
   });
 
-  if (current + incomingCount > plan.leadLimit) {
+  if (current + incomingCount > leadLimit) {
     throw new PlanLimitError(
-      `Lead limit reached. ${plan.name} allows ${plan.leadLimit} total leads; you've used ${current} (deleted leads still count). Upgrade to add ${incomingCount} more.`,
+      `Lead limit reached. ${leadLimit} total leads allowed; you've used ${current} (deleted leads still count). Upgrade to add ${incomingCount} more.`,
       "LEAD_LIMIT"
     );
   }

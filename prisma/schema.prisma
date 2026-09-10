@@ -21,6 +21,10 @@ model User {
   onboardingGoals      String?
   totpSecret           String?
   plan                 String    @default("free")
+  // Per-user lead-limit override. Honored ONLY while this user's free trial is
+  // live (and not voided); the moment the trial ends the override reverts to
+  // the plan cap. Used to grant a specific account a raised upload allowance.
+  leadLimitOverride    Int?
   billingCurrency      String    @default("NGN")
   creditBalance        Float     @default(0)
   // Portion of creditBalance that came from the signup bonus (free, revocable
