@@ -7,8 +7,8 @@ import { decryptAccount } from "@/lib/crypto";
 // receive warmup traffic.
 
 type Receiver =
-  | { kind: "seed"; id: string; email: string }
-  | { kind: "peer"; id: string; email: string };
+  | { kind: "seed"; id: string; email: string; name: string }
+  | { kind: "peer"; id: string; email: string; name: string };
 
 export function isEntitledToWarmup(user: {
   plan: string;
@@ -47,12 +47,14 @@ async function findPlatformSeed(
 ): Promise<Receiver | null> {
   const seeds = await prisma.seedInbox.findMany({
     where: { status: "active" },
-    select: { id: true, email: true, lastUsedAt: true },
+    select: { id: true, email: true, displayName: true, lastUsedAt: true },
     orderBy: { lastUsedAt: "asc" },
   });
   const candidates = seeds.filter(s => !excludeIds.has(s.id));
   if (candidates.length === 0) return null;
-  return { kind: "seed", id: candidates[0].id, email: candidates[0].email };
+  const c = candidates[0];
+  const name = c.displayName?.split(/\s+/)[0] || c.email.split("@")[0];
+  return { kind: "seed", id: c.id, email: c.email, name };
 }
 
 async function findPeerReceiver(
@@ -75,6 +77,7 @@ async function findPeerReceiver(
     select: {
       id: true,
       email: true,
+      displayName: true,
       lastHealthCheckAt: true,
       healthScore: true,
       healthState: true,
@@ -104,7 +107,8 @@ async function findPeerReceiver(
 
   const idx = Math.floor(Math.random() * pool.length);
   const picked = pool[idx];
-  return { kind: "peer", id: picked.id, email: picked.email };
+  const name = picked.displayName?.split(/\s+/)[0] || picked.email.split("@")[0];
+  return { kind: "peer", id: picked.id, email: picked.email, name };
 }
 
 // Pick a warmup receiver for a sender. Priority:
@@ -161,9 +165,12 @@ export async function pickWarmupReceiver(
   const anySeed = await prisma.seedInbox.findFirst({
     where: { status: "active" },
     orderBy: { lastUsedAt: "asc" },
-    select: { id: true, email: true },
+    select: { id: true, email: true, displayName: true },
   });
-  if (anySeed) return { kind: "seed", id: anySeed.id, email: anySeed.email };
+  if (anySeed) {
+    const name = anySeed.displayName?.split(/\s+/)[0] || anySeed.email.split("@")[0];
+    return { kind: "seed", id: anySeed.id, email: anySeed.email, name };
+  }
 
   return null;
 }

@@ -7,12 +7,12 @@ const DEEPSEEK_MODEL = "deepseek-chat";
 const AI_TIMEOUT = 12000;
 const AI_MAX_RETRIES = 2;
 
-const AI_PROMPT = `You are writing a short professional email between two business colleagues.
+const AI_PROMPT = `You are writing a short professional email from {sender_name} to {recipient_name}, two business colleagues.
 
-Sender name: {sender_name}
+Recipient name: {recipient_name}
 Greeting style (use ONE of these): {greeting_options}
 Sign-off style (use ONE of these): {signoff_options}
-Include sender's first name in greeting and sign-off: {use_name}
+Include sender's first name in the sign-off: {use_name}
 Tone: {tone}
 
 Pick a topic from this list — rotate across ALL categories each time, never repeat a topic you have used before:
@@ -298,6 +298,7 @@ const AI_TOPICS = CATEGORIES.map(c => `${c.name}: ${c.situations.map(s => s.topi
 export async function generateSeedWarmupContent(
   seedId: string,
   senderName: string,
+  recipientName: string,
   tags: string[] = [],
   filterTag = "",
 ): Promise<{ subject: string; body: string }> {
@@ -315,11 +316,11 @@ export async function generateSeedWarmupContent(
       select: { subject: true },
     });
     const recentSubjects = recentLogs.map(l => String(l.subject).slice(0, 60));
-    content = await generateViaAI(senderName, apiKey, voice, recentSubjects);
+    content = await generateViaAI(senderName, recipientName, apiKey, voice, recentSubjects);
   }
 
   if (!content) {
-    content = buildTemplateContent(seedId, senderName);
+    content = buildTemplateContent(seedId, senderName, recipientName);
   }
 
   let { subject, body } = content;
@@ -336,11 +337,11 @@ export async function generateSeedWarmupContent(
   return { subject, body };
 }
 
-function buildTemplateContent(mailboxId: string, senderName: string): { subject: string; body: string } {
+function buildTemplateContent(mailboxId: string, senderName: string, recipientName: string): { subject: string; body: string } {
   const voice = accountVoice(mailboxId);
   const time = pick(TIMES);
 
-  const greet = voice.bare ? "" : pick(voice.greeting) + (chance(0.6) && !voice.bare ? ` ${senderName},` : ",");
+  const greet = voice.bare ? "" : pick(voice.greeting) + (chance(0.6) && !voice.bare ? ` ${recipientName},` : ",");
   const courtesy = chance(voice.extChance) ? pick(COURTESY) : "";
   const signoff = voice.useName ? `${pick(voice.signoff)},\n${senderName}` : pick(voice.signoff);
 
@@ -444,6 +445,7 @@ async function resetUsedContent(senderMailboxId: string): Promise<void> {
 
 async function generateViaAI(
   senderName: string,
+  recipientName: string,
   apiKey: string,
   voice: Voice,
   recentSubjects: string[],
@@ -454,13 +456,14 @@ async function generateViaAI(
   const useName = voice.useName ? "Yes — always include the sender's first name" : "No — use only the sign-off word, no name";
   const openingInstruction = voice.bare
     ? "Start directly with the topic — no greeting, no 'Hi X,'."
-    : "Start with the greeting + first name, e.g. \"Hey Ngozi,\".";
+    : `Start with the greeting to ${recipientName}, e.g. \"Hey ${recipientName},\".`;
   const recentBlock = recentSubjects.length > 0
     ? recentSubjects.map(s => `- ${s}`).join("\n")
     : "None yet — this is this sender's first message.";
   const prompt = AI_PROMPT
     .replace("{tone}", tone)
     .replace("{sender_name}", senderName)
+    .replace("{recipient_name}", recipientName)
     .replace("{greeting_options}", greetingOptions)
     .replace("{signoff_options}", signoffOptions)
     .replace("{use_name}", useName)
@@ -508,6 +511,7 @@ async function generateViaAI(
 export async function generateWarmupContent(
   senderMailboxId: string,
   senderName: string,
+  recipientName: string,
   receiver: { seedMailboxId: string | null; seedInboxId: string | null },
 ): Promise<{ subject: string; body: string; source: string }> {
   const mailbox = await prisma.emailAccount.findUnique({
@@ -530,7 +534,7 @@ export async function generateWarmupContent(
         select: { subjectPreview: true },
       });
       const recentSubjects = recentRows.map(r => r.subjectPreview);
-      const aiContent = await generateViaAI(senderName, apiKey, voice, recentSubjects);
+      const aiContent = await generateViaAI(senderName, recipientName, apiKey, voice, recentSubjects);
       if (aiContent) {
         const duplicate = await isDuplicate(senderMailboxId, receiver, aiContent.subject, aiContent.body);
         if (!duplicate) {
@@ -548,7 +552,7 @@ export async function generateWarmupContent(
   }
 
   for (let attempt = 0; attempt < 50; attempt++) {
-    const content = buildTemplateContent(senderMailboxId, senderName);
+    const content = buildTemplateContent(senderMailboxId, senderName, recipientName);
     const duplicate = await isDuplicate(senderMailboxId, receiver, content.subject, content.body);
     if (!duplicate) {
       await recordUsedContent(senderMailboxId, receiver, content.subject, content.body, "templates");
@@ -557,7 +561,7 @@ export async function generateWarmupContent(
   }
 
   await resetUsedContent(senderMailboxId);
-  const content = buildTemplateContent(senderMailboxId, senderName);
+  const content = buildTemplateContent(senderMailboxId, senderName, recipientName);
   await recordUsedContent(senderMailboxId, receiver, content.subject, content.body, "templates");
   return { ...content, source: "templates" };
 }

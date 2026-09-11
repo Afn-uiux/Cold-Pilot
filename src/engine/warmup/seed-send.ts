@@ -82,8 +82,8 @@ const MIN_SEED_GAP_MS = 60_000;
 let lastGridSendAt = 0;
 
 type Receiver =
-  | { kind: "seed"; id: string; email: string }
-  | { kind: "peer"; id: string; email: string };
+  | { kind: "seed"; id: string; email: string; name: string }
+  | { kind: "peer"; id: string; email: string; name: string };
 
 // Mild per-seed "weight" derived from its id. Seeds with higher weight get
 // chosen as receivers a bit more often, so receives are slightly uneven but
@@ -207,15 +207,16 @@ async function pickReceiver(
 ): Promise<Receiver | null> {
   const seeds = await prisma.seedInbox.findMany({
     where: { status: "active" },
-    select: { id: true, email: true, lastUsedAt: true },
+    select: { id: true, email: true, displayName: true, lastUsedAt: true },
     orderBy: { lastUsedAt: "asc" },
   });
   // Exclude receivers already at their receive cap so no seed gets flooded.
-  const seedPool: Array<{ id: string; email: string }> = [];
+  const seedPool: Array<{ id: string; email: string; name: string }> = [];
   for (const s of seeds) {
     if (excludeIds.has(s.id)) continue;
     if (await receivedToday(s.id, todayStart) >= receiveCap) continue;
-    seedPool.push({ id: s.id, email: s.email });
+    const name = s.displayName?.split(/\s+/)[0] || s.email.split("@")[0];
+    seedPool.push({ id: s.id, email: s.email, name });
   }
 
   // Eligible customer mailboxes: warmup on, entitled (trial/paid), healthy as
@@ -225,6 +226,7 @@ async function pickReceiver(
     select: {
       id: true,
       email: true,
+      displayName: true,
       warmupMax: true,
       currentDailyVolume: true,
       healthScore: true,
@@ -233,12 +235,13 @@ async function pickReceiver(
       user: { select: { plan: true, trialEndsAt: true, trialVoided: true, deletedAt: true } },
     },
   });
-  const peerPool: Array<{ id: string; email: string }> = [];
+  const peerPool: Array<{ id: string; email: string; name: string }> = [];
   for (const p of peers) {
     if (excludeIds.has(p.id)) continue;
     if (!isEntitledToWarmup(p.user) || !isHealthyPeerReceiver(p)) continue;
     if (await peerReceivedToday(p.id, todayStart) >= peerReceiveCap(p)) continue;
-    peerPool.push({ id: p.id, email: p.email });
+    const name = p.displayName?.split(/\s+/)[0] || p.email.split("@")[0];
+    peerPool.push({ id: p.id, email: p.email, name });
   }
 
   if (seedPool.length === 0 && peerPool.length === 0) return null;
@@ -256,10 +259,10 @@ async function pickReceiver(
   let r = Math.random() * total;
   for (const p of pool) {
     r -= p.weight;
-    if (r <= 0) return { kind: p.kind, id: p.c.id, email: p.c.email };
+    if (r <= 0) return { kind: p.kind, id: p.c.id, email: p.c.email, name: p.c.name };
   }
   const last = pool[pool.length - 1];
-  return { kind: last.kind, id: last.c.id, email: last.c.email };
+  return { kind: last.kind, id: last.c.id, email: last.c.email, name: last.c.name };
 }
 
 export async function processSeedSends(): Promise<{ sent: number; failed: number }> {
@@ -354,6 +357,7 @@ export async function processSeedSends(): Promise<{ sent: number; failed: number
     const { subject, body } = await generateSeedWarmupContent(
       seed.id,
       seed.displayName || seed.email,
+      receiver.name || receiver.email.split("@")[0],
       parseSeedTags((seed as any).tags ?? []),
       String((seed as any).filterTag ?? ""),
     );
