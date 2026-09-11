@@ -92,9 +92,11 @@ export async function GET(req: NextRequest) {
       include: { lead: { select: { email: true, firstName: true, lastName: true } } },
     });
 
-    // Warmup stats for last 7 days
+    // Warmup stats for last 7 calendar days (matches the chart window below:
+    // today minus 6 days at midnight, so the summary total always equals the
+    // sum of the plotted bars).
     const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
 
     const warmupLogs = await prisma.warmupLog.findMany({
@@ -102,6 +104,11 @@ export async function GET(req: NextRequest) {
       orderBy: { sentAt: "asc" },
       select: { sentAt: true, receivedAt: true, rescuedFromSpam: true, status: true },
     });
+
+    // Only actually-sent warmups count as "sent": pending (scheduled/sending)
+    // rows carry a FUTURE sentAt and failed rows were never delivered, so both
+    // are excluded or the summary count and the chart disagree.
+    const sentLogs = warmupLogs.filter(l => l.status === "sent" || l.status === "delivered");
 
     // Build daily aggregates
     const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -113,7 +120,7 @@ export async function GET(req: NextRequest) {
       d.setHours(0, 0, 0, 0);
       const next = new Date(d);
       next.setDate(next.getDate() + 1);
-      const dayLogs = warmupLogs.filter(l => l.sentAt && l.sentAt >= d && l.sentAt < next);
+      const dayLogs = sentLogs.filter(l => l.sentAt && l.sentAt >= d && l.sentAt < next);
       daily.push({
         date: d.toISOString().slice(0, 10),
         label: dayLabels[d.getDay() === 0 ? 6 : d.getDay() - 1] || dayLabels[d.getDay()],
@@ -124,9 +131,9 @@ export async function GET(req: NextRequest) {
     }
 
     // Warmup summary
-    const warmupReceived = warmupLogs.filter(l => l.status === "received" || l.receivedAt).length;
-    const warmupSent = warmupLogs.length;
-    const savedFromSpam = warmupLogs.filter(l => l.rescuedFromSpam).length;
+    const warmupReceived = sentLogs.filter(l => l.status === "received" || l.receivedAt).length;
+    const warmupSent = sentLogs.length;
+    const savedFromSpam = sentLogs.filter(l => l.rescuedFromSpam).length;
 
     const campaigns = await prisma.campaign.findMany({
       where: { userId: session.user.id, accountIds: { contains: id }, deletedAt: null },

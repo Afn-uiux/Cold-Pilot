@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
 import { sendWarmupEmail } from "./sender";
 import { isEntitledToWarmup, isHealthyPeerReceiver } from "./pool";
-import { parseSeedTags, spinSubjectTag } from "@/lib/seed-tags";
+import { parseSeedTags } from "@/lib/seed-tags";
+import { generateSeedWarmupContent } from "./content";
 
 function parseTimeOfDay(str: string): number {
   const p = (str || "09:00").split(":");
@@ -46,52 +47,6 @@ async function lastSeedSendAt(seedId: string): Promise<Date | null> {
 // network warm ITSELF even when no customers are on the platform. Seeds send
 // warmup to other seeds, and also to eligible customer mailboxes, so the pool
 // stays active. This is what makes the network self-sustaining while idle.
-
-const SEED_SUBJECTS = [
-  "Quick question",
-  "Following up",
-  "Hope you're well",
-  "A thought for you",
-  "Re: our chat",
-  "Checking in",
-  "Saw this and thought of you",
-  "Small update",
-];
-
-const SEED_BODIES = [
-  "Hey,\n\nJust wanted to follow up on this. Let me know when you get a chance to look.\n\nBest,\n{name}",
-  "Hi,\n\nHope you're having a good week. Figured I'd reach out to see if you had any thoughts on this.\n\nCheers,\n{name}",
-  "Hello,\n\nWanted to circle back on the thing we touched on. Happy to jump on a call if useful.\n\nThanks,\n{name}",
-  "Hi,\n\nCame across this recently and thought you might find it interesting. Let me know what you think.\n\nBest regards,\n{name}",
-  "Hey,\n\nJust a quick note to keep in touch. No rush on anything — wanted to stay connected.\n\nTalk soon,\n{name}",
-];
-
-function seedContent(senderName: string, tags: string[] = [], filterTag = ""): { subject: string; body: string } {
-  let subject = SEED_SUBJECTS[Math.floor(Math.random() * SEED_SUBJECTS.length)];
-  let body = SEED_BODIES[Math.floor(Math.random() * SEED_BODIES.length)].replace(
-    "{name}",
-    senderName || "Sincerely",
-  );
-  // Spin the seed's tags into the content: one random tag rides the subject
-  // line, the full set closes the body. Every warmup email then carries
-  // unique content (identical bodies at volume are a spam-filter signal).
-  // Seeds without tags send the base templates unchanged.
-  const tagList = parseSeedTags(tags);
-  if (tagList.length > 0) {
-    const subjectTag = spinSubjectTag(tagList);
-    if (subjectTag) subject = `${subject} ${subjectTag}`;
-    body = `${body}\n\n${tagList.join(" ")}`;
-  }
-  // Per-seed tracking code (mirrors EmailAccount.warmupFilterTag): appended
-  // to the subject and stamped on its own final body line so the seed's mail
-  // is findable/filterable in any inbox. Skipped when unset.
-  const code = (filterTag || "").trim();
-  if (code) {
-    subject = `${subject} ${code}`;
-    body = `${body}\n${code}`;
-  }
-  return { subject, body };
-}
 
 type Sender = {
   id: string;
@@ -396,7 +351,8 @@ export async function processSeedSends(): Promise<{ sent: number; failed: number
     }
     lastGridSendAt = Date.now();
 
-    const { subject, body } = seedContent(
+    const { subject, body } = await generateSeedWarmupContent(
+      seed.id,
       seed.displayName || seed.email,
       parseSeedTags((seed as any).tags ?? []),
       String((seed as any).filterTag ?? ""),
