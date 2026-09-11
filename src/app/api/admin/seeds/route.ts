@@ -54,8 +54,10 @@ export async function GET(req: NextRequest) {
   startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
 
   // Aggregate warmup activity per seed. Sent = this seed sent; received =
-  // this seed received (seedInboxId); replied = it replied; rescued = it
-  // rescued a spam message.
+  // this seed received (seedInboxId); replied = it replied; rescued = warmup
+  // emails THIS seed SENT that landed in spam and were rescued by the
+  // recipient — the sender-reputation signal, same as the health score and
+  // the user-facing saved-from-spam analytics.
   const [sentToday, sentWeek, receivedToday, receivedWeek, repliedToday, repliedWeek, rescuedToday, rescuedWeek] =
     await Promise.all([
       prisma.warmupLog.groupBy({ by: ["senderInboxId"], _count: { id: true }, where: { senderInboxId: { in: seeds.map(s => s.id) }, sentAt: { gte: startOfToday } } }),
@@ -64,8 +66,8 @@ export async function GET(req: NextRequest) {
       prisma.warmupLog.groupBy({ by: ["seedInboxId"], _count: { id: true }, where: { seedInboxId: { in: seeds.map(s => s.id) }, receivedAt: { gte: startOfWeek } } }),
       prisma.warmupLog.groupBy({ by: ["seedInboxId"], _count: { id: true }, where: { seedInboxId: { in: seeds.map(s => s.id) }, repliedAt: { gte: startOfToday } } }),
       prisma.warmupLog.groupBy({ by: ["seedInboxId"], _count: { id: true }, where: { seedInboxId: { in: seeds.map(s => s.id) }, repliedAt: { gte: startOfWeek } } }),
-      prisma.warmupLog.groupBy({ by: ["seedInboxId"], _count: { id: true }, where: { seedInboxId: { in: seeds.map(s => s.id) }, rescuedFromSpam: true, receivedAt: { gte: startOfToday } } }),
-      prisma.warmupLog.groupBy({ by: ["seedInboxId"], _count: { id: true }, where: { seedInboxId: { in: seeds.map(s => s.id) }, rescuedFromSpam: true, receivedAt: { gte: startOfWeek } } }),
+      prisma.warmupLog.groupBy({ by: ["senderInboxId"], _count: { id: true }, where: { senderInboxId: { in: seeds.map(s => s.id) }, rescuedFromSpam: true, sentAt: { gte: startOfToday } } }),
+      prisma.warmupLog.groupBy({ by: ["senderInboxId"], _count: { id: true }, where: { senderInboxId: { in: seeds.map(s => s.id) }, rescuedFromSpam: true, sentAt: { gte: startOfWeek } } }),
     ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,8 +83,8 @@ export async function GET(req: NextRequest) {
     receivedWeek: mapTo(receivedWeek, "seedInboxId"),
     repliedToday: mapTo(repliedToday, "seedInboxId"),
     repliedWeek: mapTo(repliedWeek, "seedInboxId"),
-    rescuedToday: mapTo(rescuedToday, "seedInboxId"),
-    rescuedWeek: mapTo(rescuedWeek, "seedInboxId"),
+    rescuedToday: mapTo(rescuedToday, "senderInboxId"),
+    rescuedWeek: mapTo(rescuedWeek, "senderInboxId"),
   };
 
   const list = seeds.map(s => ({ ...sanitize(s as any), stats: {

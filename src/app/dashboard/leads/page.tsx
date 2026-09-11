@@ -93,6 +93,7 @@ export default function LeadsPage() {
   const [importResult, setImportResult] = useState<any>(null);
   const [importCampaignId, setImportCampaignId] = useState(urlCampaignId);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [usage, setUsage] = useState<{ leadLimit: number; leadsUsedTotal: number } | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
   const [verifyResult, setVerifyResult] = useState<{
@@ -109,9 +110,16 @@ export default function LeadsPage() {
     Promise.all([
       fetch(leadsUrl).then(r => r.json()),
       fetch("/api/campaigns").then(r => r.json()),
-    ]).then(([leadsData, campaignsData]) => {
+      fetch("/api/user").then(r => r.json()),
+    ]).then(([leadsData, campaignsData, userData]) => {
       setLeads(Array.isArray(leadsData) ? leadsData : []);
       setCampaigns(Array.isArray(campaignsData) ? campaignsData.map((c: any) => ({ id: c.id, name: c.name })) : []);
+      if (userData) {
+        const unlimited = userData.payg === true;
+        if (unlimited || Number.isFinite(userData.leadLimit)) {
+          setUsage({ leadLimit: unlimited ? Infinity : userData.leadLimit, leadsUsedTotal: Number(userData.leadsUsedTotal ?? 0) });
+        }
+      }
       if (urlCampaignId && (!Array.isArray(leadsData) || leadsData.length === 0)) setShowImport(true);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [urlCampaignId]);
@@ -263,6 +271,12 @@ export default function LeadsPage() {
       setImportResult(null);
       setImportCampaignId("");
       toast(`${result.imported ?? 0} lead${(result.imported ?? 0) === 1 ? "" : "s"} imported`, "success");
+      // Refresh the all-time used counter so the limit bar stays accurate.
+      if (result.imported) {
+        fetch("/api/user").then(r => r.json()).then(u => {
+          if (u && (u.payg === true || Number.isFinite(u?.leadLimit))) setUsage({ leadLimit: u.payg === true ? Infinity : u.leadLimit, leadsUsedTotal: Number(u.leadsUsedTotal ?? 0) });
+        }).catch(() => {});
+      }
       if (urlCampaignId) router.replace(`/dashboard/campaigns/${urlCampaignId}?tab=leads`);
     } else {
       setImportResult(result);
@@ -321,6 +335,7 @@ export default function LeadsPage() {
   }
 
   const activeCampaign = urlCampaignId ? campaigns.find(c => c.id === urlCampaignId) : null;
+  const limitReached = usage !== null && usage.leadLimit !== Infinity && usage.leadsUsedTotal >= usage.leadLimit;
 
   return (
     <>
@@ -482,6 +497,26 @@ export default function LeadsPage() {
             </div>
 
             <div className="px-8 pb-8 overflow-y-auto pt-6">
+              {usage && (
+                <div className={`mb-4 px-4 py-3 rounded-lg border transition-colors ${limitReached ? "bg-red-50 border-red-200" : "bg-cream-2 border-border"}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-muted">Upload limit</span>
+                    {usage.leadLimit === Infinity ? (
+                      <span className="text-xs font-medium text-ink">Pay as you go</span>
+                    ) : (
+                      <span className={`text-xs font-medium ${limitReached ? "text-red-600" : "text-ink"}`}>
+                        {Math.min(usage.leadsUsedTotal, usage.leadLimit).toLocaleString()} of {usage.leadLimit.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  {usage.leadLimit !== Infinity && (
+                    <div className="h-1 rounded-full bg-ink/10 overflow-hidden">
+                      <div className="h-full bg-blue-accent rounded-full transition-all" style={{ width: `${Math.min(100, (usage.leadsUsedTotal / usage.leadLimit) * 100)}%` }} />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {importResult && (
                 <div className={`text-sm p-3 rounded-lg mb-4 whitespace-pre-line ${importResult.error || importResult.firstError ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
                   {importResult.error || (importResult.firstError
@@ -523,7 +558,7 @@ export default function LeadsPage() {
                       </div>
                     )}
                   </div>
-                  <button onClick={handleCsvImport} disabled={!csvFile || importing} className="btn btn-primary w-full mt-5 disabled:opacity-40">
+                  <button onClick={handleCsvImport} disabled={!csvFile || importing || limitReached} className="btn btn-primary w-full mt-5 disabled:opacity-40">
                     {importing ? "Importing..." : "Import CSV"}
                   </button>
                 </div>
@@ -535,7 +570,7 @@ export default function LeadsPage() {
                       className="w-full bg-transparent border-b border-border pb-2.5 text-sm outline-none focus:border-ink" />
                     <p className="text-xs text-muted-2 mt-2">Publish your sheet to the web (File → Share → Publish to web → CSV), then paste the URL.</p>
                   </div>
-                  <button onClick={handleLinkImport} disabled={!linkUrl.trim() || importing} className="btn btn-primary w-full mt-5 disabled:opacity-40">
+                  <button onClick={handleLinkImport} disabled={!linkUrl.trim() || importing || limitReached} className="btn btn-primary w-full mt-5 disabled:opacity-40">
                     {importing ? "Importing..." : "Fetch & Import"}
                   </button>
                 </div>
@@ -546,7 +581,7 @@ export default function LeadsPage() {
                     placeholder={`alice@example.com\nbob@example.com\ncharlie@example.com`}
                     className="w-full h-40 bg-cream-2 border border-border rounded-lg p-4 text-sm outline-none focus:border-blue-accent focus:ring-1 focus:ring-blue-accent/20 transition-all placeholder:text-muted-2 font-mono resize-none" />
                   <p className="text-xs text-muted-2 mt-1.5">One email per line. Each line must contain a valid email address.</p>
-                  <button onClick={handlePasteImport} disabled={!manualEmails.trim() || importing} className="btn btn-primary w-full mt-4 disabled:opacity-40">
+                  <button onClick={handlePasteImport} disabled={!manualEmails.trim() || importing || limitReached} className="btn btn-primary w-full mt-4 disabled:opacity-40">
                     {importing ? "Importing..." : `Import${manualEmails.trim() ? ` (${manualEmails.split(/[\n,]+/).map(l => l.trim()).filter(l => l.includes("@")).length} detected)` : ""}`}
                   </button>
                 </div>

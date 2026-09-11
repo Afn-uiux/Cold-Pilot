@@ -50,17 +50,37 @@ export interface MailboxHealth {
 }
 
 // Warmup Health Score = (warmup emails in inbox ÷ total warmup sent) × 100,
-// over a rolling 7-day window (Instantly's documented model). Placement only:
-// "does not measure campaign placement" and does not factor bounces.
-// Spam placements count as NOT inbox-placed; rescued-from-spam counts as
-// inbox-placed (rescue is the reputation-builder). If no warmup was sent in
-// the last 7 days the score resets to 0 (Instantly's documented behavior).
+// over a rolling 7-day window (Instantly's documented model — but stricter on
+// rescue). Placement only: "does not measure campaign placement" and does not
+// factor bounces. ANY spam landing counts as NOT inbox-placed, including ones
+// later rescued — rescue fixes the inbox experience but does not mean the spam
+// filter trusted the sender, so it must not mask a weak placement signal.
+// If no warmup was sent in the last 7 days the score resets to 0.
+export interface WarmupLogSender {
+  // One of the two is set: a user's mailbox (senderMailboxId) OR a platform
+  // seed (senderInboxId) — matching the WarmupLog model.
+  senderMailboxId?: string;
+  senderInboxId?: string;
+}
+
 export async function calculateHealthScore(mailboxId: string): Promise<MailboxHealth> {
+  return calculateWarmupHealth({ senderMailboxId: mailboxId });
+}
+
+export async function calculateSeedHealthScore(seedInboxId: string): Promise<MailboxHealth> {
+  return calculateWarmupHealth({ senderInboxId: seedInboxId });
+}
+
+async function calculateWarmupHealth(sender: WarmupLogSender): Promise<MailboxHealth> {
+  const senderWhere = {
+    ...(sender.senderMailboxId ? { senderMailboxId: sender.senderMailboxId } : {}),
+    ...(sender.senderInboxId ? { senderInboxId: sender.senderInboxId } : {}),
+  };
   const windowStart = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
   // Only consider warmup sends in the rolling window.
   const baseWhere = {
-    senderMailboxId: mailboxId,
+    ...senderWhere,
     sentAt: { gte: windowStart },
     status: { not: "failed" },
   };
@@ -84,10 +104,11 @@ export async function calculateHealthScore(mailboxId: string): Promise<MailboxHe
     };
   }
 
-  // Spam-flagged logs = landed in spam AND not rescued. Rescued spam counts
-  // as inbox-placed (healing), so exclude rescued logs from the spam bucket.
+  // Spam-flagged logs = landed in spam, RESCUED OR NOT. Rescue is a UX fix for
+  // the delivered message, not a trust signal from the provider — a spam
+  // landing is a placement miss no matter what we do with the email afterwards.
   const spamCount = await prisma.warmupLog.count({
-    where: { ...baseWhere, foundInSpam: true, rescuedFromSpam: false },
+    where: { ...baseWhere, foundInSpam: true },
   });
 
   const inboxPlaced = totalSent - spamCount;
@@ -103,7 +124,7 @@ export async function calculateHealthScore(mailboxId: string): Promise<MailboxHe
   // warmup logs are marked status="failed" (with a bounceType), so this query
   // intentionally does NOT filter out failed status — it counts them.
   const bounceWhere = {
-    senderMailboxId: mailboxId,
+    ...senderWhere,
     sentAt: { gte: windowStart },
     bounceType: { not: null },
   };
@@ -205,6 +226,22 @@ export async function saveHealthLog(mailboxId: string): Promise<void> {
       warmupWeek,
       currentDailyVolume,
       lastHealthCheckAt: new Date(),
+    },
+  });
+}
+
+// Same health computation for platform seed inboxes. Their healthScore/healthState
+// used to be created-at defaults (100/"healthy") and never recomputed — wire this
+// into the hourly scheduler loop so seed reputation reflects real placement too.
+// Seeds deliberately get no fields beyond the score itself: no warmupWeek/volume
+// tracking, no bounce reserve, no warning email (no user to alert).
+export async function saveSeedHealthLog(seedInboxId: string): Promise<void> {
+  const health = await calculateSeedHealthScore(seedInboxId);
+  await prisma.seedInbox.update({
+    where: { id: seedInboxId },
+    data: {
+      healthScore: health.healthScore,
+      healthState: health.healthState,
     },
   });
 }

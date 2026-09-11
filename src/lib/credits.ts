@@ -251,10 +251,15 @@ export async function assertLeadCapacity(
     select: { plan: true, creditBalance: true, trialEndsAt: true, trialVoided: true, leadLimitOverride: true },
   });
 
-  // Pay-as-you-go users have no hard lead cap — the credit cost of importing is
-  // the throttle, exactly like the send path. Enforce the plan cap only for
-  // free/trial users who cannot pay per lead.
-  if (isPayAsYouGo(user?.plan, user?.creditBalance)) return;
+  // Pay-as-you-go users (free plan, positive balance, trial over) have no hard
+  // lead cap — the credit cost of importing is the throttle, exactly like the
+  // send path. Enforce the plan cap for everyone still inside their trial
+  // window (including the signup-credit bonus), matching getCreditState's payg
+  // definition so the banner and the server always agree.
+  const freeTrialActive =
+    user?.plan === "free" &&
+    trialGrantsFeatureAccess(user.plan, user?.trialEndsAt ?? null, user?.trialVoided ?? false);
+  if (isPayAsYouGo(user?.plan, user?.creditBalance) && !freeTrialActive) return;
 
   // A per-user trial override (leadLimitOverride) lifts the cap while the trial
   // is live; it reverts to the plan cap the moment the trial ends.

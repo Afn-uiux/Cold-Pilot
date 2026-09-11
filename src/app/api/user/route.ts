@@ -30,6 +30,10 @@ export async function GET() {
     ? { ...trial, active: true, expired: false, daysLeft: Infinity, endsAt: null }
     : trial;
 
+  // All-time lead count (deleted leads still count against capacity) — matches
+  // the enforcement used by assertLeadCapacity on the import endpoint.
+  const leadsUsedTotal = await prisma.lead.count({ where: { userId: session.user.id } });
+
   return NextResponse.json({
     name: user.name,
     email: user.email,
@@ -38,6 +42,7 @@ export async function GET() {
     billingEnabled: isBillingEnabled(),
     creditBalance: credits?.balance ?? 0,
     leadLimit: credits?.leadLimit ?? 300,
+    leadsUsedTotal,
     inboxLimit: credits?.inboxLimit ?? 2,
     aiEnabled: credits?.aiEnabled ?? false,
     payg: credits?.payg ?? false,

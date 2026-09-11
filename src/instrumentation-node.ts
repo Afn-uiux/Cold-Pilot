@@ -10,7 +10,7 @@ assertSecureEnv();
 
 const { prisma } = await import("@/lib/prisma");
 const { executeCampaign, checkForReplies, sendDailySummaries } = await import("@/engine/campaign");
-const { reconcileWarmupSchedules, processDueWarmupSends, processSeedInboxes, processSeedInboxEngagement, processSeedSends, saveHealthLog } = await import("@/engine/warmup");
+const { reconcileWarmupSchedules, processDueWarmupSends, processSeedInboxes, processSeedInboxEngagement, processSeedSends, saveHealthLog, saveSeedHealthLog } = await import("@/engine/warmup");
 const { acquireLock, newLeaderToken } = await import("@/lib/leader-lock");
 const { sweepPlanExpiries } = await import("@/lib/plan-expiry");
 
@@ -156,18 +156,29 @@ async function tickInner() {
       console.error("[scheduler] seed sends error:", e);
     }
 
-    // Health check — once per hour
+    // Health check — once per hour. Runs for ALL warmup-enabled accounts,
+    // including free/trial users (trials warm up too and their score must stay
+    // honest), then every active seed. The first tick of a fresh boot runs this
+    // immediately, so a new build corrects stored scores right away instead of
+    // waiting up to an hour.
     if (!lastHealthCheckHour || lastHealthCheckHour !== new Date().getHours()) {
       lastHealthCheckHour = new Date().getHours();
       try {
         const accounts = await prisma.emailAccount.findMany({
-          where: { warmupEnabled: true, status: "active", deletedAt: null, user: { plan: { not: "free" } } },
+          where: { warmupEnabled: true, status: "active", deletedAt: null, user: { deletedAt: null } },
           select: { id: true },
         });
         for (const a of accounts) {
           await saveHealthLog(a.id);
         }
-        console.log(`[scheduler] health check: ${accounts.length} accounts`);
+        const seeds = await prisma.seedInbox.findMany({
+          where: { status: "active" },
+          select: { id: true },
+        });
+        for (const s of seeds) {
+          await saveSeedHealthLog(s.id);
+        }
+        console.log(`[scheduler] health check: ${accounts.length} accounts, ${seeds.length} seeds`);
       } catch (e) {
         console.error("[scheduler] health check error:", e);
       }

@@ -55,6 +55,18 @@ function isNameGroupField(header: string): boolean {
 // formula if the data is ever exported to CSV/XLSX and opened in Excel/Sheets.
 // Prefixing a leading apostrophe neutralises that (classic CSV-injection defense).
 const MAX_CUSTOM_FIELD_LEN = 1000;
+
+// Upload guardrails: only accept files that look like a CSV (ext or MIME), and
+// cap the payload so a giant file can't be slurped into memory / DoS the
+// parser. 50 MB covers a full Agency-tier import (~150k rows) in one file.
+// Mirrors fetchPublicText's ceiling for the URL-import path.
+const MAX_CSV_BYTES = 50 * 1024 * 1024;
+const ALLOWED_CSV_TYPES = new Set(["text/csv", "text/plain", "application/csv", "application/vnd.ms-excel"]);
+function isCsvFile(file: File): boolean {
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+  return name.endsWith(".csv") || name.endsWith(".txt") || ALLOWED_CSV_TYPES.has(type);
+}
 function escapeCsvFormula(value: string): string {
   if (/^[=+\-@]/.test(value) || /^\t/.test(value) || /^\r/.test(value)) {
     return "'" + value;
@@ -293,7 +305,7 @@ export async function POST(req: Request) {
                 signal: AbortSignal.timeout(30000),
               });
               if (!r.ok) continue;
-              const text = await readResponseTextCapped(r, 10 * 1024 * 1024);
+              const text = await readResponseTextCapped(r, MAX_CSV_BYTES);
               if (text.trimStart().startsWith("<!")) continue;
               csvText = text;
               break;
@@ -327,7 +339,7 @@ export async function POST(req: Request) {
           // hop against the private-address guard, and caps the body size.
           let text: string;
           try {
-            text = await fetchPublicText(url);
+            text = await fetchPublicText(url, { maxBytes: MAX_CSV_BYTES });
           } catch (err) {
             return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to fetch the file. Make sure the URL is a public CSV." }, { status: 400 });
           }
@@ -436,6 +448,12 @@ export async function POST(req: Request) {
     }
   }
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
+  if (!isCsvFile(file)) {
+    return NextResponse.json({ error: "Unsupported file type — please upload a CSV (.csv)" }, { status: 400 });
+  }
+  if (file.size > MAX_CSV_BYTES) {
+    return NextResponse.json({ error: "File too large — maximum 50 MB" }, { status: 400 });
+  }
 
   const text = await file.text();
   const firstLineGuess3 = text.split(/\r?\n/)[0] || "";
