@@ -158,10 +158,16 @@ export async function calculateNextWarmupTime(accountId: string): Promise<Date |
     if (varied < targetVolume) targetVolume = varied;
   }
 
-  // Cap to eligible accounts
-  const accountCount = await prisma.emailAccount.count({ where: { status: "active", deletedAt: null, id: { not: accountId } } });
-  if (accountCount > 0 && targetVolume > accountCount) {
-    targetVolume = accountCount;
+  // Cap to the available receiver pool: other active mailboxes plus active
+  // platform seeds. Counting mailboxes alone throttled warmup to ~1 send/day
+  // even when the seed pool could absorb far more.
+  const [accountCount, seedCount] = await Promise.all([
+    prisma.emailAccount.count({ where: { status: "active", deletedAt: null, id: { not: accountId } } }),
+    prisma.seedInbox.count({ where: { status: "active" } }),
+  ]);
+  const receiverCount = accountCount + seedCount;
+  if (receiverCount > 0 && targetVolume > receiverCount) {
+    targetVolume = receiverCount;
   }
 
   // Apply health state adjustments
@@ -175,13 +181,17 @@ export async function calculateNextWarmupTime(accountId: string): Promise<Date |
 
   const minWaitSeconds = Math.round(account.minWaitTime * adj.minWaitMultiplier);
 
-  // Count emails sent today
+  // Count emails actually sent today. Pending/scheduled rows carry a FUTURE
+  // sentAt and failed rows were never delivered, so only count rows that
+  // really went out — otherwise a tomorrow-scheduled row counts against
+  // today's quota and shaves one send off the daily target.
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
   const emailsSentToday = await prisma.warmupLog.count({
     where: {
       senderMailboxId: accountId,
       sentAt: { gte: todayStart },
+      status: { in: ["sent", "delivered"] },
     },
   });
 
@@ -199,9 +209,10 @@ export async function calculateNextWarmupTime(accountId: string): Promise<Date |
 
   const idealIntervalHours = hoursRemaining / remaining;
 
-  // Get last send time
+  // Get last actual send time — ignore pending/scheduled rows, whose FUTURE
+  // sentAt would look like an impossibly-recent send and stretch the interval.
   const lastLog = await prisma.warmupLog.findFirst({
-    where: { senderMailboxId: accountId },
+    where: { senderMailboxId: accountId, status: { in: ["sent", "delivered"] } },
     orderBy: { sentAt: "desc" },
     select: { sentAt: true },
   });

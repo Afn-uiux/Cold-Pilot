@@ -256,7 +256,7 @@ export default function EmailAccountDetailPage() {
                         <div key={day.date} className="flex flex-col items-center flex-1 h-full justify-end group relative">
                           <div className="w-8 rounded-t-sm bg-blue-accent transition-all group-hover:brightness-110 cursor-pointer relative overflow-hidden" style={{ height: `${totalH}%`, maxHeight: 160 }}>
                             {rescuedH > 0 && (
-                              <div className="absolute bottom-0 w-full bg-amber-400" style={{ height: `${(day.rescued / day.sent) * 100}%` }} />
+                              <div className="absolute bottom-0 w-full bg-amber-400" style={{ height: `${rescuedH}%` }} />
                             )}
                           </div>
                           {/* Tooltip */}

@@ -99,18 +99,28 @@ export async function GET(req: NextRequest) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
 
+    // Warmup runs in both directions: this mailbox sent emails to the seed
+    // network (senderMailboxId) AND the seed network sent emails to this
+    // mailbox (seedMailboxId). Both count toward the stats, so query all logs
+    // touching this mailbox, then split by direction below.
     const warmupLogs = await prisma.warmupLog.findMany({
-      where: { senderMailboxId: id, sentAt: { gte: sevenDaysAgo } },
+      where: {
+        OR: [{ senderMailboxId: id }, { seedMailboxId: id }],
+        sentAt: { gte: sevenDaysAgo },
+      },
       orderBy: { sentAt: "asc" },
-      select: { sentAt: true, receivedAt: true, rescuedFromSpam: true, status: true },
+      select: { sentAt: true, receivedAt: true, rescuedFromSpam: true, status: true, senderMailboxId: true, seedMailboxId: true },
     });
 
     // Only actually-sent warmups count as "sent": pending (scheduled/sending)
     // rows carry a FUTURE sentAt and failed rows were never delivered, so both
     // are excluded or the summary count and the chart disagree.
-    const sentLogs = warmupLogs.filter(l => l.status === "sent" || l.status === "delivered");
+    const sentLogs = warmupLogs.filter(l => l.senderMailboxId === id && (l.status === "sent" || l.status === "delivered"));
+    const recvLogs = warmupLogs.filter(l => l.seedMailboxId === id && (l.status === "sent" || l.status === "delivered"));
 
-    // Build daily aggregates
+    // Build daily aggregates. Sent = this mailbox's outgoing warmups; received
+    // = warmups the seed network sent into this mailbox. Both are bucketed by
+    // sentAt so the summary always equals the sum of the plotted bars.
     const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const daily: { date: string; label: string; sent: number; received: number; rescued: number }[] = [];
 
@@ -120,20 +130,24 @@ export async function GET(req: NextRequest) {
       d.setHours(0, 0, 0, 0);
       const next = new Date(d);
       next.setDate(next.getDate() + 1);
-      const dayLogs = sentLogs.filter(l => l.sentAt && l.sentAt >= d && l.sentAt < next);
+      const daySent = sentLogs.filter(l => l.sentAt && l.sentAt >= d && l.sentAt < next);
+      const dayRecv = recvLogs.filter(l => l.sentAt && l.sentAt >= d && l.sentAt < next);
       daily.push({
         date: d.toISOString().slice(0, 10),
         label: dayLabels[d.getDay() === 0 ? 6 : d.getDay() - 1] || dayLabels[d.getDay()],
-        sent: dayLogs.length,
-        received: dayLogs.filter(l => l.status === "received" || l.receivedAt).length,
-        rescued: dayLogs.filter(l => l.rescuedFromSpam).length,
+        sent: daySent.length,
+        received: dayRecv.length,
+        // Rescues happen on BOTH sides: an outgoing warmup the seed pulled out
+        // of its spam, or an incoming seed warmup rescued from THIS mailbox's
+        // spam folder. Count the union so the chart matches the summary card.
+        rescued: daySent.filter(l => l.rescuedFromSpam).length + dayRecv.filter(l => l.rescuedFromSpam).length,
       });
     }
 
     // Warmup summary
-    const warmupReceived = sentLogs.filter(l => l.status === "received" || l.receivedAt).length;
+    const warmupReceived = recvLogs.length;
     const warmupSent = sentLogs.length;
-    const savedFromSpam = sentLogs.filter(l => l.rescuedFromSpam).length;
+    const savedFromSpam = sentLogs.filter(l => l.rescuedFromSpam).length + recvLogs.filter(l => l.rescuedFromSpam).length;
 
     const campaigns = await prisma.campaign.findMany({
       where: { userId: session.user.id, accountIds: { contains: id }, deletedAt: null },

@@ -8,6 +8,7 @@ import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import crypto from "crypto";
 import { hashToken } from "@/lib/tokens";
 import { parseSignupSourceCookie, parseCookieHeader, countryFromHeaders, userAgentFromHeaders } from "@/lib/signup-source";
+import { currencyFromHeaders } from "@/lib/currency";
 
 export async function POST(req: Request) {
   const { email } = await req.json();
@@ -82,6 +83,7 @@ export async function GET(req: Request) {
     signupUtmMedium?: string | null;
     signupUtmCampaign?: string | null;
     signupUserAgent?: string | null;
+    billingCurrency?: string;
   } = { emailVerified: new Date() };
 
   // Google signups can't reach request headers in the signIn callback, so the
@@ -92,6 +94,13 @@ export async function GET(req: Request) {
   if (!before?.signupIp && ip && ip !== "unknown") data.signupIp = ip;
   const country = countryFromHeaders(req.headers as unknown as Headers);
   if (!before?.signupCountry && country) data.signupCountry = country;
+  // Google signups and migrated accounts never had a currency captured at
+  // account creation (schema default slips them to NGN). Backfill it here,
+  // from the same request that is backfilling the missing country/IP, so
+  // those accounts get a currency consistent with the attributed location.
+  // Accounts created through the email signup already hold a locked
+  // billingCurrency, so this only fires when signupCountry was also missing.
+  if (!before?.signupCountry && country) data.billingCurrency = currencyFromHeaders(req.headers as unknown as Headers);
   const ua = userAgentFromHeaders(req.headers as unknown as Headers);
   if (!before?.signupUserAgent && ua) data.signupUserAgent = ua;
   if (!before?.signupSource) {
