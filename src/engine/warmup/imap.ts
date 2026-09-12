@@ -5,6 +5,7 @@ import { decryptAccount } from "@/lib/crypto";
 import { assertSafeMailTarget } from "@/lib/ssrf";
 import { openImap } from "@/lib/oauth-connect";
 import { openDelayMinutes } from "./open-delay";
+import { buildWarmupReplyBody, nameFromEmail } from "./reply";
 
 const SPAM_FOLDERS: Record<string, string[]> = {
   gmail: ["[Gmail]/Spam", "Spam"],
@@ -22,39 +23,20 @@ function shouldApply(percent: number): boolean {
   return Math.random() * 100 < percent;
 }
 
-const REPLY_BODIES = [
-  "Thanks for reaching out, I'll take a look at this.",
-  "Got it, will review and get back to you.",
-  "Thanks for the note. I'll follow up shortly.",
-  "Appreciate you sending this over. Let me check.",
-  "Received, thanks. I'll circle back soon.",
-  "Good to hear from you. Let me review this.",
-  "Thanks, this looks interesting. I'll review.",
-  "Noted, thanks for the update.",
-  "Thanks for sharing. I'll take a closer look.",
-  "Got your message. Will get back to you shortly.",
-  "Thanks for following up. I've seen this.",
-  "Appreciate the note. I'll review and respond.",
-  "Thanks, I'll look into this shortly.",
-  "Received, thanks for the heads up.",
-  "Good stuff, I'll review this when I get a chance.",
-];
-
-function randomReplyBody(): string {
-  return REPLY_BODIES[Math.floor(Math.random() * REPLY_BODIES.length)];
-}
-
 async function sendSeedReply(
   account: { email: string; smtpHost: string; smtpPort: number; smtpUser: string; smtpPass: string },
   toEmail: string,
   originalSubject: string,
   originalMessageId: string,
+  originalBodyPreview?: string | null,
+  fromName?: string | null,
+  toName?: string | null,
 ): Promise<boolean> {
   const subject = originalSubject.toLowerCase().startsWith("re:")
     ? originalSubject
     : `Re: ${originalSubject}`;
 
-  const body = randomReplyBody();
+  const body = await buildWarmupReplyBody(originalSubject, originalBodyPreview, fromName, toName);
 
   try {
     // SSRF guard: smtpHost/smtpPort come from user-configured account settings.
@@ -333,6 +315,9 @@ export async function processSeedInboxes(): Promise<{
                 senderEmail,
                 log.subject || "Warmup",
                 msg.messageId,
+                log.bodyPreview,
+                account.displayName,
+                nameFromEmail(senderEmail),
               );
 
               if (replySent) {

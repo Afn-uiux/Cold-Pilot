@@ -22,6 +22,27 @@ import { SaveIcon } from "@/components/icons/save";
 import { RefreshIcon } from "@/components/icons/refresh";
 import { CircleCheckIcon } from "@/components/icons/circle-check";
 import { MagicWand01Icon } from "@/components/icons/magic-wand-01";
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Convert plain AI text into HTML that keeps paragraph structure. The AI
+// contract (api/ai: "Use plain newlines to separate paragraphs") means each
+// line is a paragraph, so each one becomes a real <p> block — <p> carries
+// default vertical spacing in the rich editor and the email, giving clear
+// gaps between paragraphs. Flattening everything to <br> made paragraphs
+// look crammed together in the typing box. Blank lines / stray whitespace
+// are dropped.
+function textToEditorHtml(text: string): string {
+  const escaped = escHtml(text);
+  return escaped
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0)
+    .map(l => `<p>${l}</p>`)
+    .join("");
+}
 import { GridViewIcon } from "@/components/icons/grid-view";
 import { CodeXmlIcon } from "@/components/icons/code-xml";
 import { Link01Icon } from "@/components/icons/link-01";
@@ -94,18 +115,16 @@ export default function CampaignDetailPage() {
   }
 
   function appendAiText(i: number, text: string) {
-    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const html = esc(text).replace(/\r?\n/g, "<br>");
+    const html = textToEditorHtml(text);
     const current = steps[i].bodyHtml || "";
     updateStep(i, "bodyHtml", current + (current ? "<br><br>" : "") + html);
   }
 
   function applyGeneratedSequence(genSteps: GeneratedStep[]) {
-    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const newSteps: Step[] = genSteps.map((s, i) => ({
       type: "email",
       subject: i === 0 ? s.subject || "" : "",
-      bodyHtml: esc(s.body).replace(/\r?\n/g, "<br>"),
+      bodyHtml: textToEditorHtml(s.body),
       delayDays: i === 0 ? 0 : 2,
       delayUnit: "days",
       order: i,
@@ -143,8 +162,7 @@ export default function CampaignDetailPage() {
       }
       if (data.result) {
         if (action === "spin") {
-          const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-          updateStep(stepIndex, "bodyHtml", esc(data.result).replace(/\r?\n/g, "<br>"));
+          updateStep(stepIndex, "bodyHtml", textToEditorHtml(data.result));
           if (data.subject) updateStep(stepIndex, "subject", data.subject);
           const shownCount = data.combined || data.comboEstimate;
           if (shownCount) {
@@ -765,7 +783,7 @@ export default function CampaignDetailPage() {
                             <div className="text-sm font-semibold text-[#222] mb-4 pb-3 border-b border-gray-200">
                               {fillVariables(steps[previewStep]?.subject || "") || (previewStep > 0 ? "Leave empty to use previous step's subject" : "(no subject)")}
                             </div>
-                            <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getPreviewContent(previewStep)) }} />
+                            <div className="text-sm leading-relaxed html-preview" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getPreviewContent(previewStep)) }} />
                           </>
                         ) : (
                           <div className="text-sm text-gray-400">No content to preview</div>

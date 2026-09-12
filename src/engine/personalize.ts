@@ -89,7 +89,8 @@ export function previewFillVariables(
   if (lead) {
     const map: Record<string, string> = {
       firstName: lead.firstName || "", lastName: lead.lastName || "",
-      company: lead.company || "", title: lead.title || "",
+      company: lead.company || "", companyName: lead.company || "",
+      title: lead.title || "",
       email: lead.email || "", phone: lead.phone || "",
       website: lead.website || "", location: lead.location || "",
       personalization: lead.personalization || "",
@@ -105,6 +106,22 @@ export function previewFillVariables(
         // ignore malformed customFields
       }
     }
+  }
+
+  // The modal's overrides are keyed by display name ("companyName"),
+  // tag lookups are lowercase ("companyname"), and the backend aliases
+  // some display vars ("companyName" → "company", "accountSignature" →
+  // "signature"). Normalize all three so the preview fills like a real send.
+  const ovLower: Record<string, string> = {};
+  for (const [k, v] of Object.entries(overrides)) {
+    if (typeof v === "string" && v.trim()) ovLower[k.toLowerCase()] = v.trim();
+  }
+  const aliasOf: Record<string, string> = {};
+  for (const [display, backend] of Object.entries(VARIABLE_ALIASES)) {
+    const dl = display.toLowerCase();
+    const bl = backend.toLowerCase();
+    aliasOf[dl] = bl;
+    aliasOf[bl] = dl;
   }
 
   const demoValue = (key: string): string => {
@@ -144,10 +161,16 @@ export function previewFillVariables(
   }
 
   for (const key of usedKeys) {
-    let val = "";
-    const ov = overrides[key] ?? overrides[key.toLowerCase()];
-    if (ov && ov.trim()) val = ov.trim();
-    else if (lead && leadVars[key]) val = leadVars[key];
+    let val = ovLower[key];
+    if (!val) {
+      const alias = aliasOf[key];
+      val = alias ? ovLower[alias] : "";
+    }
+    if (!val && lead) val = leadVars[key] || "";
+    if (!val && lead) {
+      const alias = aliasOf[key];
+      if (alias) val = leadVars[alias] || "";
+    }
     if (!val) val = knownLower[key] ?? demoValue(key);
     vars[key] = val;
   }

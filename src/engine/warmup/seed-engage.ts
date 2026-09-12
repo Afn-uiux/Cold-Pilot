@@ -5,6 +5,7 @@ import { decryptAccount } from "@/lib/crypto";
 import { assertSafeMailTarget } from "@/lib/ssrf";
 import { openImap } from "@/lib/oauth-connect";
 import { openDelayMinutes } from "./open-delay";
+import { buildWarmupReplyBody, nameFromEmail } from "./reply";
 
 // Seed engagement engine: makes platform-owned seed inboxes behave like real,
 // live mailboxes. Seeds RECEIVE warmup (from user mailboxes and other seeds),
@@ -35,23 +36,6 @@ function shouldApply(percent: number): boolean {
   if (percent >= 100) return true;
   if (percent <= 0) return false;
   return Math.random() * 100 < percent;
-}
-
-const REPLY_BODIES = [
-  "Thanks for reaching out, I'll take a look at this.",
-  "Got it, will review and get back to you.",
-  "Thanks for the note. I'll follow up shortly.",
-  "Appreciate you sending this over. Let me check.",
-  "Received, thanks. I'll circle back soon.",
-  "Good to hear from you. Let me review this.",
-  "Thanks, this looks interesting. I'll review.",
-  "Noted, thanks for the update.",
-  "Thanks for sharing. I'll take a closer look.",
-  "Got your message. Will get back to you shortly.",
-];
-
-function randomReplyBody(): string {
-  return REPLY_BODIES[Math.floor(Math.random() * REPLY_BODIES.length)];
 }
 
 async function connect(account: { imapHost: string; imapPort: number; imapUser: string; imapPass: string }) {
@@ -176,11 +160,14 @@ async function sendSeedReply(
   toEmail: string,
   originalSubject: string,
   originalMessageId: string,
+  originalBodyPreview?: string | null,
+  fromName?: string | null,
+  toName?: string | null,
 ): Promise<boolean> {
   const subject = originalSubject.toLowerCase().startsWith("re:")
     ? originalSubject
     : `Re: ${originalSubject}`;
-  const body = randomReplyBody();
+  const body = await buildWarmupReplyBody(originalSubject, originalBodyPreview, fromName, toName);
   try {
     // SSRF guard: smtpHost/smtpPort come from user-configured account settings.
     await assertSafeMailTarget(account.smtpHost, account.smtpPort, "SMTP");
@@ -275,6 +262,9 @@ export async function processSeedInboxEngagement(): Promise<{
               senderEmail,
               log.subject || "Warmup",
               msg.messageId,
+              log.bodyPreview,
+              seed.displayName,
+              nameFromEmail(senderEmail),
             );
             if (ok) {
               await prisma.warmupLog.update({ where: { id: log.id }, data: { repliedAt: new Date(), replyReceived: true } });

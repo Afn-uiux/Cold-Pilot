@@ -100,8 +100,17 @@ export function renderEmail(templateId: EmailTemplateId, data?: Record<string, u
     return value !== undefined && value !== null ? escapeHtml(value) : "";
   });
 
+  // Subject lines are plain text (never HTML), so substitute raw — the mail
+  // library encodes the header. Escape-free: a value like "<b>" cannot inject
+  // markup into a subject, but CR/LF are stripped so a user-controlled value
+  // (e.g. a first name) can never smuggle a header injection.
+  const subject = template.subject.replace(/\{\{(\w+)\}\}/g, (_match, key) => {
+    const value = data?.[key];
+    return value !== undefined && value !== null ? String(value).replace(/[\r\n]+/g, " ").trim() : "";
+  });
+
   return {
-    subject: template.subject,
+    subject,
     html,
   };
 }
