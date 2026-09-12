@@ -20,16 +20,16 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: {
-    default: "Coldpilot — Cold email that lands in the inbox",
+    default: "Coldpilot — AI cold email that lands in the inbox",
     template: "%s | Coldpilot",
   },
-  description: "Send campaigns that land in inboxes, not spam folders. Warm-up, rotation, reply detection — all in one place.",
+  description: "AI-powered cold email that lands in the inbox, not the spam folder. Warmup, verification, and sending handled automatically.",
   alternates: {
     canonical: siteUrl,
   },
   openGraph: {
-    title: "Coldpilot — Cold email that lands in the inbox",
-    description: "Send campaigns that land in inboxes, not spam folders.",
+    title: "Coldpilot — AI cold email that lands in the inbox",
+    description: "AI-powered cold email that lands in the inbox, not the spam folder. Warmup, verification, and sending handled automatically.",
     url: siteUrl,
     siteName: "Coldpilot",
     type: "website",
@@ -45,8 +45,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Coldpilot — Cold email that lands in the inbox",
-    description: "Send campaigns that land in inboxes, not spam folders.",
+    title: "Coldpilot — AI cold email that lands in the inbox",
+    description: "AI-powered cold email that lands in the inbox, not the spam folder. Warmup, verification, and sending handled automatically.",
     images: [`${siteUrl}/opengraph-image.png`],
   },
   metadataBase: new URL(siteUrl),
@@ -66,7 +66,7 @@ const orgSchema = {
       url: siteUrl,
       logo: `${siteUrl}/coldpilot-logo.png`,
       description:
-        "Cold email that lands in the inbox. Warm-up, rotation, reply detection, verification and analytics in one place.",
+        "AI-powered cold email that lands in the inbox, not the spam folder. Warmup, verification, and sending handled automatically.",
     },
     {
       "@type": "WebSite",

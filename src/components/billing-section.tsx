@@ -23,6 +23,10 @@ export default function BillingSection() {
   const [notice, setNotice] = useState<Notice>(null);
 
   useEffect(() => {
+    // Record the visit for the billing-exploration follow-up. Fire-and-forget;
+    // never blocks the UI if it fails.
+    fetch("/api/billing/visit", { method: "POST" }).catch(() => {});
+
     let active = true;
     fetch("/api/user")
       .then((r) => r.json())

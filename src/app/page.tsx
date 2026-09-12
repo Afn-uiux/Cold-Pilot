@@ -148,7 +148,7 @@ export default async function Home() {
         <div className="wrap hero-inner">
           <span className="label" style={{marginBottom:0}}>Cold email, without the guesswork</span>
           <h1>Reach more inboxes.<br /><em style={{fontStyle:"italic"}}>Skip the spam folder.</em></h1>
-          <p className="hero-desc">Coldpilot warms your inbox, rotates sends, and stops when someone replies — so your outreach lands where it should.</p>
+          <p className="hero-desc">AI-powered cold email tool that actually lands in the inbox — warmup, verification, and sending handled automatically.</p>
           <div className="hero-cta">
             <Link href="/auth/signup" className="btn">Start free</Link>
             <a href="#how" className="text-link">See how it works</a>

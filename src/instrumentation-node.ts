@@ -13,6 +13,9 @@ const { executeCampaign, checkForReplies, sendDailySummaries } = await import("@
 const { reconcileWarmupSchedules, processDueWarmupSends, processSeedInboxes, processSeedInboxEngagement, processSeedSends, saveHealthLog, saveSeedHealthLog } = await import("@/engine/warmup");
 const { acquireLock, newLeaderToken } = await import("@/lib/leader-lock");
 const { sweepPlanExpiries } = await import("@/lib/plan-expiry");
+const { sweepBillingFollowUps } = await import("@/lib/billing-followup");
+const { sweepFounderWelcome } = await import("@/lib/founder-welcome");
+const { sweepTrialCheckups } = await import("@/lib/trial-followup");
 
 const leaderToken = newLeaderToken();
 let lastSummaryDate = "";
@@ -104,6 +107,40 @@ async function tickInner() {
       }
     } catch (e) {
       console.error("[scheduler] plan-expiry error:", e);
+    }
+
+    // Founder welcome — fires a few minutes after verification, once the auth
+    // welcome has had a beat to land. founderWelcomeSentAt makes it once-per-user.
+    try {
+      const founderWelcome = await sweepFounderWelcome();
+      if (founderWelcome.sent > 0) {
+        console.log("[scheduler] founder welcome:", JSON.stringify(founderWelcome));
+      }
+    } catch (e) {
+      console.error("[scheduler] founder welcome error:", e);
+    }
+
+    // Founder trial check-ins — "wrapping up" in the last 3 days of the trial,
+    // "don't stop now" right after it ends. Each fires once per user.
+    try {
+      const trialCheckups = await sweepTrialCheckups();
+      if (trialCheckups.expiring > 0 || trialCheckups.expired > 0) {
+        console.log("[scheduler] trial checkups:", JSON.stringify(trialCheckups));
+      }
+    } catch (e) {
+      console.error("[scheduler] trial checkups error:", e);
+    }
+
+    // Billing-exploration follow-up — free users who opened the Billing tab
+    // and never subscribed get one founder email. Gated on BILLING_ENABLED, so
+    // it stays dormant with the rest of billing.
+    try {
+      const billingSweep = await sweepBillingFollowUps();
+      if (billingSweep.sent > 0) {
+        console.log("[scheduler] billing follow-up:", JSON.stringify(billingSweep));
+      }
+    } catch (e) {
+      console.error("[scheduler] billing follow-up error:", e);
     }
 
     // Warmup engine — reconcile schedules, send due emails, process seed inboxes

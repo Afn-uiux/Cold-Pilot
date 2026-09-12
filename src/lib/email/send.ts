@@ -6,6 +6,8 @@ interface SendEmailOptions {
   to: string;
   template: EmailTemplateId;
   data?: Record<string, any>;
+  /** Send from the founder address (yemi@me.usecoldpilot.com) using RESEND_FOUNDER_API_KEY. */
+  fromFounder?: boolean;
 }
 
 interface EmbeddedImage {
@@ -60,6 +62,33 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, "&#39;");
 }
 
+/** Rough HTML-to-text: strip tags, decode entities, collapse whitespace.
+ *  Good enough for a plain-text fallback — not a full parser. */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/tr>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&mdash;/g, "\u2014")
+    .replace(/&ndash;/g, "\u2013")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&bull;/g, "\u2022")
+    .replace(/&middot;/g, "\u00b7")
+    .replace(/&copy;/g, "\u00a9")
+    .replace(/&amp;/g, "&")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function renderEmail(templateId: EmailTemplateId, data?: Record<string, unknown>) {
   const template = getTemplateById(templateId);
   if (!template) throw new Error(`Unknown email template: ${templateId}`);
@@ -77,19 +106,26 @@ export function renderEmail(templateId: EmailTemplateId, data?: Record<string, u
   };
 }
 
-export async function sendTransactionalEmail({ to, template, data }: SendEmailOptions) {
+export async function sendTransactionalEmail({ to, template, data, fromFounder }: SendEmailOptions) {
   const { subject, html: htmlWithRemote } = renderEmail(template, data);
   const { html, images } = embedSiteImages(htmlWithRemote);
 
-  if (process.env.RESEND_API_KEY) {
+  const apiKey = fromFounder ? process.env.RESEND_FOUNDER_API_KEY : process.env.RESEND_API_KEY;
+  const fromAddress =
+    fromFounder && apiKey
+      ? "Yemi from Coldpilot <yemi@me.usecoldpilot.com>"
+      : "Coldpilot <hello@mail.usecoldpilot.com>";
+
+  if (apiKey) {
     const { Resend } = await import("resend");
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const resend = new Resend(apiKey);
 
     await resend.emails.send({
-      from: "Coldpilot <hello@mail.usecoldpilot.com>",
+      from: fromAddress,
       to,
       subject,
       html,
+      text: htmlToText(html),
       attachments: images.map((img) => ({
         filename: img.filename,
         content: img.content,
@@ -113,7 +149,7 @@ export async function sendTransactionalEmail({ to, template, data }: SendEmailOp
   });
 
   await transporter.sendMail({
-    from: process.env.EMAIL_FROM || "Coldpilot <hello@mail.usecoldpilot.com>",
+    from: process.env.EMAIL_FROM || fromAddress,
     to,
     subject,
     html,
@@ -130,8 +166,8 @@ export async function sendTransactionalEmail({ to, template, data }: SendEmailOp
  * Fire-and-forget email sender. Never throws. Safe to call in try/catch
  * blocks where the main action should proceed regardless of email delivery.
  */
-export function sendEmailSafe(to: string, template: EmailTemplateId, data?: Record<string, any>) {
-  sendTransactionalEmail({ to, template, data }).catch((err) => {
+export function sendEmailSafe(to: string, template: EmailTemplateId, data?: Record<string, any>, opts?: { fromFounder?: boolean }) {
+  sendTransactionalEmail({ to, template, data, fromFounder: opts?.fromFounder }).catch((err) => {
     console.error(`[email] Failed to send ${template} to ${to}:`, err?.message || err);
   });
 }

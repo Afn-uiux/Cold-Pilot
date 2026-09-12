@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { decode } from "next-auth/jwt";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { currencyFromCountry } from "@/lib/currency";
-import { isAllowedHost, redirectBaseUrl } from "@/lib/host";
+import { canonicalOrigin, isAllowedHost, normalizedHost } from "@/lib/host";
 
 const protectedPaths = ["/dashboard"];
 const authPaths = ["/auth/login", "/auth/signup"];
@@ -82,6 +82,28 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
 
   const { pathname } = request.nextUrl;
+
+  // Canonicalize to the bare domain: Google has indexed www.usecoldpilot.com
+  // since the Vercel era, and it must consolidate to usecoldpilot.com via a
+  // 301 rather than getting the host-allowlist 400 below (which appears to
+  // Google as a crawl error and blocks snippet/favicon refreshes). The
+  // redirect runs BEFORE the host allow-list check so the www variant is
+  // redirected, not rejected. Scope it to the canonical domain's own www
+  // variant only, so arbitrary www.* host headers still hit the 400 below
+  // instead of being silently redirected.
+  if (process.env.NODE_ENV === "production") {
+    const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL || canonicalOrigin();
+    const wwwBase = normalizedHost(base);
+    const reqHost = normalizedHost(request.headers.get("host"));
+    if (wwwBase && reqHost === `www.${wwwBase}`) {
+      const target = new URL(base);
+      target.pathname = request.nextUrl.pathname;
+      target.search = request.nextUrl.search;
+      const res = NextResponse.redirect(target.toString(), 301);
+      applySecurityHeaders(res, cspHeader);
+      return res;
+    }
+  }
 
   // Host-header poisoning defense: in production a request whose Host is not
   // allow-listed (ALLOWED_HOSTS, or the canonical origin's host) is rejected

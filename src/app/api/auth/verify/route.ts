@@ -69,7 +69,7 @@ export async function GET(req: Request) {
   // once, only when this is the click that flips emailVerified from null.
   const before = await prisma.user.findUnique({
     where: { email: record.identifier },
-    select: { emailVerified: true, signupIp: true, signupCountry: true, signupSource: true, signupUserAgent: true },
+    select: { emailVerified: true, name: true, signupIp: true, signupCountry: true, signupSource: true, signupUserAgent: true },
   });
 
   const data: {
@@ -113,8 +113,10 @@ export async function GET(req: Request) {
   });
   await prisma.verificationToken.delete({ where: { token: tokenDigest } });
 
-  if (!before?.emailVerified) {
-    sendEmailSafe(record.identifier, "welcome");
+  if (before && !before.emailVerified) {
+    // Auth welcome goes out immediately; the founder welcome follows a few
+    // minutes later via the sweep (founderWelcomeSentAt-gated, so exactly once).
+    sendEmailSafe(record.identifier, "welcome", { name: before.name });
   }
 
   return NextResponse.json({ message: "Email verified successfully" });

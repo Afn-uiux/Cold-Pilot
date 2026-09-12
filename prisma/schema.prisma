@@ -35,6 +35,21 @@ model User {
   trialEndsAt          DateTime?
   planExpiresAt        DateTime?
   planReminderSentDays Int       @default(0)
+  // Founder-email tracking: when the user last opened the Billing tab, and
+  // whether the billing-exploration follow-up has already been sent (once per
+  // user, ever). Set by the billing-visit route / sweepBillingFollowUps.
+  lastBillingVisitAt DateTime?
+  billingFollowUpSentAt DateTime?
+  // Set once the founder welcome email has been sent (a few minutes after the
+  // verification/welcome email). Null until then; the founder-welcome sweep
+  // uses it to fire exactly once, shortly after verified signup.
+  founderWelcomeSentAt DateTime?
+  // Set once the founder trial check-in emails have gone out (each fires once):
+  // founderTrialExpiringSentAt when the "wrapping up" mail is sent in the last
+  // ~3 days of the trial, founderTrialExpiredSentAt when the "don't stop now"
+  // mail is sent after the trial clock passes.
+  founderTrialExpiringSentAt DateTime?
+  founderTrialExpiredSentAt DateTime?
   bachsCustomerId      String?
   bachsSubscriptionId  String?
   deletedAt            DateTime?
