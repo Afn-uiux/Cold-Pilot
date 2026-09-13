@@ -17,6 +17,7 @@ const { sweepPlanExpiries } = await import("@/lib/plan-expiry");
 const { sweepBillingFollowUps } = await import("@/lib/billing-followup");
 const { sweepFounderWelcome } = await import("@/lib/founder-welcome");
 const { sweepTrialCheckups } = await import("@/lib/trial-followup");
+const { sweepOnboardingNudges } = await import("@/lib/onboarding-nudges");
 
 const leaderToken = newLeaderToken();
 let lastSummaryDate = "";
@@ -147,6 +148,18 @@ async function tickInner() {
       }
     } catch (e) {
       console.error("[scheduler] billing follow-up error:", e);
+    }
+
+    // Onboarding nudges — one email per stuck step, sent while the user is
+    // still in the setup window (never after they've done the step). Each
+    // bit is stamped on the user so every nudge fires at most once.
+    try {
+      const nudgeSweep = await sweepOnboardingNudges();
+      if (nudgeSweep.connect > 0 || nudgeSweep.campaign > 0 || nudgeSweep.leads > 0) {
+        console.log("[scheduler] onboarding nudges:", JSON.stringify(nudgeSweep));
+      }
+    } catch (e) {
+      console.error("[scheduler] onboarding nudges error:", e);
     }
 
     // Warmup engine — reconcile schedules, send due emails, process seed inboxes

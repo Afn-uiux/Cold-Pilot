@@ -50,6 +50,12 @@ model User {
   // mail is sent after the trial clock passes.
   founderTrialExpiringSentAt DateTime?
   founderTrialExpiredSentAt DateTime?
+  // Onboarding nudge tracking. Bitmask, mirrors the planReminderSentDays pattern:
+  //   bit0 = connect-account nudge sent (never connected an email account yet)
+  //   bit1 = create-campaign nudge sent  (connected but no campaign yet)
+  //   bit2 = import-leads nudge sent     (campaign created but no leads yet)
+  // Set by sweepOnboardingNudges; each nudge fires exactly once per user.
+  onboardingNudgesSent Int @default(0)
   bachsCustomerId      String?
   bachsSubscriptionId  String?
   deletedAt            DateTime?

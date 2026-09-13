@@ -265,7 +265,7 @@ export default function EmailAccountDetailPage() {
                               <p className="font-medium mb-1">{day.label} — {new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
                               <p>Warmup Emails Sent: <span className="font-medium">{day.sent}</span></p>
                               <p>Warmup Emails Received: <span className="font-medium">{day.received}</span></p>
-                              <p>Landings in Spam: <span className="font-medium">{day.rescued}</span></p>
+                              <p>Rescued from Spam: <span className="font-medium">{day.rescued}</span></p>
                             </div>
                           </div>
                         </div>

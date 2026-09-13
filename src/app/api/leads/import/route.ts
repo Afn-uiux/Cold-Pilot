@@ -4,7 +4,6 @@ import { auth } from "@/lib/auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { sendEmailSafe } from "@/lib/email/send";
 import { assertLeadCapacity, PlanLimitError, spendCredits, InsufficientCreditsError } from "@/lib/credits";
 import { fetchPublicText, readResponseTextCapped } from "@/lib/ssrf-guard";
 import { CREDIT_COSTS } from "@/lib/plans";
@@ -524,13 +523,6 @@ export async function POST(req: Request) {
       });
       imported++;
     } catch (e: any) { errors++; if (!firstError) firstError = e?.message || "Unknown"; }
-  }
-
-  // Send onboarding email if this is the user's first lead import
-  const leadCount = await prisma.lead.count({ where: { userId, deletedAt: null } });
-  if (leadCount <= imported) {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
-    if (user?.email) sendEmailSafe(user.email, "onboarding-import-leads");
   }
 
   return NextResponse.json({ imported, errors, skipped, total: lines.length - 1, firstError, duplicates: duplicateEmails.length, duplicateEmails, knownBad });

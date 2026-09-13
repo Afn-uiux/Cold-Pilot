@@ -4,7 +4,6 @@ import { auth } from "@/lib/auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { sendEmailSafe } from "@/lib/email/send";
 import { encryptAccount, encrypt } from "@/lib/crypto";
 import { assertInboxCapacity, PlanLimitError } from "@/lib/credits";
 import { mailboxIdentityKey, recordMailboxConnect, markMailboxDisconnected } from "@/lib/fraud";
@@ -137,17 +136,17 @@ export async function GET(req: NextRequest) {
         label: dayLabels[d.getDay() === 0 ? 6 : d.getDay() - 1] || dayLabels[d.getDay()],
         sent: daySent.length,
         received: dayRecv.length,
-        // Rescues happen on BOTH sides: an outgoing warmup the seed pulled out
-        // of its spam, or an incoming seed warmup rescued from THIS mailbox's
-        // spam folder. Count the union so the chart matches the summary card.
-        rescued: daySent.filter(l => l.rescuedFromSpam).length + dayRecv.filter(l => l.rescuedFromSpam).length,
+        // Only the mailbox's OWN outgoing warmups that landed in spam count as
+        // spam placements. Incoming seed warmups rescued from this mailbox's
+        // spam folder are traffic this mailbox received, not hits against it.
+        rescued: daySent.filter(l => l.rescuedFromSpam).length,
       });
     }
 
     // Warmup summary
     const warmupReceived = recvLogs.length;
     const warmupSent = sentLogs.length;
-    const savedFromSpam = sentLogs.filter(l => l.rescuedFromSpam).length + recvLogs.filter(l => l.rescuedFromSpam).length;
+    const savedFromSpam = sentLogs.filter(l => l.rescuedFromSpam).length;
 
     const campaigns = await prisma.campaign.findMany({
       where: { userId: session.user.id, accountIds: { contains: id }, deletedAt: null },
@@ -253,12 +252,6 @@ export async function POST(req: Request) {
     providerAccountId: mailboxKey.providerAccountId,
     email,
   });
-
-  // Send onboarding email if this is the user's first account
-  const accountCount = await prisma.emailAccount.count({ where: { userId: session.user.id, deletedAt: null } });
-  if (!existing && accountCount === 1) {
-    sendEmailSafe(email, "onboarding-connect-account");
-  }
 
   // Never hand ciphertext to the browser: re-read through SAFE_FIELDS so
   // enc: secrets (smtp/imap passwords, tokens) stay server-side. Ciphertext

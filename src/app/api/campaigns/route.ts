@@ -190,12 +190,6 @@ export async function POST(req: NextRequest) {
     data: { name, userId: ctx!.userId, status: "draft", steps: { create: steps.map((s: any, i: number) => ({ order: i, type: s.type || "email", subject: s.subject || null, bodyHtml: s.body ? sanitizeHtml(String(s.body)) : null, delayDays: s.delayDays ?? 0 })) } },
     include: { steps: true },
   });
-  // Send onboarding email if this is the user's first campaign
-  const campaignCount = await prisma.campaign.count({ where: { userId: ctx!.userId, deletedAt: null } });
-  if (campaignCount === 1) {
-    const user = await prisma.user.findUnique({ where: { id: ctx!.userId }, select: { email: true } });
-    if (user?.email) sendEmailSafe(user.email, "onboarding-create-campaign");
-  }
   return NextResponse.json(campaign);
 }
 

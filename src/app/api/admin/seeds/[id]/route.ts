@@ -73,13 +73,13 @@ export async function GET(
       label: dayLabels[d.getDay() === 0 ? 6 : d.getDay() - 1] || dayLabels[d.getDay()],
       sent: daySent.length,
       received: dayRecv.length,
-      rescued: daySent.filter(l => l.rescuedFromSpam).length + dayRecv.filter(l => l.rescuedFromSpam).length,
+      rescued: daySent.filter(l => l.rescuedFromSpam).length,
     });
   }
 
   const warmupReceived = recvLogs.length;
   const warmupSent = sentLogs.length;
-  const savedFromSpam = sentLogs.filter(l => l.rescuedFromSpam).length + recvLogs.filter(l => l.rescuedFromSpam).length;
+  const savedFromSpam = sentLogs.filter(l => l.rescuedFromSpam).length;
 
   return NextResponse.json({
     seed: sanitize(seed as any),
