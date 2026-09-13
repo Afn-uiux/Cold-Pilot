@@ -34,6 +34,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 
   // Campaign Activity
   { id: "campaign-launched", subject: "Campaign launched", category: "Campaign Activity", filename: "campaign-launched.html" },
+  { id: "campaign-resumed", subject: "Campaign resumed", category: "Campaign Activity", filename: "campaign-resumed.html" },
   { id: "campaign-paused", subject: "Campaign paused", category: "Campaign Activity", filename: "campaign-paused.html" },
   { id: "campaign-completed", subject: "Campaign completed", category: "Campaign Activity", filename: "campaign-completed.html" },
   { id: "account-disconnected", subject: "Email account disconnected", category: "Campaign Activity", filename: "campaign-disconnected.html" },

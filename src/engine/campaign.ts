@@ -189,12 +189,35 @@ async function maybeCompleteCampaign(campaign: {
 
   await prisma.campaign.update({ where: { id: campaign.id }, data: { status: "completed" } });
 
-  const [sent, opened, replied, bounced] = await Promise.all([
-    prisma.emailLog.count({ where: { lead: { campaignId: campaign.id }, type: "outgoing", status: "sent" } }),
-    prisma.emailLog.count({ where: { lead: { campaignId: campaign.id }, type: "outgoing", status: "sent", openedAt: { not: null } } }),
-    prisma.lead.count({ where: { campaignId: campaign.id, status: "replied" } }),
+  // Sent = REAL campaign sends only. Out-of-app manual replies (sent from the
+  // user's own Gmail and picked up by the sent-activity scanner) are recorded
+  // as outgoing logs with a NULL campaignStepId — they must not inflate the
+  // campaign's send count, or the completion email would say "5 sent" when the
+  // campaign really sent 4.
+  const [sent, openedLogs, repliedLeads, bounced] = await Promise.all([
+    prisma.emailLog.count({
+      where: { lead: { campaignId: campaign.id }, type: "outgoing", status: "sent", campaignStepId: { not: null } },
+    }),
+    prisma.emailLog.findMany({
+      where: { lead: { campaignId: campaign.id }, openedAt: { not: null } },
+      select: { leadId: true },
+      distinct: ["leadId"],
+    }),
+    prisma.lead.findMany({
+      where: { campaignId: campaign.id, status: "replied" },
+      select: { id: true },
+    }),
     prisma.lead.count({ where: { campaignId: campaign.id, status: "bounced" } }),
   ]);
+
+  // A lead that replied clearly READ the email, even if the tracking pixel
+  // never fired (image-blocked clients, or the open URL pointed at a machine
+  // the reader can't reach). Count unique leads with a tracked open OR a
+  // reply as "opened" so the completion email reflects reality.
+  const openedLeads = new Set<string>(openedLogs.map(l => l.leadId));
+  for (const lead of repliedLeads) openedLeads.add(lead.id);
+  const opened = openedLeads.size;
+  const replied = repliedLeads.length;
 
   dispatchIntegrationEvent(campaign.userId, "campaign_completed", {
     name: campaign.name,

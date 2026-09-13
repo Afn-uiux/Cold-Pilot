@@ -108,7 +108,6 @@ export async function GET(req: NextRequest) {
           imapHost: "imap.gmail.com",
           imapPort: 993,
           dailySendLimit: 50,
-          warmupEnabled: true,
           warmupFilterTag: (function () {
             const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
             let tag = "";

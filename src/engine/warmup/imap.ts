@@ -4,8 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
 import { assertSafeMailTarget } from "@/lib/ssrf";
 import { openImap } from "@/lib/oauth-connect";
+import { runConcurrent } from "@/lib/concurrency";
 import { openDelayMinutes } from "./open-delay";
 import { buildWarmupReplyBody, nameFromEmail } from "./reply";
+import { saveHealthLog, saveSeedHealthLog } from "./health";
 
 const SPAM_FOLDERS: Record<string, string[]> = {
   gmail: ["[Gmail]/Spam", "Spam"],
@@ -243,13 +245,23 @@ export async function processSeedInboxes(): Promise<{
   let replied = 0;
   let rescued = 0;
 
-  for (const account of accounts) {
+  // Senders whose warmup landed in spam during this pass — refreshed health
+  // right after the batch so rescue (or even a non-rescued spam hit) is
+  // reflected in the stored score instead of waiting for the hourly tick.
+  const sendersToRefresh = new Map<string, "mailbox" | "seed">();
+
+  // Each account is fully independent: its own IMAP connection, its own SMTP
+  // creds for replies, and verbatim warmup logs matched under
+  // `seedMailboxId: account.id`. No two accounts share a mailbox or a warmup
+  // log row, so scanning them concurrently (capped) is race-free and stops the
+  // serial IMAP wait (plus AI reply generation) from consuming the whole tick.
+  await runConcurrent(accounts, async (account) => {
     let client: ImapFlow | null = null;
 
     try {
       const provider = account.provider || providerFromEmail(account.email);
       client = await connectForRead(account);
-      if (!client) continue;
+      if (!client) return;
 
       // Sender → warmup log match scope. Mail from another customer mailbox is
       // captured via senderMailboxId; mail from a platform seed via senderInboxId.
@@ -351,6 +363,11 @@ export async function processSeedInboxes(): Promise<{
             });
 
             if (!log) continue;
+
+            // Found one of our warmup sends in a recipient's spam folder —
+            // that's a placement hit for this sender (rescued or not), so its
+            // health needs an immediate recompute after the batch.
+            sendersToRefresh.set(senderId, "senderMailboxId" in scope ? "mailbox" : "seed");
 
             // Rescue while the spam window is short (20-90min): pull from junk
             // promptly, but still stamp the received time at a simulated
@@ -460,7 +477,18 @@ export async function processSeedInboxes(): Promise<{
         try { await client.logout(); } catch {}
       }
     }
-  }
+  });
+
+  // Apply the recomputes for every sender whose warmup landed in spam this
+  // pass, so the stored score reflects the hit right away.
+  await Promise.all([...sendersToRefresh].map(async ([senderId, kind]) => {
+    try {
+      if (kind === "mailbox") await saveHealthLog(senderId);
+      else await saveSeedHealthLog(senderId);
+    } catch {
+      // Health recompute is best-effort; failures must not fail the pass.
+    }
+  }));
 
   return { received, replied, rescued };
 }

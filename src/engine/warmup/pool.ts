@@ -82,12 +82,23 @@ async function findPeerReceiver(
       healthScore: true,
       healthState: true,
       warmupBounceFlag: true,
+      smtpUser: true,
+      smtpPass: true,
       user: { select: { plan: true, trialEndsAt: true, trialVoided: true, deletedAt: true } },
     },
   });
 
   const eligible = recipients.filter(
-    r => !excludeIds.has(r.id) && isEntitledToWarmup(r.user) && isHealthyPeerReceiver(r),
+    r =>
+      !excludeIds.has(r.id) &&
+      // Only app-password-connected mailboxes (a real SMTP identity) may receive
+      // warmup traffic. OAuth-only accounts carry no smtpPass and can't send, so
+      // they are never eligible — otherwise they'd silently receive warmup they
+      // can never reply to, polluting the pool with non-participating inboxes.
+      !!r.smtpPass &&
+      !!r.smtpUser &&
+      isEntitledToWarmup(r.user) &&
+      isHealthyPeerReceiver(r),
   );
 
   if (eligible.length === 0) return null;

@@ -6,6 +6,76 @@ import { sendWarmupEmail } from "./sender";
 import { decryptAccount } from "@/lib/crypto";
 import { canSendFromAccount } from "@/lib/send-gate";
 import { categorizeBounce } from "@/lib/bounce";
+import { createNotification } from "@/lib/notify";
+import { sendEmailSafe } from "@/lib/email/send";
+import { runConcurrent } from "@/lib/concurrency";
+
+// A failed SMTP auth on warmup means the stored app password is wrong/revoked —
+// the mailbox physically cannot send anymore. Broaden past bounce.ts (which is
+// tuned for delivery errors) so nodemailer's EAUTH / "Invalid login" / Gmail's
+// "Username and Password not accepted" all count as credential failures.
+function isWarmupAuthError(error: string | null | undefined): boolean {
+  if (!error) return false;
+  const msg = error.toLowerCase();
+  return (
+    msg.includes("eauth") ||
+    msg.includes("eaccess") ||
+    msg.includes("invalid_grant") ||
+    msg.includes("invalid login") ||
+    msg.includes("invalid credentials") ||
+    msg.includes("username and password not accepted") ||
+    msg.includes("authentication failed") ||
+    msg.includes("5.7.8") ||
+    msg.includes("5.7.0") ||
+    (msg.includes("auth") && msg.includes("login"))
+  );
+}
+
+// One-shot credential-blocked handling: disable warmup, pause the mailbox, and
+// mail the owner. Returns true when it actually disabled the account (so the
+// caller can avoid re-notifying if the account was already disabled).
+async function handleWarmupCredentialFailure(
+  sender: any,
+): Promise<boolean> {
+  try {
+    // Re-read inside the handler: multiple due logs from the same mailbox can
+    // race through runConcurrent, and only the FIRST transitioner to a broken
+    // account should mail the owner.
+    const fresh = await prisma.emailAccount.findUnique({
+      where: { id: sender.id },
+      select: { email: true, userId: true, warmupEnabled: true },
+    });
+    if (!fresh) return false;
+    const becomesDisabled = fresh.warmupEnabled !== false;
+    await prisma.emailAccount.update({
+      where: { id: sender.id },
+      data: { warmupEnabled: false, isPaused: true, status: "error" },
+    });
+    // Cancel any still-scheduled/sending warmups from this mailbox so the dead
+    // account isn't retried every tick, and record them as failed instead.
+    await prisma.warmupLog.updateMany({
+      where: { senderMailboxId: sender.id, status: { in: ["scheduled", "sending"] } },
+      data: { status: "failed", bounceType: "auth_error" },
+    });
+    createNotification({
+      userId: fresh.userId,
+      type: "account_error",
+      title: "Reconnect your email account",
+      message: `${fresh.email} was disconnected — warmup was paused because we could no longer sign in with its saved app password.`,
+    }).catch(() => {});
+    if (becomesDisabled) {
+      const user = await prisma.user.findUnique({
+        where: { id: fresh.userId },
+        select: { email: true },
+      });
+      if (user?.email) sendEmailSafe(user.email, "account-disconnected", { email: fresh.email });
+    }
+    return true;
+  } catch (err) {
+    console.error("Failed to disable account after warmup auth error:", err);
+    return false;
+  }
+}
 
 export async function reconcileWarmupSchedules(): Promise<number> {
   const mailboxes = await prisma.emailAccount.findMany({
@@ -21,6 +91,8 @@ export async function reconcileWarmupSchedules(): Promise<number> {
       email: true,
       warmupStartedAt: true,
       userId: true,
+      smtpUser: true,
+      smtpPass: true,
       user: { select: { plan: true, trialEndsAt: true, trialVoided: true, deletedAt: true } },
     },
   });
@@ -32,6 +104,11 @@ export async function reconcileWarmupSchedules(): Promise<number> {
       // Warmup runs while the owner is on an active trial OR a paid plan.
       // Once the trial ends and they have not paid, warmup is paused.
       if (!isEntitledToWarmup(mailbox.user)) continue;
+
+      // Warmup needs a real SMTP identity. OAuth-only accounts (no app
+      // password) cannot send, so they must never be scheduled — they'd only
+      // accumulate failed sends and soak the pool as dead weight.
+      if (!mailbox.smtpPass || !mailbox.smtpUser) continue;
 
       const pendingCount = await prisma.warmupLog.count({
         where: {
@@ -110,11 +187,16 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
   let sent = 0;
   let failed = 0;
 
-  for (const log of dueLogs) {
+  // Reconcile only ever schedules one pending warmup per sender mailbox
+  // (pendingCount === 0 gate above), so every due log here has a DISTINCT
+  // sender. Sending them concurrently (capped) overlaps the SMTP round-trips
+  // and AI content generation without any risk of two parallel sends from the
+  // same mailbox.
+  await runConcurrent(dueLogs, async (log) => {
     try {
       if (!log.senderMailbox) {
         await prisma.warmupLog.delete({ where: { id: log.id } });
-        continue;
+        return;
       }
       const sender = decryptAccount(log.senderMailbox) as any;
       if (log.seedMailbox) log.seedMailbox = decryptAccount(log.seedMailbox) as any;
@@ -130,7 +212,7 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
       } else {
         // No valid receiver anymore — drop the stale log.
         await prisma.warmupLog.delete({ where: { id: log.id } });
-        continue;
+        return;
       }
 
       let subject = log.subject;
@@ -189,7 +271,7 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
         });
         console.log(`[warmup] Send blocked for ${sender.email}: ${gate.reason}`);
         failed++;
-        continue;
+        return;
       }
 
       const result = await sendWarmupEmail(
@@ -247,6 +329,14 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
           data: { status: "failed", bounceType },
         });
         failed++;
+
+        // A credential failure means this mailbox can no longer send at all.
+        // Disable warmup, pause it, and (once) email the owner — warmup must
+        // never keep retrying (or keep being used as a receiver) with a broken
+        // app password.
+        if (isWarmupAuthError(result.error)) {
+          await handleWarmupCredentialFailure(sender);
+        }
       }
     } catch (err) {
       console.error("Warmup send failed:", err);
@@ -256,7 +346,7 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
       });
       failed++;
     }
-  }
+  });
 
   return { sent, failed };
 }

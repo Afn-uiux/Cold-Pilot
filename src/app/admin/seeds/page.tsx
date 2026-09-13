@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AccountsConnector from "@/components/accounts-connector";
 
 function parseTags(raw: string | null | undefined): string[] {
@@ -66,6 +67,7 @@ const DEFAULT_SETTINGS: Record<string, number | string> = {
 };
 
 export default function AdminSeedsPage() {
+  const router = useRouter();
   const [seeds, setSeeds] = useState<Seed[]>([]);
   const [filter, setFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
@@ -297,7 +299,9 @@ export default function AdminSeedsPage() {
               {!loading && visible.map(s => (
                 <tr key={s.id} className={s.status === "quarantined" ? "bg-red-50/50" : ""}>
                   <td className="px-4 py-3">
-                    <div className="font-medium">{s.email}</div>
+                    <div className="font-medium">
+                      <button onClick={() => router.push(`/admin/seeds/${s.id}`)} className="text-blue-accent hover:underline">{s.email}</button>
+                    </div>
                     <div className="text-xs text-muted-2 mt-0.5">
                       <span className="capitalize">{s.provider}</span>
                       {s.displayName && <> · {s.displayName}</>}

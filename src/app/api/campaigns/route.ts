@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   const enriched = await Promise.all(campaigns.map(async (c) => {
     const totalSteps = Math.max(c.steps?.filter((s: any) => s.type === "email").length || c._count.steps || 1, 1);
     const sentCount = await prisma.emailLog.count({
-      where: { lead: { campaignId: c.id }, type: "outgoing", status: "sent" },
+      where: { lead: { campaignId: c.id }, type: "outgoing", status: "sent", campaignStepId: { not: null } },
     });
     const clickCount = await prisma.emailLog.count({
       where: { lead: { campaignId: c.id }, type: "outgoing", clickedAt: { not: null } },
@@ -141,10 +141,14 @@ export async function PATCH(req: NextRequest) {
       if (user?.email) {
         if (body.status === "active" && c.status !== "active") {
           const leadCount = await prisma.lead.count({ where: { campaignId: id, deletedAt: null } });
-          sendEmailSafe(user.email, "campaign-launched");
+          if (c.status === "paused") {
+            sendEmailSafe(user.email, "campaign-resumed", { campaignName: c.name });
+          } else {
+            sendEmailSafe(user.email, "campaign-launched");
+          }
         }
         if (body.status === "paused") {
-          sendEmailSafe(user.email, "campaign-paused");
+          sendEmailSafe(user.email, "campaign-paused", { campaignName: c.name, reason: "" });
         }
       }
     }

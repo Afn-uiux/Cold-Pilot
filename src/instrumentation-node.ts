@@ -12,6 +12,7 @@ const { prisma } = await import("@/lib/prisma");
 const { executeCampaign, checkForReplies, sendDailySummaries } = await import("@/engine/campaign");
 const { reconcileWarmupSchedules, processDueWarmupSends, processSeedInboxes, processSeedInboxEngagement, processSeedSends, saveHealthLog, saveSeedHealthLog } = await import("@/engine/warmup");
 const { acquireLock, newLeaderToken } = await import("@/lib/leader-lock");
+const { runConcurrent } = await import("@/lib/concurrency");
 const { sweepPlanExpiries } = await import("@/lib/plan-expiry");
 const { sweepBillingFollowUps } = await import("@/lib/billing-followup");
 const { sweepFounderWelcome } = await import("@/lib/founder-welcome");
@@ -69,13 +70,18 @@ async function tickInner() {
     }
 
     // Reply detection runs regardless of campaign status — leads can
-    // reply after their campaign has finished.
+    // reply after their campaign has finished. Users share no mailboxes, so
+    // their scans are independent: run them concurrently (capped) instead of
+    // one-at-a-time. Each IMAP/Gmail round-trip blocks this tick for ~1s, and
+    // with hundreds of users the serial version alone would exceed the
+    // 2-minute tick budget and skip rounds.
     const accounts = await prisma.emailAccount.findMany({
       where: { status: "active", deletedAt: null },
       select: { userId: true },
       distinct: ["userId"],
     });
-    for (const { userId } of accounts) {
+    const userIds = accounts.map(a => a.userId);
+    await runConcurrent(userIds, async (userId) => {
       try {
         const result = await checkForReplies(userId);
         if (result && result.replied > 0) {
@@ -84,7 +90,7 @@ async function tickInner() {
       } catch (e) {
         console.error(`[scheduler] replies ${userId}:`, e);
       }
-    }
+    });
 
     // Daily summary — once per day
     const today = new Date().toISOString().slice(0, 10);

@@ -21,13 +21,19 @@ Pick a topic from this list — rotate across ALL categories each time, never re
 Recently used topics/subjects from this sender (DO NOT reuse these or similar phrasing — pick a different niche and angle):
 {recent_subjects}
 
+Topics this sender has ALREADY COVERED and MUST NOT write about again:
+{covered_topics}
+
+Recent message bodies from this sender (avoid the same stories, angles, and word choices):
+{recent_bodies}
+
 Requirements:
 - Subject: 3 to 7 natural words; often echo the topic; never buzzwords/hype.
 - Body: exactly 3 to 4 short sentences (~45-60 words). Once in a while (~1 in 12) write just a one or two line quick reply instead — real inboxes have both lengths.
 - {opening_instruction}
 - Invent a small, safe, plausible detail so it feels real — never brands, products, links, prices, currencies, money amounts, or anything sensitive. Keep generic and believable.
 - Fundraising/startup chat: casual personal check-in ONLY (how's it going, congrats, deck/pitch). NEVER mention raising money, asking for investor intros, dollar amounts, wire/terms, or selling something. Same for gig/client talk: no soliciting work.
-- Never reuse exact phrasing from an earlier message; vary structure, sentence length, details each time.
+- Never reuse exact phrasing from an earlier message; vary structure, sentence length, details each time. Example: do NOT send a subject like "Coffee shop worth a visit" if something similar was already sent — pick a clearly different topic.
 - No marketing language, no links, no HTML, no emojis.
 - Never start with "I hope this email finds you well".
 - Never use "synergy", "leverage", "circle back", "touch base", "reaching out".
@@ -261,6 +267,113 @@ function chance(p: number): boolean {
   return Math.random() < p;
 }
 
+const STOPWORDS = new Set([
+  "the", "and", "for", "are", "that", "this", "with", "you", "your", "have",
+  "has", "was", "were", "from", "they", "them", "what", "when", "where", "how",
+  "about", "into", "just", "like", "very", "really", "get", "got", "will",
+  "would", "could", "should", "there", "here", "then", "than", "over", "back",
+  "been", "being", "cant", "dont", "does", "doing", "make", "made", "know",
+  "think", "want", "need", "see", "say", "said", "going", "time", "week",
+  "long", "good", "great", "new",
+]);
+
+function normalizeWords(s: string | null | undefined): string[] {
+  return (s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w: string) => w.length > 2 && !STOPWORDS.has(w));
+}
+
+function normText(s: string | null | undefined): string {
+  return (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function jaccard(a: string[], b: string[]): number {
+  const sa = new Set(a);
+  const sb = new Set(b);
+  if (sa.size === 0 || sb.size === 0) return 0;
+  let inter = 0;
+  for (const w of sa) if (sb.has(w)) inter++;
+  const union = sa.size + sb.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+interface RecentContent {
+  subject?: string | null;
+  body?: string | null;
+}
+
+// True if the candidate subject/body is an exact or near-repeat of anything the
+// sender has recently written — same normalized subject, subject with >=70%
+// word overlap, or body with >=55% word overlap.
+function isNearDuplicate(subject: string, body: string, recents: RecentContent[]): boolean {
+  const subjWords = normalizeWords(subject);
+  const bodyWords = normalizeWords(body);
+  const subjNorm = normText(subject);
+  for (const r of recents) {
+    if (!r.subject && !r.body) continue;
+    if (r.subject && subjNorm.length > 0 && normText(r.subject) === subjNorm) return true;
+    if (r.subject && subjWords.length > 0) {
+      const rSubj = normalizeWords(r.subject);
+      if (rSubj.length > 0 && jaccard(subjWords, rSubj) >= 0.7) return true;
+    }
+    if (r.body && bodyWords.length > 0) {
+      const rBody = normalizeWords(r.body);
+      if (rBody.length > 0 && jaccard(bodyWords, rBody) >= 0.55) return true;
+    }
+  }
+  return false;
+}
+
+// Fraction of the topic's own content words that appear anywhere in a text.
+// This is containment, not Jaccard: topic phrases are only 1-3 real words while
+// email bodies run to 15+ words, so symmetric overlap on a long body almost
+// never reaches a usable threshold (previously ~0.06 vs the 0.5 required). With
+// containment, "how the project is going" is marked covered as soon as a recent
+// subject/body mentions "project".
+function coverageRatio(topicWords: string[], text: string): number {
+  const present = new Set(normalizeWords(text));
+  if (present.size === 0) return 0;
+  let hits = 0;
+  for (const w of topicWords) if (present.has(w)) hits++;
+  return hits / topicWords.length;
+}
+
+// Which labelled situations a sender has effectively already covered. A topic is
+// "covered" if >=50% of its content words appear in any recent subject or body
+// the sender has written. Drives rotation so the pool is explored fully before
+// anything gets revisited; once everything reads as covered, pickSituation falls
+// back to the full pool.
+function deriveCoveredTopics(recents: RecentContent[]): string[] {
+  const covered = new Set<string>();
+  const texts = recents.map(r => `${r.subject || ""} ${r.body || ""}`);
+  for (const cat of CATEGORIES) {
+    for (const sit of cat.situations) {
+      const topicWords = normalizeWords(sit.topic);
+      if (topicWords.length === 0) continue;
+      for (const t of texts) {
+        if (coverageRatio(topicWords, t) >= 0.5) {
+          covered.add(sit.topic);
+          break;
+        }
+      }
+    }
+  }
+  return [...covered];
+}
+
+// Pick a situation from the global pool, preferring topics not yet covered so
+// every topic is explored before anything repeats. Falls back to the full pool
+// once everything is exhausted.
+function pickSituation(coveredTopics: string[]): Situation {
+  const covered = new Set(coveredTopics);
+  const all = CATEGORIES.flatMap(c => c.situations);
+  const open = all.filter(s => !covered.has(s.topic));
+  if (open.length > 0) return pick(open);
+  return pick(all);
+}
+
 interface Voice {
   greeting: string[];
   signoff: string[];
@@ -305,22 +418,47 @@ export async function generateSeedWarmupContent(
   const voice = accountVoice(seedId);
   let content: { subject: string; body: string } | null = null;
 
+  // Seeds aren't in warmupContent (that's keyed to senderMailboxId), so pull
+  // their recent copy from warmupLog to steer the AI away from covered topics
+  // and to block near-duplicates.
+  const recentLogs = await prisma.warmupLog.findMany({
+    where: { senderInboxId: seedId, status: { in: ["sent", "delivered"] }, subject: { not: null } },
+    orderBy: { sentAt: "desc" },
+    take: 20,
+    select: { subject: true, bodyPreview: true },
+  });
+  const recents: RecentContent[] = recentLogs.map(l => ({ subject: l.subject, body: l.bodyPreview }));
+  const covered = deriveCoveredTopics(recents);
+  const recentSubjects = recents.map(r => String(r.subject || "").slice(0, 60));
+  const recentBodies = recents.map(r => String(r.body || "").slice(0, 160));
+
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (apiKey) {
-    // Seeds aren't in warmupContent (that's keyed to senderMailboxId), so pull
-    // their recent copy from warmupLog to steer the AI away from covered topics.
-    const recentLogs = await prisma.warmupLog.findMany({
-      where: { senderInboxId: seedId, status: { in: ["sent", "delivered"] }, subject: { not: null } },
-      orderBy: { sentAt: "desc" },
-      take: 8,
-      select: { subject: true },
-    });
-    const recentSubjects = recentLogs.map(l => String(l.subject).slice(0, 60));
-    content = await generateViaAI(senderName, recipientName, apiKey, voice, recentSubjects);
+    const subjects = [...recentSubjects];
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const candidate = await generateViaAI(senderName, recipientName, apiKey, voice, subjects, covered, recentBodies);
+      if (candidate) {
+        if (!isNearDuplicate(candidate.subject, candidate.body, recents)) {
+          content = candidate;
+          break;
+        }
+        subjects.push(candidate.subject);
+      }
+    }
   }
 
   if (!content) {
-    content = buildTemplateContent(seedId, senderName, recipientName);
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const candidate = buildTemplateContent(seedId, senderName, recipientName, covered);
+      if (!isNearDuplicate(candidate.subject, candidate.body, recents)) {
+        content = candidate;
+        break;
+      }
+    }
+  }
+
+  if (!content) {
+    content = buildTemplateContent(seedId, senderName, recipientName, []);
   }
 
   let { subject, body } = content;
@@ -337,7 +475,7 @@ export async function generateSeedWarmupContent(
   return { subject, body };
 }
 
-function buildTemplateContent(mailboxId: string, senderName: string, recipientName: string): { subject: string; body: string } {
+function buildTemplateContent(mailboxId: string, senderName: string, recipientName: string, coveredTopics: string[] = []): { subject: string; body: string } {
   const voice = accountVoice(mailboxId);
   const time = pick(TIMES);
 
@@ -354,9 +492,9 @@ function buildTemplateContent(mailboxId: string, senderName: string, recipientNa
     return { subject: q.subject, body };
   }
 
-  // Pick a category at random (never sequentially), then a situation inside it.
-  const category = pick(CATEGORIES);
-  const situation = pick(category.situations);
+  // Pick from the global situation pool, preferring topics not yet covered so
+  // the full pool is explored before anything repeats.
+  const situation = pickSituation(coveredTopics);
   const opener = pick(situation.openers);
   const ask = pick(situation.asks);
 
@@ -449,6 +587,8 @@ async function generateViaAI(
   apiKey: string,
   voice: Voice,
   recentSubjects: string[],
+  coveredTopics: string[] = [],
+  recentBodies: string[] = [],
 ): Promise<{ subject: string; body: string } | null> {
   const tone = TONES[Math.floor(Math.random() * TONES.length)];
   const greetingOptions = voice.greeting.join(" / ");
@@ -460,6 +600,13 @@ async function generateViaAI(
   const recentBlock = recentSubjects.length > 0
     ? recentSubjects.map(s => `- ${s}`).join("\n")
     : "None yet — this is this sender's first message.";
+  const coveredBlock = coveredTopics.length > 0
+    ? coveredTopics.map(t => `- ${t}`).join("\n")
+    : "None yet — every topic below is available.";
+  const bodiesBlock = recentBodies
+    .slice(0, 6)
+    .map(b => `- ${b.slice(0, 120)}`)
+    .join("\n") || "None yet — this is this sender's first message.";
   const prompt = AI_PROMPT
     .replace("{tone}", tone)
     .replace("{sender_name}", senderName)
@@ -469,6 +616,8 @@ async function generateViaAI(
     .replace("{use_name}", useName)
     .replace("{topics}", AI_TOPICS)
     .replace("{recent_subjects}", recentBlock)
+    .replace("{covered_topics}", coveredBlock)
+    .replace("{recent_bodies}", bodiesBlock)
     .replace("{opening_instruction}", openingInstruction);
 
   for (let attempt = 0; attempt < AI_MAX_RETRIES; attempt++) {
@@ -519,27 +668,37 @@ export async function generateWarmupContent(
     select: { warmupAiEnabled: true },
   });
 
+  // The sender's own recent history — subjects and bodies — is both the AI's
+  // "don't repeat this" context and the near-duplicate source for retries.
+  const recentRows = await prisma.warmupContent.findMany({
+    where: { senderMailboxId },
+    orderBy: { usedAt: "desc" },
+    take: 20,
+    select: { subjectPreview: true, bodyPreview: true },
+  });
+  const recents: RecentContent[] = recentRows.map(r => ({ subject: r.subjectPreview, body: r.bodyPreview }));
+  const covered = deriveCoveredTopics(recents);
+
   // Try AI first if enabled — the voice object keeps AI and template emails
   // sounding like the same person for this account.
   if (mailbox?.warmupAiEnabled) {
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (apiKey) {
       const voice = accountVoice(senderMailboxId);
-      // Give the AI this sender's recent copy so it can steer away from the
-      // niches it already covered (stateless model otherwise has no memory).
-      const recentRows = await prisma.warmupContent.findMany({
-        where: { senderMailboxId },
-        orderBy: { usedAt: "desc" },
-        take: 8,
-        select: { subjectPreview: true },
-      });
       const recentSubjects = recentRows.map(r => r.subjectPreview);
-      const aiContent = await generateViaAI(senderName, recipientName, apiKey, voice, recentSubjects);
-      if (aiContent) {
-        const duplicate = await isDuplicate(senderMailboxId, receiver, aiContent.subject, aiContent.body);
-        if (!duplicate) {
-          await recordUsedContent(senderMailboxId, receiver, aiContent.subject, aiContent.body, "ai");
-          return { ...aiContent, source: "ai" };
+      const recentBodies = recentRows.map(r => r.bodyPreview);
+      // Retry a few times when the draft repeats a niche the sender already
+      // covered (stateless model otherwise has no memory).
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const aiContent = await generateViaAI(senderName, recipientName, apiKey, voice, recentSubjects, covered, recentBodies);
+        if (aiContent) {
+          const duplicate = await isDuplicate(senderMailboxId, receiver, aiContent.subject, aiContent.body);
+          const repetitive = isNearDuplicate(aiContent.subject, aiContent.body, recents);
+          if (!duplicate && !repetitive) {
+            await recordUsedContent(senderMailboxId, receiver, aiContent.subject, aiContent.body, "ai");
+            return { ...aiContent, source: "ai" };
+          }
+          recentSubjects.push(aiContent.subject);
         }
       }
     }
@@ -552,16 +711,17 @@ export async function generateWarmupContent(
   }
 
   for (let attempt = 0; attempt < 50; attempt++) {
-    const content = buildTemplateContent(senderMailboxId, senderName, recipientName);
+    const content = buildTemplateContent(senderMailboxId, senderName, recipientName, covered);
     const duplicate = await isDuplicate(senderMailboxId, receiver, content.subject, content.body);
-    if (!duplicate) {
+    const repetitive = isNearDuplicate(content.subject, content.body, recents);
+    if (!duplicate && !repetitive) {
       await recordUsedContent(senderMailboxId, receiver, content.subject, content.body, "templates");
       return { ...content, source: "templates" };
     }
   }
 
   await resetUsedContent(senderMailboxId);
-  const content = buildTemplateContent(senderMailboxId, senderName, recipientName);
+  const content = buildTemplateContent(senderMailboxId, senderName, recipientName, []);
   await recordUsedContent(senderMailboxId, receiver, content.subject, content.body, "templates");
   return { ...content, source: "templates" };
 }

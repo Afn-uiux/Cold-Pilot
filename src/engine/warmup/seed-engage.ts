@@ -4,8 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
 import { assertSafeMailTarget } from "@/lib/ssrf";
 import { openImap } from "@/lib/oauth-connect";
+import { runConcurrent } from "@/lib/concurrency";
 import { openDelayMinutes } from "./open-delay";
 import { buildWarmupReplyBody, nameFromEmail } from "./reply";
+import { saveHealthLog, saveSeedHealthLog } from "./health";
 
 // Seed engagement engine: makes platform-owned seed inboxes behave like real,
 // live mailboxes. Seeds RECEIVE warmup (from user mailboxes and other seeds),
@@ -218,12 +220,22 @@ export async function processSeedInboxEngagement(): Promise<{
   let replied = 0;
   let rescued = 0;
 
-  for (const seed of seeds) {
+  // Senders whose warmup landed in this seed's spam during this pass. The
+  // sender can be a user mailbox (senderMailboxId) or another seed
+  // (senderInboxId) — recompute whichever sent the flagged warmup.
+  const sendersToRefresh = new Map<string, "mailbox" | "seed">();
+
+  // Seed inboxes are fully independent — each opens its own IMAP connection,
+  // matches warmup logs verbatim under `seedInboxId: seed.id`, and replies
+  // with its own SMTP creds. Scanning them concurrently (capped) keeps the
+  // IMAP + AI-reply wait from eating the whole scheduler tick as the seed
+  // network grows.
+  await runConcurrent(seeds, async (seed) => {
     let client: ImapFlow | null = null;
     try {
       const provider = seed.provider || providerFromEmail(seed.email);
       client = await connectForRead(seed);
-      if (!client) continue;
+      if (!client) return;
 
       // Match a sender email to the warmup log that used THIS seed as receiver.
       function logWhere(senderEmail: string, senderIsUser: boolean) {
@@ -289,6 +301,10 @@ export async function processSeedInboxEngagement(): Promise<{
             const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
             if (Date.now() < openAt.getTime()) continue;
 
+            // This warmup landed in junk — a placement hit for its sender.
+            if (log.senderMailboxId) sendersToRefresh.set(log.senderMailboxId, "mailbox");
+            else if (log.senderInboxId) sendersToRefresh.set(log.senderInboxId, "seed");
+
             // Always record that this warmup landed in junk; whether we pull it
             // back out depends on the seed's spam-protection rate.
             if (shouldApply(seed.spamProtection ?? 100)) {
@@ -330,7 +346,17 @@ export async function processSeedInboxEngagement(): Promise<{
     } finally {
       if (client) { try { await client.logout(); } catch {} }
     }
-  }
+  });
+
+  // Immediately reflect spam landings in the senders' stored health scores.
+  await Promise.all([...sendersToRefresh].map(async ([senderId, kind]) => {
+    try {
+      if (kind === "mailbox") await saveHealthLog(senderId);
+      else await saveSeedHealthLog(senderId);
+    } catch {
+      // Health recompute is best-effort; failures must not fail the pass.
+    }
+  }));
 
   return { received, replied, rescued };
 }

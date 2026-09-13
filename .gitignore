@@ -69,6 +69,7 @@ Thumbs.db
 check-users.js
 check-users.mjs
 start.bat
+local-debug-*.js
 
 # typescript
 *.tsbuildinfo

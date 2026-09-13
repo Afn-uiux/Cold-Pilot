@@ -58,13 +58,17 @@ export async function GET(req: NextRequest) {
   const statusRate = totalLeads > 0 ? Math.round((activeLeads / totalLeads) * 100) : 0;
   const completionRate = totalLeads > 0 ? Math.round((completedLeads / totalLeads) * 100) : 0;
 
-  // Leads that have started the sequence (have at least one email sent)
-  const startedLeadIds = new Set(emailLogs.filter(e => e.status === "sent" || e.status === "delivered").map(e => e.leadId));
+  // Leads that have started the sequence (have at least one email sent).
+  // Out-of-app manual replies are recorded as stepless outgoing/sent logs —
+  // exclude them so they never inflate "sent" (matches step analytics and the
+  // completed-campaign email, which count real campaign steps only).
+  const realSentLogs = emailLogs.filter(e => e.campaignStepId && (e.status === "sent" || e.status === "delivered"));
+  const startedLeadIds = new Set(realSentLogs.map(e => e.leadId));
   const sequenceStarted = startedLeadIds.size;
 
   // Overall metrics
-  const sent = emailLogs.filter(e => e.status === "sent" || e.status === "delivered").length;
-  const delivered = emailLogs.filter(e => e.status === "sent" || e.status === "delivered" || e.status === "opened" || e.status === "clicked" || e.status === "replied").length;
+  const sent = realSentLogs.length;
+  const delivered = realSentLogs.filter(e => e.status === "sent" || e.status === "delivered" || e.status === "opened" || e.status === "clicked" || e.status === "replied").length;
   const openedLogs = emailLogs.filter(e => e.openedAt);
   const repliedLogs = emailLogs.filter(e => e.repliedAt);
   const clickedLogs = emailLogs.filter(e => e.clickedAt);

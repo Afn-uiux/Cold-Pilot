@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { auth } from "@/lib/auth";
 import { trialGuard } from "@/lib/trial";
 import { prisma } from "@/lib/prisma";
+import { decryptAccount } from "@/lib/crypto";
 import { NextResponse } from "next/server";
 import { reconcileWarmupSchedules, processDueWarmupSends, saveHealthLog } from "@/engine/warmup";
 
@@ -33,10 +34,30 @@ export async function POST(req: Request) {
       // trialGuard above); expired/voided trials are already blocked there.
       const enabled = !account.warmupEnabled;
 
+      // Warmup requires a real sending identity. OAuth-only accounts have no
+      // app password (smtpPass), so they can send nothing — never enable
+      // warmup for them.
+      if (enabled) {
+        const decrypted = decryptAccount(account);
+        if (!decrypted.smtpPass || !decrypted.smtpUser) {
+          return NextResponse.json(
+            {
+              error:
+                "This account is connected without an app password. Add your Gmail/Outlook app password to enable warmup.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+
       const updated = await prisma.emailAccount.update({
         where: { id: emailAccountId },
         data: {
           warmupEnabled: enabled,
+          // Re-enabling warmup revokes any auto/manual pause so the account
+          // resumes — otherwise a previously paused mailbox stays frozen even
+          // after the owner fixes their credentials and flips it back on.
+          isPaused: enabled ? false : undefined,
           warmupStartedAt: enabled ? (account.warmupStartedAt || new Date()) : undefined,
         },
       });

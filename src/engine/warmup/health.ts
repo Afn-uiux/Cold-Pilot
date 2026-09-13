@@ -88,13 +88,14 @@ async function calculateWarmupHealth(sender: WarmupLogSender): Promise<MailboxHe
   const totalSent = await prisma.warmupLog.count({ where: baseWhere });
 
   if (totalSent === 0) {
-    // No warmup traffic in the window — score is 0 (nothing measured yet),
-    // neither healthy nor broken. Distinct from a measured low placement.
+    // No warmup traffic in the window — nothing was measured, so keep the
+    // default 100/"healthy" score (same as a brand-new mailbox). A "0" here
+    // was indistinguishable from a mailbox that lost all its sends to spam.
     return {
-      healthScore: 0,
-      healthState: "watch",
+      healthScore: 100,
+      healthState: "healthy",
       spamRate: 0,
-      inboxPlacementRate: 0,
+      inboxPlacementRate: 100,
       sentInWindow: 0,
       inboxPlaced: 0,
       spamCount: 0,
