@@ -132,6 +132,21 @@ async function matchLogForMessage(
   });
 }
 
+// Bind a physical spam-folder message to a warmup log even when the log was
+// already marked delivered/rescued. The DB saying "rescued" while the message
+// is STILL physically in spam is proof the old code's move failed — but it
+// recorded the launch anyway and the strict matcher above will never touch a
+// delivered log. Exact Message-ID only, so a real third-party email can't be
+// hijacked into a recovery.
+async function matchStuckSpamLog(msg: FoundMessage, where: Record<string, unknown>): Promise<any> {
+  const mid = msg.messageId && !msg.messageId.startsWith("unknown-") ? msg.messageId : null;
+  if (!mid) return null;
+  return prisma.warmupLog.findFirst({
+    where: { ...where, messageId: mid },
+    orderBy: { sentAt: "desc" },
+  });
+}
+
 async function connectToAccount(account: {
   imapHost: string;
   imapPort: number;
@@ -370,15 +385,26 @@ export async function processSeedInboxes(): Promise<{
             const spamProtection = settings?.spamProtection ?? 100;
 
             for (const msg of msgs) {
-              // Don't filter on foundInSpam:false — a log that was flagged
-              // but never physically rescued (copy failed) still has
-              // receivedAt:null, so the matcher will bind it. This lets
-              // the engine retry failed rescues every tick.
-              const log = await matchLogForMessage(msg, {
+              // Strict match first: only an unresolved log (status sent, not
+              // yet received) gets a normal rescue — this already retries
+              // failed rescues, since foundInSpam is no longer filtered here.
+              let log = await matchLogForMessage(msg, {
                 ...scope,
                 seedMailboxId: account.id,
               });
 
+              // Recovery: the log is already marked delivered/rescued, but the
+              // message is STILL physically in the spam folder — the old code
+              // recorded a rescue it never completed and the strict matcher
+              // above will never bind a delivered log. Bind by exact
+              // Message-ID (safe: a third-party email can't match) and
+              // physically clean up the spam copy.
+              if (!log) {
+                log = await matchStuckSpamLog(msg, {
+                  ...scope,
+                  seedMailboxId: account.id,
+                });
+              }
               if (!log) continue;
 
               // Found one of our warmup sends in a recipient's spam folder —
@@ -388,14 +414,38 @@ export async function processSeedInboxes(): Promise<{
 
               // Rescue while the spam window is short (20-90min): pull from junk
               // promptly, but still stamp the received time at a simulated
-              // check-time so the account's timeline shows human gaps.
-              if (!log.sentAt) continue;
-              const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
-              if (Date.now() < openAt.getTime()) continue;
+              // check-time so the account's timeline shows human gaps. Only
+              // genuinely undelivered logs wait for the window; a stuck one
+              // (already delivered in DB) skips straight to physical cleanup.
+              let openAt = new Date();
+              const notYetDelivered = log.status !== "delivered" && !log.receivedAt;
+              if (notYetDelivered) {
+                if (!log.sentAt) continue;
+                openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
+                if (Date.now() < openAt.getTime()) continue;
+              }
 
               const updateData: any = { foundInSpam: true };
 
-              if (shouldApply(spamProtection)) {
+              // DB says delivered but the message is physically still in spam:
+              // move the real copy to INBOX and drop the spam stray. No status
+              // rewrite needed — it already says delivered.
+              if (!notYetDelivered) {
+                try {
+                  await markSeen(c, spamFolder, [msg.uid]);
+                  const lock = await c.getMailboxLock(spamFolder);
+                  try {
+                    const moved = await c.messageMove([msg.uid], "INBOX", { uid: true });
+                    if (!moved) throw new Error("messageMove returned false");
+                  } finally {
+                    lock.release();
+                  }
+                  rescued++;
+                  console.log(`Recovered stuck spam for ${account.email}: UID ${msg.uid} moved from ${spamFolder} to INBOX`);
+                } catch (err) {
+                  console.error(`Stuck-spam recovery failed for ${account.email}, ${spamFolder}, UID ${msg.uid}:`, err);
+                }
+              } else if (shouldApply(spamProtection)) {
                 await markSeen(c, spamFolder, [msg.uid]);
                 let moved = false;
                 try {

@@ -167,6 +167,21 @@ async function matchLogForMessage(
   });
 }
 
+// Bind a physical spam-folder message to a warmup log even when the log was
+// already marked delivered/rescued. The DB saying "rescued" while the message
+// is STILL physically in spam is proof the old code's move failed — but it
+// recorded the result anyway and the strict matcher above will never touch a
+// delivered log. Exact Message-ID only, so a real third-party email can't be
+// hijacked into a recovery.
+async function matchStuckSpamLog(msg: FoundMessage, where: Record<string, unknown>): Promise<any> {
+  const mid = msg.messageId && !msg.messageId.startsWith("unknown-") ? msg.messageId : null;
+  if (!mid) return null;
+  return prisma.warmupLog.findFirst({
+    where: { ...where, messageId: mid },
+    orderBy: { sentAt: "desc" },
+  });
+}
+
 async function sendSeedReply(
   account: { email: string; smtpHost: string; smtpPort: number; smtpUser: string; smtpPass: string },
   toEmail: string,
@@ -306,17 +321,55 @@ export async function processSeedInboxEngagement(): Promise<{
           for (const [senderEmail, msgs] of found) {
             const senderIsUser = userAccounts.some(a => a.email === senderEmail);
             for (const msg of msgs) {
-              const log = await matchLogForMessage(msg, logWhere(senderEmail, senderIsUser));
+              // Strict match first: only an unresolved log (status sent, not
+              // yet received) gets the normal spam-protection rescue.
+              let log = await matchLogForMessage(msg, logWhere(senderEmail, senderIsUser));
+              // Recovery: log already marked delivered/rescued but the message
+              // is STILL physically in the spam folder — the old code recorded
+              // a rescue it never completed. Bind by exact Message-ID and
+              // physically move it to INBOX.
+              if (!log) {
+                log = await matchStuckSpamLog(msg, logWhere(senderEmail, senderIsUser));
+              }
               if (!log) continue;
               // Short rescue window (20-90min): pull from junk promptly while
               // still stamping a simulated received time for human-looking gaps.
-              if (!log.sentAt) continue;
-              const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
-              if (Date.now() < openAt.getTime()) continue;
+              // Stuck-but-delivered logs skip straight to physical cleanup.
+              let openAt = new Date();
+              const notYetDelivered = log.status !== "delivered" && !log.receivedAt;
+              if (notYetDelivered) {
+                if (!log.sentAt) continue;
+                openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
+                if (Date.now() < openAt.getTime()) continue;
+              }
 
               // This warmup landed in junk — a placement hit for its sender.
               if (log.senderMailboxId) sendersToRefresh.set(log.senderMailboxId, "mailbox");
               else if (log.senderInboxId) sendersToRefresh.set(log.senderInboxId, "seed");
+
+              // DB says delivered but the message is physically still in spam:
+              // move the real copy to INBOX and drop the spam stray.
+              if (!notYetDelivered) {
+                try {
+                  await markSeen(c, folder, [msg.uid]);
+                  const lock = await c.getMailboxLock(folder);
+                  try {
+                    const moved = await c.messageMove([msg.uid], "INBOX", { uid: true });
+                    if (!moved) throw new Error("messageMove returned false");
+                  } finally {
+                    lock.release();
+                  }
+                  rescued++;
+                  console.log(`Recovered stuck spam for ${seed.email}: UID ${msg.uid} moved from ${folder} to INBOX`);
+                  await prisma.warmupLog.update({
+                    where: { id: log.id },
+                    data: { foundInSpam: true },
+                  });
+                } catch (err) {
+                  console.error(`Stuck-spam recovery failed for ${seed.email}, ${folder}, UID ${msg.uid}:`, err);
+                }
+                continue;
+              }
 
               // Always record that this warmup landed in junk; whether we pull it
               // back out depends on the seed's spam-protection rate.
