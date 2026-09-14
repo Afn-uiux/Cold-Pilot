@@ -266,9 +266,8 @@ export async function processSeedInboxEngagement(): Promise<{
     let client: ImapFlow | null = null;
     try {
       const provider = normalizeProvider(seed.provider, seed.email);
-      if (seed.email.includes("yahoo")) console.log(`[debug-seed] connecting ${seed.email} provider=${provider}`);
       client = await connectForRead(seed);
-      if (!client) { if (seed.email.includes("yahoo")) console.log(`[debug-seed] ${seed.email} connectForRead returned null`); return; }
+      if (!client) return;
 
       // Match a sender email to the warmup log that used THIS seed as receiver.
       function logWhere(senderEmail: string, senderIsUser: boolean) {
@@ -326,7 +325,6 @@ export async function processSeedInboxEngagement(): Promise<{
       const rescue = async (c: ImapFlow) => {
         for (const folder of spamFolders) {
           const found = await searchFolder(c, folder, senderEmails, senderTags);
-          if (seed.email.includes("yahoo")) console.log(`[debug-seed] ${seed.email} folder=${folder} found=${found.size} senders=${[...found.keys()].join(",")}`);
           for (const [senderEmail, msgs] of found) {
             const senderIsUser = userAccounts.some(a => a.email === senderEmail);
             for (const msg of msgs) {
