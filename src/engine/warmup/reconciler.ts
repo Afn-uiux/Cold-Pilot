@@ -89,6 +89,7 @@ export async function reconcileWarmupSchedules(): Promise<number> {
     select: {
       id: true,
       email: true,
+      displayName: true,
       warmupStartedAt: true,
       userId: true,
       smtpUser: true,
@@ -133,7 +134,7 @@ export async function reconcileWarmupSchedules(): Promise<number> {
       const receiver = await pickWarmupReceiver({ id: mailbox.id, userId: mailbox.userId });
       if (!receiver) continue;
 
-      const senderName = mailbox.email.split("@")[0];
+      const senderName = mailbox.displayName || mailbox.email.split("@")[0];
       const content = await generateWarmupContent(
         mailbox.id,
         senderName,
@@ -219,7 +220,7 @@ export async function processDueWarmupSends(): Promise<{ sent: number; failed: n
       let emailBody = log.bodyHtml || log.bodyPreview || "";
 
       if (!subject || !emailBody) {
-        const senderName = sender.email.split("@")[0];
+        const senderName = sender.displayName || sender.email.split("@")[0];
         const receiverObj = log.seedInbox || log.seedMailbox;
         const recipientName = receiverObj ?
           (receiverObj.displayName?.split(/\s+/)[0] || receiverObj.email.split("@")[0]) : "";

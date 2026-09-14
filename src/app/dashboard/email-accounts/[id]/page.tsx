@@ -174,8 +174,8 @@ export default function EmailAccountDetailPage() {
               <ChevronLeftIcon size={18} />
             </button>
             <h1 className="text-xl font-medium">{account.email}</h1>
-            <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2.5 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-full ${isActive ? "text-green-700 bg-green-50 border border-green-200" : "text-muted bg-gray-100 border border-border"}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-500" : "bg-muted-2"}`} />
               {isActive ? "Active" : "Paused"}
             </span>
           </div>

@@ -9,6 +9,9 @@ export default async function DashboardPage() {
   const userId = session?.user?.id;
   if (!userId) return null;
 
+  const totalCampaigns = await prisma.campaign.count({ where: { userId, deletedAt: null } });
+  const activeCampaigns = await prisma.campaign.count({ where: { userId, deletedAt: null, status: "active" } });
+
   const campaigns = await prisma.campaign.findMany({
     where: { userId, deletedAt: null },
     orderBy: { updatedAt: "desc" },
@@ -49,8 +52,8 @@ export default async function DashboardPage() {
         <div className="metrics">
           <div className="metric">
             <div className="metric-label">Campaigns</div>
-            <div className="metric-value">{campaigns.length}</div>
-            <div className="metric-change up">{campaigns.filter(c => c.status === "active").length} active</div>
+            <div className="metric-value">{totalCampaigns}</div>
+            <div className="metric-change up">{activeCampaigns} active</div>
           </div>
           <div className="metric">
             <div className="metric-label">Leads</div>

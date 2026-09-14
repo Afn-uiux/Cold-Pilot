@@ -70,7 +70,7 @@ export async function canSendFromAccount(
   if (totalSentToday >= dailySendLimit) {
     return {
       allowed: false,
-      reason: `Daily limit reached (${totalSentToday}/${dailySendLimit})`,
+      reason: `You've hit today's send limit (${totalSentToday}/${dailySendLimit}) — it resets at midnight. Nice pacing!`,
     };
   }
 
@@ -98,9 +98,10 @@ export async function canSendFromAccount(
     const minWait = GLOBAL_MIN_WAIT_MS + jitterFor(lastSentAt.getTime());
     const elapsed = now.getTime() - lastSentAt.getTime();
     if (elapsed < minWait) {
+      const secs = Math.ceil((minWait - elapsed) / 1000);
       return {
         allowed: false,
-        reason: `Min wait not met (${Math.ceil((minWait - elapsed) / 1000)}s remaining)`,
+        reason: `A short pause between sends keeps your inbox reputation healthy. You can send again in ~${secs}s.`,
         retryAfterMs: minWait - elapsed,
       };
     }

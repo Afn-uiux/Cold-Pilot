@@ -3,9 +3,12 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import Database from "better-sqlite3";
 import { mkdirSync, readdirSync, statSync, unlinkSync } from "fs";
 import { join, resolve, sep } from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
 
 const BACKUPS_DIR = join(process.cwd(), "backups");
 const DB_PATH = join(process.cwd(), "dev.db");
@@ -13,7 +16,12 @@ const MAX_BACKUPS = 10;
 
 // Only files this route itself created may be downloaded. The timestamp shape
 // comes from POST below; anything else is rejected before touching the disk.
-const BACKUP_NAME_RE = /^coldpilot-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.db$/;
+const BACKUP_NAME_RE = /^coldpilot-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.(db|dump)$/;
+
+function isPostgres(): boolean {
+  const url = process.env.DATABASE_URL || "file:./dev.db";
+  return url.startsWith("postgresql") || url.startsWith("postgres://");
+}
 
 async function requireAdmin() {
   const session = await auth();
@@ -26,51 +34,73 @@ async function requireAdmin() {
   return null;
 }
 
+async function createBackup(): Promise<{ file: string; size: number }> {
+  mkdirSync(BACKUPS_DIR, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+
+  if (isPostgres()) {
+    const url = process.env.DATABASE_URL!;
+    const file = `coldpilot-${timestamp}.dump`;
+    const path = join(BACKUPS_DIR, file);
+    // pg_dump: custom format ("directory-safe", compressible, restorable with pg_restore).
+    await execFileAsync("pg_dump", ["--format=custom", "--file", path, url]);
+    const size = statSync(path).size;
+    if (size <= 0) {
+      unlinkSync(path);
+      throw new Error("pg_dump produced an empty file");
+    }
+    return { file, size };
+  }
+
+  const file = `coldpilot-${timestamp}.db`;
+  const backupPath = join(BACKUPS_DIR, file);
+
+  // Safe online backup (SQLite backup API), NOT a raw file copy: the DB is
+  // live and WAL-mode, so copyFileSync could capture a torn page and hand
+  // you a corrupt "backup" that only fails on restore day.
+  const { default: Database } = await import("better-sqlite3");
+  const src = new Database(DB_PATH, { readonly: true });
+  try {
+    await src.backup(backupPath);
+  } finally {
+    src.close();
+  }
+
+  // Verify before trusting: integrity + same table count as the live DB.
+  const check = new Database(backupPath, { readonly: true });
+  let integrity = "";
+  let tables = 0;
+  try {
+    integrity = (check.prepare("PRAGMA integrity_check").get() as { integrity_check: string }).integrity_check;
+    tables = (check.prepare("SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table'").get() as { c: number }).c;
+  } finally {
+    check.close();
+  }
+  const live = new Database(DB_PATH, { readonly: true });
+  let liveTables = 0;
+  try {
+    liveTables = (live.prepare("SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table'").get() as { c: number }).c;
+  } finally {
+    live.close();
+  }
+  if (integrity !== "ok" || tables !== liveTables) {
+    unlinkSync(backupPath);
+    throw new Error(`verification failed (integrity=${integrity}, tables=${tables}/${liveTables})`);
+  }
+
+  return { file, size: statSync(backupPath).size };
+}
+
 export async function POST() {
   const denied = await requireAdmin();
   if (denied) return denied;
 
   try {
-    mkdirSync(BACKUPS_DIR, { recursive: true });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const backupName = `coldpilot-${timestamp}.db`;
-    const backupPath = join(BACKUPS_DIR, backupName);
-
-    // Safe online backup (SQLite backup API), NOT a raw file copy: the DB is
-    // live and WAL-mode, so copyFileSync could capture a torn page and hand
-    // you a corrupt "backup" that only fails on restore day.
-    const src = new Database(DB_PATH, { readonly: true });
-    try {
-      await src.backup(backupPath);
-    } finally {
-      src.close();
-    }
-
-    // Verify before trusting: integrity + same table count as the live DB.
-    const check = new Database(backupPath, { readonly: true });
-    let integrity = "";
-    let tables = 0;
-    try {
-      integrity = (check.prepare("PRAGMA integrity_check").get() as { integrity_check: string }).integrity_check;
-      tables = (check.prepare("SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table'").get() as { c: number }).c;
-    } finally {
-      check.close();
-    }
-    const live = new Database(DB_PATH, { readonly: true });
-    let liveTables = 0;
-    try {
-      liveTables = (live.prepare("SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table'").get() as { c: number }).c;
-    } finally {
-      live.close();
-    }
-    if (integrity !== "ok" || tables !== liveTables) {
-      unlinkSync(backupPath);
-      throw new Error(`verification failed (integrity=${integrity}, tables=${tables}/${liveTables})`);
-    }
+    const { file, size } = await createBackup();
 
     // Prune old backups
     const files = readdirSync(BACKUPS_DIR)
-      .filter(f => f.startsWith("coldpilot-") && f.endsWith(".db"))
+      .filter(f => /^coldpilot-.*\.(db|dump)$/.test(f))
       .map(f => ({ name: f, time: statSync(join(BACKUPS_DIR, f)).mtime }))
       .sort((a, b) => b.time.getTime() - a.time.getTime());
 
@@ -78,14 +108,13 @@ export async function POST() {
       unlinkSync(join(BACKUPS_DIR, file.name));
     }
 
-    const size = statSync(backupPath).size;
     return NextResponse.json({
       success: true,
-      file: backupName,
+      file,
       size: `${(size / 1024).toFixed(1)} KB`,
       backups: Math.min(files.length, MAX_BACKUPS),
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Backup failed:", err);
     return NextResponse.json({ error: "Backup failed. Check the server logs." }, { status: 500 });
   }
@@ -113,9 +142,12 @@ export async function GET(req: NextRequest) {
       if (!stat.isFile()) throw new Error("not a file");
       const { readFileSync } = await import("fs");
       const data = readFileSync(resolved);
+      const contentType = download.endsWith(".dump")
+        ? "application/octet-stream"
+        : "application/x-sqlite3";
       return new NextResponse(new Uint8Array(data), {
         headers: {
-          "Content-Type": "application/x-sqlite3",
+          "Content-Type": contentType,
           "Content-Disposition": `attachment; filename="${download}"`,
           "Content-Length": String(data.length),
         },
@@ -127,7 +159,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const files = readdirSync(BACKUPS_DIR)
-      .filter(f => f.startsWith("coldpilot-") && f.endsWith(".db"))
+      .filter(f => /^coldpilot-.*\.(db|dump)$/.test(f))
       .map(f => {
         const stat = statSync(join(BACKUPS_DIR, f));
         return { name: f, size: `${(stat.size / 1024).toFixed(1)} KB`, created: stat.mtime };

@@ -76,7 +76,7 @@ export async function POST(req: Request) {
     reasons.push("High daily limit may trigger rate limits");
   }
 
-  const accountIds = accounts.map(a => a.id);
+const accountIds = accounts.map(a => a.id);
   const hasWarmup = accountIds.length > 0 ? await prisma.warmupContent.findFirst({
     where: { senderMailboxId: { in: accountIds } },
   }) : null;
@@ -90,7 +90,30 @@ export async function POST(req: Request) {
     reasons.push("Warmup enabled — improves reputation");
   }
 
+  // Content check: run the campaign's actual email bodies through the AI spam
+  // scanner. This is the "ai spam check" — the AI reads every step's body and
+  // judges spamminess the way Gmail/Outlook filters would.
+  const stepBodies = campaign.steps.map(s => s.bodyHtml).filter(Boolean).join("\n\n---\n\n");
+  const { aiScoreContent, scoreContent } = await import("@/lib/deliverability");
+  const contentResult = stepBodies
+    ? (await aiScoreContent(stepBodies)) ?? scoreContent(stepBodies)
+    : null;
+
+  if (contentResult) {
+    reasons.push(...contentResult.issues.map((i: string) => `Content: ${i}`));
+    if (contentResult.score >= 7) {
+      score += 1;
+      reasons.push("Content reads clean to the AI spam check");
+    } else if (contentResult.score >= 4) {
+      score -= 1;
+      reasons.push(`Content flagged by AI spam check (${contentResult.score}/10)`);
+    } else {
+      score -= 2;
+      reasons.push(`Content likely to be flagged as spam (${contentResult.score}/10)`);
+    }
+  }
+
   score = Math.max(1, Math.min(10, score));
 
-  return NextResponse.json({ score, reasons });
+  return NextResponse.json({ score, reasons, contentScore: contentResult?.score ?? null });
 }

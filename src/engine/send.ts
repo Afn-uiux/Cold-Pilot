@@ -68,20 +68,7 @@ function headerSafe(value: string): string {
   return out.replace(/\s+/g, " ").trim();
 }
 
-function wrapInEmailDocument(html: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#333333;">
-  <div style="max-width:600px;margin:0 auto;padding:20px;">
-    ${html}
-  </div>
-</body>
-</html>`;
-}
+
 
 function rewriteLinks(html: string, baseUrl: string, leadId: string, campaignStepId?: string): string {
   const stepParam = campaignStepId ? `&stepId=${campaignStepId}` : "";
@@ -192,7 +179,13 @@ export async function sendEmail(opts: SendOptions) {
   }
 
   let html = opts.htmlBody;
-  const isPlainText = opts.plainTextOnly;
+  // Match warmup's plain-text format: campaign bodies that are just simple
+  // paragraph content (spintax, variables, line breaks — no real formatting)
+  // render as clean plain text so they read like a normal email in Gmail.
+  // HTML is only used when the body genuinely contains formatting (bold,
+  // links, lists, headings, images) and plainTextOnly isn't set.
+  const hasRichMarkup = /<(?:a|strong|b|em|i|u|ul|ol|li|h[1-6]|img|span)\b/i.test(opts.htmlBody || "");
+  const isPlainText = opts.plainTextOnly || !hasRichMarkup;
 
   if (isPlainText) {
     html = stripHtml(html);
@@ -218,7 +211,7 @@ export async function sendEmail(opts: SendOptions) {
     ? `<img src="${baseUrl}/api/track?id=${opts.trackingId}${opts.campaignStepId ? `&stepId=${opts.campaignStepId}` : ""}" width="1" height="1" alt="" style="display:none;" />`
     : "";
 
-  const body = isPlainText ? html : wrapInEmailDocument(html + trackingPixel);
+  const body = isPlainText ? html : html + trackingPixel;
   const fromName = opts.fromName || account.displayName || account.email;
 
   let sendResult: { messageId: string; threadId: string };
@@ -371,7 +364,26 @@ async function sendViaGmailApi(
     requestBody: { raw, ...(threadId ? { threadId } : {}) },
   });
 
-  return { messageId: generatedMessageId, threadId: res.data.threadId! };
+  // Gmail rewrites the Message-ID header at delivery to its own
+  // CAJ...@mail.gmail.com; the header we set in raw above is discarded. The
+  // receiver's client threads by the ID it actually saw, so we must store the
+  // delivered Message-ID — otherwise follow-ups' In-Reply-To references an ID
+  // the receiver never received and threading breaks on the receiver side.
+  let deliveredMessageId = generatedMessageId;
+  try {
+    const sent = await gmail.users.messages.get({
+      userId: "me",
+      id: res.data.id!,
+      format: "metadata",
+      metadataHeaders: ["Message-ID"],
+    });
+    const mid = sent.data.payload?.headers?.find(h => h.name?.toLowerCase() === "message-id")?.value;
+    if (mid) deliveredMessageId = normalizeMessageId(mid);
+  } catch (err: any) {
+    console.warn(`[send] Could not read delivered Message-ID for ${res.data.id}:`, err?.message);
+  }
+
+  return { messageId: deliveredMessageId, threadId: res.data.threadId! };
 }
 
 async function sendViaSmtp(

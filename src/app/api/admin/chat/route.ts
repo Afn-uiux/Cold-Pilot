@@ -30,16 +30,13 @@ export async function GET(req: NextRequest) {
     });
     let aiDisabled = false;
     try {
-      await prisma.$executeRawUnsafe(
-        `CREATE TABLE IF NOT EXISTS "ChatSettings" ("userId" TEXT NOT NULL PRIMARY KEY, "aiDisabled" BOOLEAN NOT NULL DEFAULT false, "updatedAt" DATETIME NOT NULL)`
-      );
       const settings = await prisma.chatSettings.findUnique({
         where: { userId },
         select: { aiDisabled: true },
       });
       aiDisabled = settings?.aiDisabled ?? false;
     } catch {
-      // Default to AI on.
+      // Table may not exist yet — default to AI on.
     }
     return NextResponse.json({ messages, aiDisabled });
   }
@@ -107,7 +104,6 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.findUnique({ where: { id: body.userId }, select: { id: true } });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
     try {
-      await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "ChatSettings" ("userId" TEXT NOT NULL PRIMARY KEY, "aiDisabled" BOOLEAN NOT NULL DEFAULT false, "updatedAt" DATETIME NOT NULL)`;
       await prisma.chatSettings.upsert({
         where: { userId: body.userId },
         update: { aiDisabled: body.aiDisabled },

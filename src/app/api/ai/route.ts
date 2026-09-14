@@ -77,32 +77,38 @@ function runLocalSpamCheck(emailText: string): SpamFinding[] {
   return findings;
 }
 
-// DeepSeek returns a JSON array of {"text","fix"} fixes. Verify each quoted
-// text actually appears in the email (trimmed, case-insensitive) and replace
-// it with the email's own verbatim slice so apply-fix always matches exactly.
-function extractSpamFindings(raw: string, emailText: string): SpamFinding[] {
+// Parse the AI spam-check response: {"score": 0-10, "issues": [{"text","fix"}]}.
+// Returns null when the AI output can't be trusted (no valid JSON), so callers
+// fall back to the deterministic word list instead of silently passing.
+type AISpamCheckResult = { score: number; findings: SpamFinding[] };
+
+function parseAISpamCheck(raw: string, emailText: string): AISpamCheckResult | null {
   let text = raw.trim();
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) text = fence[1].trim();
-  const start = text.indexOf("[");
-  const end = text.lastIndexOf("]");
-  if (start === -1 || end === -1 || end <= start) return [];
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
   let parsed: unknown;
   try {
     parsed = JSON.parse(text.slice(start, end + 1));
   } catch {
-    return [];
+    return null;
   }
-  if (!Array.isArray(parsed)) return [];
+  if (!parsed || typeof parsed !== "object") return null;
+  const obj = parsed as { score?: unknown; issues?: unknown };
+  const score = typeof obj.score === "number" ? Math.max(0, Math.min(10, obj.score)) : null;
+  if (score === null) return null;
+  if (!Array.isArray(obj.issues)) return null;
 
   const lower = emailText.toLowerCase();
   const findings: SpamFinding[] = [];
-  for (const item of parsed) {
+  for (const item of obj.issues) {
     if (!item || typeof item !== "object") continue;
     const { text: t, fix: f } = item as { text?: unknown; fix?: unknown };
     if (typeof t !== "string" || !t.trim()) continue;
     const idx = lower.indexOf(t.trim().toLowerCase());
-    if (idx === -1) continue; // AI quoted something not in the email — skip
+    if (idx === -1) continue;
     const verbatim = emailText.slice(idx, idx + t.trim().length);
     const fix = typeof f === "string" ? f : "";
     findings.push({
@@ -112,7 +118,7 @@ function extractSpamFindings(raw: string, emailText: string): SpamFinding[] {
       fix,
     });
   }
-  return findings;
+  return { score, findings };
 }
 
 function spamCheckSummary(findings: SpamFinding[]): string {
@@ -407,12 +413,32 @@ export async function POST(req: Request) {
       }
 
       if (action === "check") {
+        // The AI judges the email the way Gmail/Outlook/Yahoo filters would:
+        // pressure/scarcity phrasing, money/deal promises, hype, ALL-CAPS,
+        // exclamations, template-y or robotic writing, deception, and anything
+        // a spam engine would trip on — no fixed list. Score lets the UI show
+        // how serious the problem is.
         const result = await callAI(
-          `Analyze the following cold email for spam-trigger language that could land it in the spam folder (Gmail/Outlook/Yahoo filters): pressure/scarcity phrases (act now, limited time, urgent, hurry), money/deal promises (guarantee, 100%, no-risk, free trial, discount, best price), winner/prize language, hype words (amazing, incredible, unbelievable, miracle), excessive exclamation marks, and ALL-CAPS emphasis.\n\n` +
-            `Return ONLY a JSON array. Each element must be an object: {"text": "the exact phrase as it appears VERBATIM (same case, same spacing) in the email", "fix": "a natural replacement that avoids the spam trigger; use an empty string \\"\\" if the phrase should simply be deleted"}. Match the email's own style and tone. If the email is clean, return []. No markdown, no extra text.\n\nEMAIL:\n${text}`
+          `Analyze the following cold email for anything that could land it in the SPAM FOLDER (Gmail/Outlook/Yahoo filters). Judge it like a spam filter would: pressure/scarcity phrases (act now, limited time, urgent, hurry, don't wait), money/deal promises (guarantee, 100%, no-risk, free trial, discount, best price, double your, earn money, get paid), winner/prize language, hype and unsubstantiated claims (amazing, incredible, unbelievable, miracle, once in a lifetime), excessive exclamation marks, ALL-CAPS emphasis, sneaky phrasing (don't delete, click here, unsubscribe at the bottom), too many links, and copy that reads like a template or ad instead of a real person. Catch anything a human spam reviewer would.\n\n` +
+            `Return ONLY valid JSON matching this shape: {"score": 0 to 10, "issues": [{"text": "exact phrase verbatim (same case and spacing) in the email", "fix": "natural replacement avoiding the trigger, or \\"\\" to delete it, or lowercase for ALL-CAPS, or \\"!\\" for bang runs"}]}. Score 10 = clean, 0 = certain spam. Issues must each be a real phrase from the email. If the email is clean return {"score": 10, "issues": []}. No markdown, no extra text.\n\nEMAIL:\n${text}`
         );
-        const findings = extractSpamFindings(result, text);
-        return NextResponse.json({ result: spamCheckSummary(findings), findings });
+        const parsed = parseAISpamCheck(result, text);
+        if (parsed) {
+          return NextResponse.json({
+            result: spamCheckSummary(parsed.findings),
+            score: parsed.score,
+            findings: parsed.findings,
+          });
+        }
+        // AI returned nothing usable — fall back to the deterministic list so
+        // the user still gets a real answer instead of a silent pass.
+        const findings = runLocalSpamCheck(text);
+        return NextResponse.json({
+          result: spamCheckSummary(findings),
+          score: findings.length ? Math.max(1, 10 - findings.length) : 10,
+          findings,
+          source: "fallback",
+        });
       }
 
       if (action === "write") {
@@ -569,7 +595,12 @@ export async function POST(req: Request) {
 
   if (action === "check") {
     const findings = runLocalSpamCheck(text);
-    return NextResponse.json({ result: spamCheckSummary(findings), findings });
+    return NextResponse.json({
+      result: spamCheckSummary(findings),
+      score: findings.length ? Math.max(1, 10 - findings.length) : 10,
+      findings,
+      source: "fallback",
+    });
   }
 
   if (action === "write") {

@@ -1,5 +1,10 @@
 import dns from "dns/promises";
 
+const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
+const DEEPSEEK_MODEL = "deepseek-chat";
+const AI_TIMEOUT = 15000;
+const AI_MAX_RETRIES = 2;
+
 const DNS_BLACKLISTS = [
   "zen.spamhaus.org",
   "bl.spamcop.net",
@@ -78,7 +83,72 @@ async function checkBlacklists(domain: string, ip?: string): Promise<{ listed: b
   return { listed: listedOn.length > 0, lists: listedOn };
 }
 
-function scoreContent(bodyHtml: string): { score: number; issues: string[] } {
+const AI_SPAM_PROMPT = `You are a senior email deliverability engineer. Analyze the following outbound email body and judge whether it would be flagged as spam by providers like Gmail / Outlook.
+
+Return ONLY valid JSON, no prose, matching this shape:
+{"score": <number 0-10>, "issues": ["<short reason>", ...]}
+
+Score meaning:
+- 10 = perfectly clean, natural human email.
+- 0 = certain spam.
+Consider: spam trigger words and phrases, salesy/hype language, urgency and pressure, excessive links, link shorteners, ALL-CAPS words, excessive exclamation marks, sneaky phrasing like "don't delete", promises/guarantees, financial or "act now" pressure, a body that reads like a template or ad rather than a human message. Deduct 0.5 to 2 per issue found.
+List every deduction as a short specific issue.
+
+EMAIL BODY:
+{{{BODY}}}`;
+
+export async function aiScoreContent(bodyHtml: string): Promise<{ score: number; issues: string[] } | null> {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return null;
+
+  const body = (bodyHtml || "").slice(0, 4000);
+  const prompt = AI_SPAM_PROMPT.replace("{{{BODY}}}", body);
+
+  for (let attempt = 1; attempt <= AI_MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT);
+      const res = await fetch(DEEPSEEK_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: DEEPSEEK_MODEL,
+          max_tokens: 400,
+          temperature: 0.2,
+          messages: [{ role: "user", content: prompt }],
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        if (attempt < AI_MAX_RETRIES && res.status === 429) {
+          await new Promise((r) => setTimeout(r, 1200));
+          continue;
+        }
+        return null;
+      }
+
+      const data = await res.json();
+      const raw: string = data.choices?.[0]?.message?.content || "";
+      let cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      const score = typeof parsed.score === "number" ? Math.max(0, Math.min(10, parsed.score)) : null;
+      if (score === null) return null;
+      const issues = Array.isArray(parsed.issues) ? parsed.issues.map(String) : [];
+      return { score, issues };
+    } catch {
+      if (attempt < AI_MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+export function scoreContent(bodyHtml: string): { score: number; issues: string[] } {
   const body = (bodyHtml || "").toLowerCase();
   const issues: string[] = [];
   let deductions = 0;
@@ -141,7 +211,8 @@ export async function checkDeliverability(domain: string, bodyHtml?: string): Pr
     checkBlacklists(domain),
   ]);
 
-  const content = scoreContent(bodyHtml || "");
+  const aiContent = await aiScoreContent(bodyHtml || "");
+  const content = aiContent ?? scoreContent(bodyHtml || "");
 
   let score = 10;
 

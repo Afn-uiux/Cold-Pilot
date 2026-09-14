@@ -83,7 +83,7 @@ export default function CampaignDetailPage() {
   const [aiStepIdx, setAiStepIdx] = useState(0);
   const [aiWriterOpen, setAiWriterOpen] = useState(false);
   const [aiDropdownStep, setAiDropdownStep] = useState<number | null>(null);
-  const [spamCheck, setSpamCheck] = useState<{ stepIndex: number; findings: { flag: string; text: string; suggestion: string; fix: string }[]; applied: boolean[] } | null>(null);
+  const [spamCheck, setSpamCheck] = useState<{ stepIndex: number; score: number | null; findings: { flag: string; text: string; suggestion: string; fix: string }[]; applied: boolean[] } | null>(null);
   const [variablesPanelStep, setVariablesPanelStep] = useState<number | null>(null);
   const [previewStep, setPreviewStep] = useState<number | null>(null);
   const [senderEmail, setSenderEmail] = useState("");
@@ -93,7 +93,10 @@ export default function CampaignDetailPage() {
   const [varOverrides, setVarOverrides] = useState<Record<string, string>>({});
   const [testSending, setTestSending] = useState(false);
   const [deliverabilityScore, setDeliverabilityScore] = useState<number | null>(null);
+  const [deliverabilityReasons, setDeliverabilityReasons] = useState<string[]>([]);
+  const [contentScore, setContentScore] = useState<number | null>(null);
   const [testMsg, setTestMsg] = useState("");
+  const [testMsgCode, setTestMsgCode] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [toast, setToast] = useState<string | null>(null);
@@ -176,10 +179,11 @@ export default function CampaignDetailPage() {
           appendAiText(stepIndex, data.result);
         } else if (action === "check") {
           const findings = Array.isArray(data.findings) ? data.findings : [];
+          const score = typeof data.score === "number" ? data.score : null;
           if (findings.length > 0) {
-            setSpamCheck({ stepIndex, findings, applied: findings.map(() => false) });
+            setSpamCheck({ stepIndex, score, findings, applied: findings.map(() => false) });
           } else {
-            setToast("Spam check passed — no spam-trigger words found");
+            setToast(`Spam check passed — no spam-trigger words found${score !== null ? ` (${score}/10)` : ""}`);
             setTimeout(() => setToast(null), 4000);
           }
         }
@@ -220,6 +224,7 @@ export default function CampaignDetailPage() {
       setSelectedLeadId("");
       setDeliverabilityScore(null);
       setTestMsg("");
+      setTestMsgCode(null);
       setRecipientEmail("");
       setSenderEmail("");
     }
@@ -334,7 +339,7 @@ export default function CampaignDetailPage() {
 
   function applySpamFix(findingIdx: number) {
     if (!spamCheck) return;
-    const { stepIndex, findings, applied } = spamCheck;
+    const { stepIndex, score, findings, applied } = spamCheck;
     const finding = findings[findingIdx];
     const step = steps[stepIndex];
     let nextSubject = step.subject || "";
@@ -354,7 +359,7 @@ export default function CampaignDetailPage() {
       updateStep(stepIndex, "bodyHtml", nextBody);
       const nextApplied = applied.slice();
       nextApplied[findingIdx] = true;
-      setSpamCheck({ stepIndex, findings, applied: nextApplied });
+      setSpamCheck({ stepIndex, score, findings, applied: nextApplied });
       setToast(`Fixed "${finding.text}"`);
       setTimeout(() => setToast(null), 2500);
     }
@@ -395,7 +400,7 @@ export default function CampaignDetailPage() {
 
   async function sendTestEmail() {
     if (!recipientEmail?.includes("@")) { setTestMsg("Enter a valid recipient email"); return; }
-    setTestSending(true); setTestMsg(""); setDeliverabilityScore(null);
+    setTestSending(true); setTestMsg(""); setDeliverabilityScore(null); setDeliverabilityReasons([]); setContentScore(null);
     try {
       const step = steps[previewStep!];
       const subject = fillVariables(step?.subject || "");
@@ -415,12 +420,15 @@ export default function CampaignDetailPage() {
       const data = await res.json();
       if (res.ok) {
         setTestMsg("Test email sent successfully!");
+        setTestMsgCode(null);
         if (data.deliverabilityScore) setDeliverabilityScore(data.deliverabilityScore);
       } else {
         setTestMsg(data.error || "Failed to send test email");
+        setTestMsgCode(data.code || null);
       }
     } catch (e: any) {
       setTestMsg(`Error: ${e.message}`);
+      setTestMsgCode(null);
     }
     setTestSending(false);
   }
@@ -795,7 +803,7 @@ export default function CampaignDetailPage() {
 
                 {/* Status messages */}
                 {testMsg && (
-                  <div className={`mt-4 text-sm px-4 py-2.5 rounded-lg ${testMsg.includes("successfully") ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                  <div className={`mt-4 text-sm px-4 py-2.5 rounded-lg ${testMsg.includes("successfully") ? "bg-green-50 text-green-700 border border-green-200" : testMsgCode === "SEND_PAUSED" ? "bg-[#E3EBFD] text-[#2563EB] border border-[#C8D8FC]" : "bg-red-50 text-red-700 border border-red-200"}`}>
                     {testMsg}
                   </div>
                 )}
@@ -805,6 +813,18 @@ export default function CampaignDetailPage() {
                     <span className={`font-semibold ${deliverabilityScore >= 7 ? "text-green-600" : deliverabilityScore >= 4 ? "text-yellow-600" : "text-red-600"}`}>
                       {deliverabilityScore}/10
                     </span>
+                    {contentScore !== null && (
+                      <span className="text-xs text-[#999]">(AI content: {contentScore}/10)</span>
+                    )}
+                  </div>
+                )}
+                {deliverabilityReasons.length > 0 && (
+                  <div className="mt-2 text-xs leading-relaxed">
+                    {deliverabilityReasons.map((r, i) => (
+                      <div key={i} className={r.startsWith("Content") || r.includes("flagged") ? "text-red-600" : "text-[#999]"}>
+                        • {r}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -812,7 +832,7 @@ export default function CampaignDetailPage() {
               {/* Bottom actions */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-gray-200">
                 <button disabled={testSending} onClick={async () => {
-                  setTestMsg(""); setDeliverabilityScore(null);
+setTestMsg(""); setTestMsgCode(null); setDeliverabilityScore(null); setDeliverabilityReasons([]); setContentScore(null);
                   try {
                     const res = await fetch("/api/deliverability", {
                       method: "POST",
@@ -820,7 +840,11 @@ export default function CampaignDetailPage() {
                       body: JSON.stringify({ campaignId: id }),
                     });
                     const data = await res.json();
-                    if (data.score !== undefined) setDeliverabilityScore(data.score);
+                    if (data.score !== undefined) {
+                      setDeliverabilityScore(data.score);
+                      setDeliverabilityReasons(data.reasons || []);
+                      setContentScore(typeof data.contentScore === "number" ? data.contentScore : null);
+                    }
                     else setTestMsg(data.error || "Could not compute score");
                   } catch { setTestMsg("Failed to check deliverability"); }
                 }}
@@ -882,7 +906,14 @@ export default function CampaignDetailPage() {
             <div className="bg-white rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] w-full max-w-[640px] max-h-[85vh] flex flex-col m-4" onClick={e => e.stopPropagation()}>
               {/* Header */}
               <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-[#1a1a1a]">Spam Check</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-bold text-[#1a1a1a]">Spam Check</h2>
+                  {spamCheck.score !== null && (
+                    <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${spamCheck.score >= 7 ? "bg-green-50 text-green-700" : spamCheck.score >= 4 ? "bg-yellow-50 text-yellow-700" : "bg-red-50 text-red-600"}`}>
+                      AI score {spamCheck.score}/10
+                    </span>
+                  )}
+                </div>
                 <button onClick={() => setSpamCheck(null)} className="text-gray-400 hover:text-gray-600 flex items-center justify-center">
                   <Cancel01Icon size={18} />
                 </button>

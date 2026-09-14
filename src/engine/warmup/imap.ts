@@ -52,7 +52,7 @@ async function sendSeedReply(
     });
 
     const info = await transporter.sendMail({
-      from: account.email,
+      from: fromName ? `"${fromName}" <${account.email}>` : account.email,
       to: toEmail,
       subject,
       text: body,

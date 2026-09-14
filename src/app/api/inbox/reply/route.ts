@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
   // Shared send gate
   const gate = await canSendFromAccount(account.id, account.dailySendLimit || 50);
   if (!gate.allowed) {
-    return NextResponse.json({ error: `Send blocked: ${gate.reason}` }, { status: 429 });
+    return NextResponse.json({ error: gate.reason, code: "SEND_PAUSED" }, { status: 429 });
   }
 
   // Verification gate for cold replies (no prior outgoing thread): a reply

@@ -236,7 +236,7 @@ async function sendSeedReply(
       auth: { user: account.smtpUser, pass: account.smtpPass },
     });
     const info = await transporter.sendMail({
-      from: account.email,
+      from: fromName ? `"${fromName}" <${account.email}>` : account.email,
       to: toEmail,
       subject,
       text: body,

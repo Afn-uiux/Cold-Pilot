@@ -7,6 +7,8 @@ import { PanelLeftIcon } from "@/components/icons/panel-left";
 import { ArrowUpLeft01Icon } from "@/components/icons/arrow-up-left-01";
 import { Delete02Icon } from "@/components/icons/delete-02";
 import { Mail01Icon } from "@/components/icons/mail-01";
+import { useToast } from "@/components/toast";
+import ConfirmModal from "@/components/confirm-modal";
 
 type Campaign = { id: string; name: string };
 type EmailAccount = { id: string; email: string };
@@ -48,6 +50,7 @@ export default function InboxPageWrapper() {
 
 function InboxPage() {
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
@@ -76,6 +79,7 @@ function InboxPage() {
   const [inboxSearch, setInboxSearch] = useState("");
   const [moreSearch, setMoreSearch] = useState("");
   const [mobileView, setMobileView] = useState<"list" | "thread">("list");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   function fetchInbox() {
     fetch("/api/inbox").then(r => r.json()).then(data => {
@@ -120,7 +124,7 @@ function InboxPage() {
 
   async function deleteThread() {
     if (!selectedId) return;
-    if (!confirm("Delete this conversation?")) return;
+    setConfirmDelete(false);
     try {
       const res = await fetch(`/api/inbox?leadId=${selectedId}`, { method: "DELETE" });
       if (res.ok) {
@@ -148,10 +152,10 @@ function InboxPage() {
         selectThread(selectedId);
       } else {
         const err = await res.json();
-        alert(err.error || "Failed to send");
+        toast(err.error || "Failed to send", err.code === "SEND_PAUSED" ? "info" : "error");
       }
     } catch {
-      alert("Failed to send reply");
+      toast("Failed to send reply", "error");
     } finally {
       setSending(false);
     }
@@ -362,7 +366,7 @@ function InboxPage() {
                     {STAGE_LABELS[selectedThread.dealStage] || selectedThread.dealStage}
                   </span>
                 )}
-                <button onClick={deleteThread}
+                <button onClick={() => setConfirmDelete(true)}
                   className="ml-auto text-muted hover:text-red-500 transition-colors p-1.5 rounded-md hover:bg-red-50"
                   title="Delete conversation">
                   <Delete02Icon size={16} />
@@ -424,6 +428,15 @@ function InboxPage() {
         )}
       </div>
       </div>
+      <ConfirmModal
+        open={confirmDelete}
+        title="Delete conversation?"
+        message="This will permanently remove this conversation from your inbox."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={deleteThread}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }
