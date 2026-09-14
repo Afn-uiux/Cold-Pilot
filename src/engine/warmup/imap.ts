@@ -208,15 +208,21 @@ async function searchFolderForSenders(
       for (const sender of senderEmails) {
         // Identify warmup mail precisely: sender's own filter tag is stamped
         // into the subject of every warmup they send (reconciler/seedContent),
-        // so require it in the search. Without the tag a real non-warmup email
-        // from the same sender could be mistaken for warmup.
+        // so require it before treating a message as warmup. Some providers
+        // (Yahoo) ignore the subject criterion in IMAP SEARCH, so search by
+        // from only and re-apply the tag check locally on the envelope. A
+        // message must carry a known warmup tag to reach the matcher — a real
+        // spam email from the same sender can't accidentally match a log.
         const tag = (tagsByEmail.get(sender) || "").trim();
-        const criteria = tag ? { from: sender, subject: tag } : { from: sender };
-        const uids = await client.search(criteria, { uid: true });
+        const knownTags = [...tagsByEmail.values()].map(t => String(t).trim()).filter(Boolean);
+        const uids = await client.search({ from: sender }, { uid: true });
         if (!uids || uids.length === 0) continue;
         const searchResult: any[] = [];
         for await (const msg of client.fetch(uids, { envelope: true, internalDate: true, flags: true }, { uid: true })) {
-          searchResult.push(msg);
+          const subject = ((msg.envelope?.subject || "") as string).toLowerCase();
+          const matchesSenderTag = tag ? subject.includes(tag.toLowerCase()) : true;
+          const matchesAnyKnownTag = knownTags.some(kt => subject.includes(kt.toLowerCase()));
+          if (matchesSenderTag && matchesAnyKnownTag) searchResult.push(msg);
         }
 
         if (searchResult.length > 0) {
