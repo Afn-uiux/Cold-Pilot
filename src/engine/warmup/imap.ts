@@ -13,9 +13,9 @@ import { saveHealthLog, saveSeedHealthLog } from "./health";
 const SPAM_FOLDERS: Record<string, string[]> = {
   gmail: ["[Gmail]/Spam", "Spam"],
   outlook: ["Junk", "Junk Email"],
-  yahoo: ["Spam", "Bulk Mail"],
+  yahoo: ["Spam", "Bulk Mail", "Bulk"],
   proton: ["Spam"],
-  other: ["Spam", "Bulk Mail", "Junk", "Junk Email"],
+  other: ["Spam", "Bulk Mail", "Bulk", "Junk", "Junk Email"],
 };
 
 function getSpamFolders(provider: string): string[] {
