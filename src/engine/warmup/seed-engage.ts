@@ -1,4 +1,5 @@
 import { ImapFlow } from "imapflow";
+import { createImapClient } from "@/lib/imap-client";
 import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
@@ -18,7 +19,7 @@ const SPAM_FOLDERS: Record<string, string[]> = {
   outlook: ["Junk", "Junk Email"],
   yahoo: ["Spam", "Bulk Mail"],
   proton: ["Spam"],
-  other: ["Spam", "Junk", "Junk Email"],
+  other: ["Spam", "Bulk Mail", "Junk", "Junk Email"],
 };
 
 function getSpamFolders(provider: string): string[] {
@@ -34,6 +35,15 @@ function providerFromEmail(email: string): string {
   return "other";
 }
 
+// Only ever trust a provider label that names a real mail provider; anything
+// else (IMAP fallback strings, consumer labels) is a mislabel and the mailbox
+// domain is authoritative for folder naming.
+function normalizeProvider(provider: string | null | undefined, email: string): string {
+  const known = new Set(["gmail", "outlook", "hotmail", "live", "yahoo", "proton"]);
+  const stored = (provider || "").toLowerCase();
+  return known.has(stored) ? stored : providerFromEmail(email);
+}
+
 function shouldApply(percent: number): boolean {
   if (percent >= 100) return true;
   if (percent <= 0) return false;
@@ -43,7 +53,7 @@ function shouldApply(percent: number): boolean {
 async function connect(account: { imapHost: string; imapPort: number; imapUser: string; imapPass: string }) {
   // SSRF guard: imapHost/imapPort come from user-configured account settings.
   await assertSafeMailTarget(account.imapHost, account.imapPort, "IMAP");
-  const client = new ImapFlow({
+  const client = createImapClient({
     host: account.imapHost,
     port: account.imapPort,
     secure: true,
@@ -233,7 +243,7 @@ export async function processSeedInboxEngagement(): Promise<{
   await runConcurrent(seeds, async (seed) => {
     let client: ImapFlow | null = null;
     try {
-      const provider = seed.provider || providerFromEmail(seed.email);
+      const provider = normalizeProvider(seed.provider, seed.email);
       client = await connectForRead(seed);
       if (!client) return;
 
@@ -286,59 +296,79 @@ export async function processSeedInboxEngagement(): Promise<{
         }
       }
 
-      // Spam/Promotions: rescue to INBOX
-      const folders = [...getSpamFolders(provider), "[Gmail]/Promotions", "Promotions"];
-      for (const folder of folders) {
-        const found = await searchFolder(client, folder, senderEmails, senderTags);
-        for (const [senderEmail, msgs] of found) {
-          const senderIsUser = userAccounts.some(a => a.email === senderEmail);
-          for (const msg of msgs) {
-            const log = await matchLogForMessage(msg, logWhere(senderEmail, senderIsUser));
-            if (!log) continue;
-            // Short rescue window (20-90min): pull from junk promptly while
-            // still stamping a simulated received time for human-looking gaps.
-            if (!log.sentAt) continue;
-            const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
-            if (Date.now() < openAt.getTime()) continue;
+      // Spam/Promotions: rescue to INBOX. A rescuing function taking the live
+      // connection so a stale/dead one from the INBOX pass can be swapped and
+      // this pass still runs — spam rescue must not silently die with INBOX.
+      const spamFolders = [...getSpamFolders(provider), "[Gmail]/Promotions", "Promotions"];
+      const rescue = async (c: ImapFlow) => {
+        for (const folder of spamFolders) {
+          const found = await searchFolder(c, folder, senderEmails, senderTags);
+          for (const [senderEmail, msgs] of found) {
+            const senderIsUser = userAccounts.some(a => a.email === senderEmail);
+            for (const msg of msgs) {
+              const log = await matchLogForMessage(msg, logWhere(senderEmail, senderIsUser));
+              if (!log) continue;
+              // Short rescue window (20-90min): pull from junk promptly while
+              // still stamping a simulated received time for human-looking gaps.
+              if (!log.sentAt) continue;
+              const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
+              if (Date.now() < openAt.getTime()) continue;
 
-            // This warmup landed in junk — a placement hit for its sender.
-            if (log.senderMailboxId) sendersToRefresh.set(log.senderMailboxId, "mailbox");
-            else if (log.senderInboxId) sendersToRefresh.set(log.senderInboxId, "seed");
+              // This warmup landed in junk — a placement hit for its sender.
+              if (log.senderMailboxId) sendersToRefresh.set(log.senderMailboxId, "mailbox");
+              else if (log.senderInboxId) sendersToRefresh.set(log.senderInboxId, "seed");
 
-            // Always record that this warmup landed in junk; whether we pull it
-            // back out depends on the seed's spam-protection rate.
-            if (shouldApply(seed.spamProtection ?? 100)) {
-              let moved = false;
-              try {
-                const lock = await client.getMailboxLock(folder);
+              // Always record that this warmup landed in junk; whether we pull it
+              // back out depends on the seed's spam-protection rate.
+              if (shouldApply(seed.spamProtection ?? 100)) {
+                let moved = false;
                 try {
-                  await client.messageFlagsAdd([msg.uid], ["\\Seen"], { uid: true });
-                  await client.messageCopy([msg.uid], "INBOX", { uid: true });
-                  moved = true; // copy to INBOX landed; deletion is best-effort
-                  await client.messageDelete([msg.uid], { uid: true }).catch(() => {});
-                } finally {
-                  lock.release();
+                  const lock = await c.getMailboxLock(folder);
+                  try {
+                    await c.messageFlagsAdd([msg.uid], ["\\Seen"], { uid: true });
+                    await c.messageCopy([msg.uid], "INBOX", { uid: true });
+                    moved = true; // copy to INBOX landed; deletion is best-effort
+                    await c.messageDelete([msg.uid], { uid: true }).catch(() => {});
+                  } finally {
+                    lock.release();
+                  }
+                } catch (err) {
+                  console.error(`Seed spam rescue failed for ${seed.email}, ${folder}, UID ${msg.uid}:`, err);
                 }
-              } catch {}
-              if (moved) {
-                await prisma.warmupLog.update({
-                  where: { id: log.id },
-                  data: { foundInSpam: true, rescuedFromSpam: true, receivedAt: openAt, status: "delivered" },
-                });
-                rescued++;
+                if (moved) {
+                  await prisma.warmupLog.update({
+                    where: { id: log.id },
+                    data: { foundInSpam: true, rescuedFromSpam: true, receivedAt: openAt, status: "delivered" },
+                  });
+                  rescued++;
+                } else {
+                  await prisma.warmupLog.update({
+                    where: { id: log.id },
+                    data: { foundInSpam: true },
+                  });
+                }
               } else {
                 await prisma.warmupLog.update({
                   where: { id: log.id },
                   data: { foundInSpam: true },
                 });
               }
-            } else {
-              await prisma.warmupLog.update({
-                where: { id: log.id },
-                data: { foundInSpam: true },
-              });
             }
           }
+        }
+      };
+
+      // Run the rescue pass on the live connection; if the link went stale
+      // (socket timeout during INBOX or connect) reconnect once so spam is
+      // still scanned for every seed this tick.
+      if (client.usable) await rescue(client);
+      if (!client.usable) {
+        console.warn(`Connection went stale for ${seed.email}, reconnecting for spam pass`);
+        const retry = await connectForRead(seed);
+        if (retry) {
+          try { await client.logout(); } catch {}
+          client = retry;
+          await rescue(client);
         }
       }
     } catch (err) {

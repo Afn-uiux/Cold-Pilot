@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { trialGuard } from "@/lib/trial";
 import nodemailer from "nodemailer";
-import { ImapFlow } from "imapflow";
+import { createImapClient } from "@/lib/imap-client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { decryptAccount, encryptAccount } from "@/lib/crypto";
@@ -214,7 +214,7 @@ export async function POST(req: Request) {
       const hostErr = await assertSafeSocketTarget(String(imapHost), imapPortNum).catch(() => "unsafe");
       if (!hostErr && isAllowedSocketPort(imapPortNum)) {
         try {
-          const client = new ImapFlow({
+          const client = createImapClient({
             host: imapHost,
             port: imapPortNum,
             secure: true,

@@ -1,5 +1,6 @@
 import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
+import { createImapClient } from "@/lib/imap-client";
 import { prisma } from "@/lib/prisma";
 import { decryptAccount } from "@/lib/crypto";
 import { assertSafeMailTarget } from "@/lib/ssrf";
@@ -14,7 +15,7 @@ const SPAM_FOLDERS: Record<string, string[]> = {
   outlook: ["Junk", "Junk Email"],
   yahoo: ["Spam", "Bulk Mail"],
   proton: ["Spam"],
-  other: ["Spam", "Junk", "Junk Email"],
+  other: ["Spam", "Bulk Mail", "Junk", "Junk Email"],
 };
 
 function getSpamFolders(provider: string): string[] {
@@ -78,6 +79,15 @@ function providerFromEmail(email: string): string {
   return "other";
 }
 
+// Only ever trust a provider label that names a real mail provider; anything
+// else (IMAP fallback strings, consumer labels) is a mislabel and the mailbox
+// domain is authoritative for folder naming.
+function normalizeProvider(provider: string | null | undefined, email: string): string {
+  const known = new Set(["gmail", "outlook", "hotmail", "live", "yahoo", "proton"]);
+  const stored = (provider || "").toLowerCase();
+  return known.has(stored) ? stored : providerFromEmail(email);
+}
+
 // Best-effort mark a message as read (\Seen) so warmup mail actually looks
 // opened in the real mailbox. UID-scoped; failures must not break processing.
 async function markSeen(client: ImapFlow, folder: string, uids: number[]): Promise<void> {
@@ -130,7 +140,7 @@ async function connectToAccount(account: {
 }) {
   // SSRF guard: imapHost/imapPort come from user-configured account settings.
   await assertSafeMailTarget(account.imapHost, account.imapPort, "IMAP");
-  const client = new ImapFlow({
+  const client = createImapClient({
     host: account.imapHost,
     port: account.imapPort,
     secure: true,
@@ -259,7 +269,7 @@ export async function processSeedInboxes(): Promise<{
     let client: ImapFlow | null = null;
 
     try {
-      const provider = account.provider || providerFromEmail(account.email);
+      const provider = normalizeProvider(account.provider, account.email);
       client = await connectForRead(account);
       if (!client) return;
 
@@ -343,131 +353,157 @@ export async function processSeedInboxes(): Promise<{
         }
       }
 
-      // 2. Check Spam folders for rescued emails
+      // 2. Spam / Promotions: rescue to INBOX. Extracted into a closure so a
+      // stale connection after the INBOX pass can be swapped and the rescue
+      // still runs — spam rescue must not silently die with the INBOX scan.
       const spamFolders = getSpamFolders(provider);
-      for (const spamFolder of spamFolders) {
-        const spamResults = await searchFolderForSenders(client, spamFolder, senderEmails, senderTags);
-
-        for (const [senderEmail, msgs] of spamResults) {
-          const scope = logScopeFor(senderEmail);
-          if (!scope) continue;
-          const senderId = "senderMailboxId" in scope ? scope.senderMailboxId : scope.senderInboxId;
-          const settings = senderSettings.get(senderId);
-          const spamProtection = settings?.spamProtection ?? 100;
-
-          for (const msg of msgs) {
-            const log = await matchLogForMessage(msg, {
-              ...scope,
-              seedMailboxId: account.id,
-              foundInSpam: false,
-            });
-
-            if (!log) continue;
-
-            // Found one of our warmup sends in a recipient's spam folder —
-            // that's a placement hit for this sender (rescued or not), so its
-            // health needs an immediate recompute after the batch.
-            sendersToRefresh.set(senderId, "senderMailboxId" in scope ? "mailbox" : "seed");
-
-            // Rescue while the spam window is short (20-90min): pull from junk
-            // promptly, but still stamp the received time at a simulated
-            // check-time so the account's timeline shows human gaps.
-            if (!log.sentAt) continue;
-            const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
-            if (Date.now() < openAt.getTime()) continue;
-
-            const updateData: any = { foundInSpam: true };
-
-            if (shouldApply(spamProtection)) {
-              await markSeen(client, spamFolder, [msg.uid]);
-              try {
-                const lock = await client.getMailboxLock(spamFolder);
-                try {
-                  await client.messageCopy([msg.uid], "INBOX", { uid: true });
-                  await client.messageDelete([msg.uid], { uid: true });
-                } finally {
-                  lock.release();
-                }
-              } catch {
-                try {
-                  const lock = await client.getMailboxLock(spamFolder);
-                  try {
-                    await client.messageCopy([msg.uid], "INBOX", { uid: true });
-                  } finally {
-                    lock.release();
-                  }
-                } catch {}
-              }
-
-              updateData.receivedAt = openAt;
-              updateData.rescuedFromSpam = true;
-              updateData.status = "delivered";
-
-              const markImportant = settings?.markImportant ?? 0;
-              if (shouldApply(markImportant)) {
-                updateData.markedImportant = true;
-              }
-
-              rescued++;
-            }
-
-            await prisma.warmupLog.update({
-              where: { id: log.id },
-              data: updateData,
-            });
-          }
-        }
-      }
-
-      // 3. Check Promotions category (Gmail) and move to INBOX
       const promoFolders = ["[Gmail]/Promotions", "Promotions"];
-      for (const promoFolder of promoFolders) {
-        try {
-          const promoResults = await searchFolderForSenders(client, promoFolder, senderEmails, senderTags);
+      const rescuePass = async (c: ImapFlow) => {
+        for (const spamFolder of spamFolders) {
+          const spamResults = await searchFolderForSenders(c, spamFolder, senderEmails, senderTags);
 
-          for (const [senderEmail, msgs] of promoResults) {
+          for (const [senderEmail, msgs] of spamResults) {
             const scope = logScopeFor(senderEmail);
             if (!scope) continue;
+            const senderId = "senderMailboxId" in scope ? scope.senderMailboxId : scope.senderInboxId;
+            const settings = senderSettings.get(senderId);
+            const spamProtection = settings?.spamProtection ?? 100;
 
             for (const msg of msgs) {
+              // Don't filter on foundInSpam:false — a log that was flagged
+              // but never physically rescued (copy failed) still has
+              // receivedAt:null, so the matcher will bind it. This lets
+              // the engine retry failed rescues every tick.
               const log = await matchLogForMessage(msg, {
                 ...scope,
                 seedMailboxId: account.id,
-                foundInSpam: false,
               });
 
               if (!log) continue;
 
-              // Same short rescue window as spam: pull from Promotions promptly
-              // but stamp a simulated received time for human-looking gaps.
+              // Found one of our warmup sends in a recipient's spam folder —
+              // that's a placement hit for this sender (rescued or not), so its
+              // health needs an immediate recompute after the batch.
+              sendersToRefresh.set(senderId, "senderMailboxId" in scope ? "mailbox" : "seed");
+
+              // Rescue while the spam window is short (20-90min): pull from junk
+              // promptly, but still stamp the received time at a simulated
+              // check-time so the account's timeline shows human gaps.
               if (!log.sentAt) continue;
               const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
               if (Date.now() < openAt.getTime()) continue;
 
-              try {
-                const lock = await client.getMailboxLock(promoFolder);
+              const updateData: any = { foundInSpam: true };
+
+              if (shouldApply(spamProtection)) {
+                await markSeen(c, spamFolder, [msg.uid]);
+                let moved = false;
                 try {
-                  await client.messageFlagsAdd([msg.uid], ["\\Seen"], { uid: true });
-                  await client.messageMove([msg.uid], "INBOX", { uid: true });
-                } finally {
-                  lock.release();
+                  const lock = await c.getMailboxLock(spamFolder);
+                  try {
+                    await c.messageCopy([msg.uid], "INBOX", { uid: true });
+                    await c.messageDelete([msg.uid], { uid: true });
+                    moved = true;
+                  } finally {
+                    lock.release();
+                  }
+                } catch {
+                  try {
+                    const lock = await c.getMailboxLock(spamFolder);
+                    try {
+                      await c.messageCopy([msg.uid], "INBOX", { uid: true });
+                      moved = true; // copy landed; deletion is best-effort
+                    } finally {
+                      lock.release();
+                    }
+                  } catch (err) {
+                    console.error(`Spam copy failed for ${account.email}, ${spamFolder}, UID ${msg.uid}:`, err);
+                  }
                 }
 
-                await prisma.warmupLog.update({
-                  where: { id: log.id },
-                  data: {
-                    receivedAt: openAt,
-                    status: "delivered",
-                  },
-                });
-                rescued++;
-              } catch {
-                // Folder may not exist or move failed
+                if (moved) {
+                  updateData.receivedAt = openAt;
+                  updateData.rescuedFromSpam = true;
+                  updateData.status = "delivered";
+
+                  const markImportant = settings?.markImportant ?? 0;
+                  if (shouldApply(markImportant)) {
+                    updateData.markedImportant = true;
+                  }
+
+                  rescued++;
+                }
               }
+
+              await prisma.warmupLog.update({
+                where: { id: log.id },
+                data: updateData,
+              });
             }
           }
-        } catch {
-          // Promotions folder may not exist for this provider
+        }
+
+        for (const promoFolder of promoFolders) {
+          try {
+            const promoResults = await searchFolderForSenders(c, promoFolder, senderEmails, senderTags);
+
+            for (const [senderEmail, msgs] of promoResults) {
+              const scope = logScopeFor(senderEmail);
+              if (!scope) continue;
+
+              for (const msg of msgs) {
+                const log = await matchLogForMessage(msg, {
+                  ...scope,
+                  seedMailboxId: account.id,
+                });
+
+                if (!log) continue;
+
+                // Same short rescue window as spam: pull from Promotions promptly
+                // but stamp a simulated received time for human-looking gaps.
+                if (!log.sentAt) continue;
+                const openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
+                if (Date.now() < openAt.getTime()) continue;
+
+                try {
+                  const lock = await c.getMailboxLock(promoFolder);
+                  try {
+                    await c.messageFlagsAdd([msg.uid], ["\\Seen"], { uid: true });
+                    await c.messageMove([msg.uid], "INBOX", { uid: true });
+                  } finally {
+                    lock.release();
+                  }
+
+                  await prisma.warmupLog.update({
+                    where: { id: log.id },
+                    data: {
+                      receivedAt: openAt,
+                      status: "delivered",
+                    },
+                  });
+                  rescued++;
+                } catch {
+                  // Folder may not exist or move failed
+                }
+              }
+            }
+          } catch {
+            // Promotions folder may not exist for this provider
+          }
+        }
+      };
+
+      // Run the rescue pass on the live connection; if the link went stale
+      // (socket timeout during INBOX or connect) reconnect once so spam is
+      // still scanned for every account this tick.
+      if (client.usable) await rescuePass(client);
+      if (!client.usable) {
+        console.warn(`Connection went stale for ${account.email}, reconnecting for spam pass`);
+        const fresh = await connectForRead(account);
+        if (fresh) {
+          try { await client.logout(); } catch {}
+          client = fresh;
+          await rescuePass(client);
         }
       }
     } catch (err) {

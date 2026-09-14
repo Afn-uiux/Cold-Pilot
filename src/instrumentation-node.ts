@@ -29,6 +29,12 @@ let lastHealthCheckHour = -1;
 // duplicate sends. When a tick is still in flight, skip the new one entirely.
 let tickInFlight = false;
 
+// How many campaigns' pacing checks run concurrently per tick. This is
+// checks, not sends — real sends stay separately rate-limited per account
+// regardless of this number. Tune up if the DB/host has headroom, down if
+// you see connection-pool pressure in logs.
+const CAMPAIGN_TICK_CONCURRENCY = 50;
+
 async function tick() {
   if (tickInFlight) return;
   tickInFlight = true;
@@ -49,16 +55,37 @@ async function tickInner() {
     const isLeader = await acquireLock("scheduler", leaderToken);
     if (!isLeader) return;
 
+    // Previously: take:10 with no ordering — SQLite's stable default row
+    // order meant the SAME first 10 active campaigns got processed every
+    // tick, forever, once there were more than 10 active at once. Campaign
+    // #11 onward never sent anything, silently, with no error anywhere.
+    //
+    // Fix: order by lastCheckedAt (oldest/never-checked first) so every
+    // active campaign gets a turn on a fair rotation, and raise the batch
+    // size well above any realistic per-tick load. Most calls to
+    // executeCampaign() are cheap no-ops (pacing gates decide nothing is
+    // due yet) — the expensive part is real sends, which are already
+    // separately rate-limited per account — so a large batch size does NOT
+    // mean 1,000 concurrent SMTP connections, just 1,000 lightweight
+    // "is anything due" checks, run with bounded concurrency below.
     const campaigns = await prisma.campaign.findMany({
       where: { status: "active", deletedAt: null },
       select: { id: true, userId: true },
-      take: 10,
+      orderBy: [{ lastCheckedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }],
+      take: 1000,
     });
 
     if (campaigns.length > 0) {
       console.log(`[scheduler] tick: ${campaigns.length} active campaign(s)`);
 
-      await Promise.allSettled(campaigns.map(async (c: { id: string; userId: string }) => {
+      // Bounded concurrency instead of unbounded Promise.allSettled — with
+      // hundreds/thousands of active campaigns, firing all of them at once
+      // would spike DB connection usage and, on any tick where many
+      // campaigns genuinely have a send due, open far too many simultaneous
+      // SMTP/IMAP connections at once. A cap keeps throughput high without
+      // that spike; raise CAMPAIGN_TICK_CONCURRENCY if the DB/host can take
+      // more, lower it if you see connection-pool pressure.
+      await runConcurrent(campaigns, async (c: { id: string; userId: string }) => {
         try {
           const result = await executeCampaign(c.id);
           if (result && (result.sent > 0 || result.errors > 0)) {
@@ -66,8 +93,15 @@ async function tickInner() {
           }
         } catch (e) {
           console.error(`[scheduler] campaign ${c.id}:`, e);
+        } finally {
+          try {
+            await prisma.campaign.update({ where: { id: c.id }, data: { lastCheckedAt: new Date() } });
+          } catch {
+            // Non-fatal — worst case this campaign is checked again sooner
+            // than strictly necessary on the next tick's rotation.
+          }
         }
-      }));
+      }, CAMPAIGN_TICK_CONCURRENCY);
     }
 
     // Reply detection runs regardless of campaign status — leads can

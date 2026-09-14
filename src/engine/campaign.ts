@@ -8,7 +8,7 @@ import { classifyReply } from "@/lib/classify";
 import { categorizeBounce } from "@/lib/bounce";
 import { sendEmailSafe } from "@/lib/email/send";
 import { sanitizeHtml } from "@/lib/sanitize";
-import { ImapFlow } from "imapflow";
+import { createImapClient } from "@/lib/imap-client";
 import { simpleParser } from "mailparser";
 import { decryptAccount } from "@/lib/crypto";
 import { canSendToLead } from "@/lib/verify";
@@ -1012,7 +1012,7 @@ async function recordImapSentActivity(account: any): Promise<number> {
   // SSRF guard: imapHost/imapPort come from user-configured account settings,
   // so restrict to mail ports and reject private/reserved/metadata addresses.
   await assertSafeMailTarget(account.imapHost, account.imapPort || 993, "IMAP");
-  const client = new ImapFlow({
+  const client = createImapClient({
     host: account.imapHost,
     port: account.imapPort || 993,
     secure: (account.imapPort || 993) === 993,
@@ -1125,7 +1125,7 @@ async function checkImapAccountBounces(account: any): Promise<number> {
   // SSRF guard: imapHost/imapPort come from user-configured account settings,
   // so restrict to mail ports and reject private/reserved/metadata addresses.
   await assertSafeMailTarget(account.imapHost, account.imapPort || 993, "IMAP");
-  const client = new ImapFlow({
+  const client = createImapClient({
     host: account.imapHost,
     port: account.imapPort || 993,
     secure: (account.imapPort || 993) === 993,
@@ -1525,7 +1525,7 @@ async function checkImapAccountReplies(account: any): Promise<number> {
   // SSRF guard: imapHost/imapPort come from user-configured account settings,
   // so restrict to mail ports and reject private/reserved/metadata addresses.
   await assertSafeMailTarget(account.imapHost, account.imapPort || 993, "IMAP");
-  const client = new ImapFlow({
+  const client = createImapClient({
     host: account.imapHost,
     port: account.imapPort || 993,
     secure: (account.imapPort || 993) === 993,

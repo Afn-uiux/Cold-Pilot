@@ -1,5 +1,6 @@
 import { ImapFlow } from "imapflow";
 import { assertSafeMailTarget } from "@/lib/ssrf";
+import { createImapClient } from "@/lib/imap-client";
 
 type DecryptedAccount = Record<string, any>;
 
@@ -155,7 +156,7 @@ export async function openImap(account: DecryptedAccount): Promise<ImapFlow | nu
   if (!resolved) return null;
   try {
     await assertSafeMailTarget(resolved.host, resolved.port, "IMAP");
-    const client = new ImapFlow({
+    const client = createImapClient({
       host: resolved.host,
       port: resolved.port,
       secure: true,

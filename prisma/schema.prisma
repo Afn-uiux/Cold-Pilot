@@ -383,6 +383,7 @@ model Campaign {
   // credits. On the next credit purchase it resumes automatically.
   resumeOnFunding      Boolean   @default(false)
   deletedAt            DateTime?
+  lastCheckedAt        DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
