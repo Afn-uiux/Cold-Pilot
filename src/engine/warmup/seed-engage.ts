@@ -110,9 +110,14 @@ async function searchFolder(client: ImapFlow, folder: string, senderEmails: stri
         const list: any[] = [];
         for await (const msg of client.fetch(uids, { envelope: true, internalDate: true, flags: true }, { uid: true })) {
           const subject = ((msg.envelope?.subject || "") as string).toLowerCase();
+          // A reply to one of OUR warmups carries the tag of whoever we sent
+          // from (this mailbox), not the replier's own tag — so don't require
+          // the sender tag for a threaded reply; the inReplyTo → parent-log
+          // match is the actual gate and can't be spoofed by real spam.
+          const isReply = !!msg.envelope?.inReplyTo;
           const matchesSenderTag = tag ? subject.includes(tag.toLowerCase()) : true;
           const matchesAnyKnownTag = knownTags.some(kt => subject.includes(kt.toLowerCase()));
-          if (matchesSenderTag && matchesAnyKnownTag) list.push(msg);
+          if ((matchesSenderTag && matchesAnyKnownTag) || isReply) list.push(msg);
         }
         if (list.length > 0) {
           results.set(sender, list.map(m => ({
@@ -185,6 +190,25 @@ async function matchStuckSpamLog(msg: FoundMessage, where: Record<string, unknow
   if (!mid) return null;
   return prisma.warmupLog.findFirst({
     where: { ...where, messageId: mid },
+    orderBy: { sentAt: "desc" },
+  });
+}
+
+// Bind a spam-folder REPLY to the warmup THREAD it belongs to. Replies aren't
+// logged individually — only the original send is — so the strict matcher can
+// never find them, and their subject carries the tag of whoever we sent FROM
+// (this mailbox), not the replier's. Bind by In-Reply-To -> the parent log
+// where THIS mailbox was the sender. A real spam message can't reference the
+// random Message-ID we generated for our own warmup, so the match is safe.
+async function matchReplyLog(msg: FoundMessage, ownIds: { seedId?: string; mailboxId?: string }): Promise<any> {
+  const ref = msg.inReplyTo || "";
+  const mid = ref.replace(/^<|>$/g, "").trim();
+  if (!mid) return null;
+  const anchor = ownIds.seedId
+    ? { senderInboxId: ownIds.seedId }
+    : { senderMailboxId: ownIds.mailboxId };
+  return prisma.warmupLog.findFirst({
+    where: { ...anchor, messageId: ref },
     orderBy: { sentAt: "desc" },
   });
 }
@@ -338,7 +362,14 @@ export async function processSeedInboxEngagement(): Promise<{
               if (!log) {
                 log = await matchStuckSpamLog(msg, logWhere(senderEmail, senderIsUser));
               }
+              // Replies aren't logged individually, so neither matcher above can
+              // bind them. Their In-Reply-To points at OUR outbound warmup that
+              // the replier is answering — rescue the stranded reply itself.
+              if (!log) {
+                log = await matchReplyLog(msg, { seedId: seed.id });
+              }
               if (!log) continue;
+              const isReplyRescue = log.senderInboxId === seed.id;
               // Short rescue window (20-90min): pull from junk promptly while
               // still stamping a simulated received time for human-looking gaps.
               // Stuck-but-delivered logs skip straight to physical cleanup.
@@ -348,6 +379,28 @@ export async function processSeedInboxEngagement(): Promise<{
                 if (!log.sentAt) continue;
                 openAt = new Date(log.sentAt.getTime() + openDelayMinutes(log.id, 20, 90) * 60_000);
                 if (Date.now() < openAt.getTime()) continue;
+              }
+
+              // Second chance: the strict+stuck matchers above only know logs
+              // where THIS seed is the receiver. A REPLY to our own outbound
+              // warmup (sender = this seed) has no log of its own, so its
+              // In-Reply-To is used to find the thread. Rescue it physically.
+              if (isReplyRescue) {
+                try {
+                  await markSeen(c, folder, [msg.uid]);
+                  const lock = await c.getMailboxLock(folder);
+                  try {
+                    const moved = await c.messageMove([msg.uid], "INBOX", { uid: true });
+                    if (!moved) throw new Error("messageMove returned false");
+                  } finally {
+                    lock.release();
+                  }
+                  rescued++;
+                  console.log(`Recovered spam reply for ${seed.email}: UID ${msg.uid} moved from ${folder} to INBOX (thread ${log.messageId})`);
+                } catch (err) {
+                  console.error(`Spam-reply recovery failed for ${seed.email}, ${folder}, UID ${msg.uid}:`, err);
+                }
+                continue;
               }
 
               // This warmup landed in junk — a placement hit for its sender.
