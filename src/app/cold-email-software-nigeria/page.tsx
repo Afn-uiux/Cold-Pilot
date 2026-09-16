@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Cold Email Software for Nigeria (NGN Pricing & Lagos Timezone) — Cold Pilot",
+  title: "Cold Email Software for Nigeria — NGN Pricing",
   description:
     "Cold email software built for Nigerian teams — pay in naira, run warmup on Lagos time, and manage Gmail/Outlook inboxes from one dashboard.",
   alternates: { canonical: "/cold-email-software-nigeria" },

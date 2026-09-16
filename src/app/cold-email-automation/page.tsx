@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Cold Email Automation — Campaigns That Run Themselves — Cold Pilot",
+  title: "Cold Email Automation — Campaigns That Run Themselves",
   description:
     "Automate your entire cold email flow — warmup, inbox rotation, sequence scheduling, and reply-triggered follow-up — from one dashboard.",
   alternates: { canonical: "/cold-email-automation" },

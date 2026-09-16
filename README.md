@@ -52,7 +52,7 @@ Coldpilot handles the full outbound workflow — from finding and verifying lead
 | Framework | Next.js 16 (App Router) |
 | Language | TypeScript |
 | UI | React 19, Tailwind CSS 4 |
-| Database | SQLite (dev) / PostgreSQL (prod) via Prisma |
+| Database | PostgreSQL via Prisma |
 | Auth | NextAuth v5 (credentials + OAuth) |
 | Email | Nodemailer (SMTP), ImapFlow (IMAP), Google APIs (Gmail OAuth) |
 | Queue | BullMQ + Redis |
