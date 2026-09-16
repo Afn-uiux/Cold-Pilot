@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Docs — Coldpilot",
+  title: "Docs",
   description: "Documentation for Coldpilot: connecting inboxes, warm-up, rotation, and deliverability.",
+  alternates: { canonical: "/docs" },
 };
 
 const topics = [

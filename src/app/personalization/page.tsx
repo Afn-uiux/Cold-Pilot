@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Personalization tokens — Coldpilot",
+  title: "Personalization tokens",
   description: "Pull first name, company, or any custom field into the subject line and body — no manual find-and-replace.",
+  alternates: { canonical: "/personalization" },
 };
 
 export default function PersonalizationPage() {

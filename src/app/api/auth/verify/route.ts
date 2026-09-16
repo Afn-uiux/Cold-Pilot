@@ -20,11 +20,21 @@ export async function POST(req: Request) {
   // mirroring the password-reset request route. Without this an attacker
   // could repeatedly trigger verification emails as a spam/abuse vector.
   const ip = getClientIp(req.headers as unknown as { get(name: string): string | null });
-  const [ipLimit, emailLimit] = await Promise.all([
+  const [ipLimit, emailLimit, dailyLimit] = await Promise.all([
+    // Burst guard — stops any single 60-second flood. Per source IP.
     rateLimitAsync(`verify-resend:ip:${ip}`, { max: 5, windowMs: 60_000 }),
+    // Burst guard — stops per-email flooding. Per targeted email.
     rateLimitAsync(`verify-resend:email:${email.toLowerCase()}`, { max: 3, windowMs: 60_000 }),
+    // Hard daily cap — bounds total resends per email to 3 in any rolling 24h.
+    // The burst guards above only throttle short floods; without this a scammer
+    // could still fire 3 resends every minute across separate windows forever.
+    // 3/day is generous for a real founder and far too tight for abuse.
+    rateLimitAsync(`verify-resend-daily:email:${email.toLowerCase()}`, {
+      max: 3,
+      windowMs: 24 * 60 * 60 * 1000,
+    }),
   ]);
-  if (!ipLimit.ok || !emailLimit.ok) {
+  if (!ipLimit.ok || !emailLimit.ok || !dailyLimit.ok) {
     return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 });
   }
 

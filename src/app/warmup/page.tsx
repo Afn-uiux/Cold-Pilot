@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Inbox warm-up — Coldpilot",
+  title: "Inbox warm-up",
   description: "New inboxes send a slow, human-looking pattern for two weeks so mailbox providers learn to trust the address before your campaign starts.",
+  alternates: { canonical: "/warmup" },
 };
 
 export default function WarmupPage() {

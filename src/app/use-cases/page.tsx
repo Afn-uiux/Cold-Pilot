@@ -3,8 +3,9 @@ import Link from "next/link";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Use cases — Coldpilot",
+  title: "Use cases",
   description: "Cold email for founders, agencies, sales teams, recruiters, fundraising, and everyone else sending outreach.",
+  alternates: { canonical: "/use-cases" },
 };
 
 const items = [

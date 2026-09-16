@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import SiteHeader from "@/components/site-header";
 
 export const metadata: Metadata = {
-  title: "Contact Coldpilot",
+  title: "Contact",
   description:
     "Questions about Coldpilot plans, credits, billing or deliverability? Email hello@mail.usecoldpilot.com and we'll reply within one business day.",
+  alternates: { canonical: "/contact" },
 };
 
 export default function ContactPage() {

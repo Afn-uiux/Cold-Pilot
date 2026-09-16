@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Recruiters — Coldpilot",
+  title: "Recruiters",
   description: "Candidate outreach from personal mailboxes. Sequence stops the moment a candidate answers.",
+  alternates: { canonical: "/use-cases/recruiters" },
 };
 
 export default function RecruitersPage() {

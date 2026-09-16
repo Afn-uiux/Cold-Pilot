@@ -6,10 +6,12 @@ export const metadata: Metadata = {
   title: "Pricing",
   description:
     "Coldpilot pricing: a free 14-day trial, unlimited inboxes on every paid plan, and one credit balance for sending, verification and AI writing. No seat fees, no contracts.",
+  alternates: { canonical: "/pricing" },
   openGraph: {
     title: "Pricing — Pro features, half the price",
     description:
       "Unlimited inboxes on every paid plan. AI email writing included — not sold as an add-on. No seat fees, no contracts.",
+    siteName: "Coldpilot",
   },
 };
 

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +9,13 @@ import StateToggle from "./state-toggle";
 import CommandPalette from "@/components/command-palette";
 import TrialBanner from "@/components/trial-banner";
 import SupportChat from "@/components/support-chat";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function DashboardLayout({
   children,

@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Multi-inbox rotation — Coldpilot",
+  title: "Multi-inbox rotation",
   description: "Connect as many inboxes as you want. Sends spread across all of them so no single address carries the volume — or the risk.",
+  alternates: { canonical: "/rotation" },
 };
 
 export default function RotationPage() {

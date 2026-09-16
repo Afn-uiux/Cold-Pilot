@@ -14,6 +14,9 @@ export default function SiteFooter() {
               <li><Link href="/reply-detection">Reply detection</Link></li>
               <li><Link href="/deliverability">Deliverability</Link></li>
               <li><Link href="/analytics">Analytics</Link></li>
+              <li><Link href="/cold-email-automation">Automation</Link></li>
+              <li><Link href="/cold-email-software-nigeria">Nigeria</Link></li>
+              <li><Link href="/cold-email-software-africa">Africa</Link></li>
             </ul></div>
             <div className="sf-col"><h4>Use cases</h4><ul>
               <li><Link href="/use-cases/founders">Founders</Link></li>

@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Terms of Service",
   description:
     "Coldpilot's terms of service — the rules and conditions governing the use of our cold email outreach platform.",
+  alternates: { canonical: "/legal/terms" },
 };
 
 const SECTIONS: LegalSection[] = [

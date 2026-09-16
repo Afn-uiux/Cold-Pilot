@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Analytics — Coldpilot",
+  title: "Analytics",
   description: "Opens, replies, and bounces on one screen. Just what you need to know if the sequence is working.",
+  alternates: { canonical: "/analytics" },
 };
 
 export default function AnalyticsPage() {

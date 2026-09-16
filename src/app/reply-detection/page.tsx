@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Reply detection — Coldpilot",
+  title: "Reply detection",
   description: "The moment a lead replies, books, or bounces, their sequence stops. No awkward follow-up after they've already answered.",
+  alternates: { canonical: "/reply-detection" },
 };
 
 export default function ReplyDetectionPage() {

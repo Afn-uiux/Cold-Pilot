@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Fundraising — Coldpilot",
+  title: "Fundraising",
   description: "A focused outreach sequence that lands in the inbox. Cold email for fundraising.",
+  alternates: { canonical: "/use-cases/fundraising" },
 };
 
 export default function FundraisingPage() {

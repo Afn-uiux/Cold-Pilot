@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Script from "next/script";
 import { redirect } from "next/navigation";
@@ -6,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { PLANS } from "@/lib/plans";
 import { currencyFromHeaders, formatPrice, type Currency } from "@/lib/currency";
 import SiteHeader from "@/components/site-header";
+import JsonLd from "@/components/seo-jsonld";
 import Logo from "@/components/logo";
 import { FlameIcon } from "@/components/icons/flame";
 import { RefreshIcon } from "@/components/icons/refresh";
@@ -19,6 +21,56 @@ import { Edit02Icon } from "@/components/icons/edit-02";
 import { SentIcon } from "@/components/icons/sent";
 import { ChevronRightIcon } from "@/components/icons/chevron-right";
 import { IconHover, IconHoverLink, StepItem } from "@/components/icon-hover";
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL || "https://usecoldpilot.com";
+
+export const metadata: Metadata = {
+  title: {
+    absolute: "Coldpilot | Cold Email Outreach & Email Warmup",
+  },
+  description:
+    "Coldpilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "Coldpilot | Cold Email Outreach & Email Warmup",
+    description:
+      "Coldpilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
+    url: siteUrl,
+    siteName: "Coldpilot",
+    type: "website",
+    locale: "en_US",
+    images: [
+      {
+        url: `${siteUrl}/opengraph-image.png`,
+        width: 1200,
+        height: 630,
+        alt: "Coldpilot — cold email outreach with built-in warmup",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Coldpilot | Cold Email Outreach & Email Warmup",
+    description:
+      "Coldpilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
+  },
+};
+
+const softwareSchema = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "@id": `${siteUrl}/#software`,
+  name: "Coldpilot",
+  url: siteUrl,
+  description:
+    "Coldpilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  image: `${siteUrl}/opengraph-image.png`,
+  publisher: { "@id": `${siteUrl}/#organization` },
+};
 
 export default async function Home() {
   const session = await auth();
@@ -143,11 +195,12 @@ export default async function Home() {
       `}</style>
 
       <SiteHeader />
+      <JsonLd data={softwareSchema} />
 
       <header className="hero">
         <div className="wrap hero-inner">
           <span className="label" style={{marginBottom:0}}>Cold email, without the guesswork</span>
-          <h1>Reach more inboxes.<br /><em style={{fontStyle:"italic"}}>Skip the spam folder.</em></h1>
+          <h1>Cold email outreach with built-in warmup.<br /><em style={{fontStyle:"italic"}}>Lands in the inbox, not spam.</em></h1>
           <p className="hero-desc">AI-powered cold email tool that actually lands in the inbox — warmup, verification, and sending handled automatically.</p>
           <div className="hero-cta">
             <Link href="/auth/signup" className="btn">Start free</Link>
@@ -460,6 +513,7 @@ export default async function Home() {
             <div className="foot-brand"><div className="logo"><Logo height={22} /></div><p>Cold email for solo founders. One flat price, nothing bolted on.</p></div>
             <div className="foot-links">
               <div className="foot-col"><h4>Product</h4><ul><li><a href="#product">Features</a></li><li><a href="#how">How it works</a></li><li><Link href="/pricing">Pricing</Link></li></ul></div>
+              <div className="foot-col"><h4>Features</h4><ul><li><Link href="/warmup">Inbox warm-up</Link></li><li><Link href="/rotation">Multi-inbox rotation</Link></li><li><Link href="/reply-detection">Reply detection</Link></li><li><Link href="/deliverability">Deliverability</Link></li><li><Link href="/personalization">Personalization</Link></li><li><Link href="/analytics">Analytics</Link></li></ul></div>
               <div className="foot-col"><h4>Company</h4><ul><li><Link href="/about">About</Link></li><li><Link href="/contact">Contact</Link></li></ul></div>
               <div className="foot-col"><h4>Legal</h4><ul><li><Link href="/legal/privacy">Privacy</Link></li><li><Link href="/legal/terms">Terms</Link></li><li><Link href="/legal/acceptable-use">Acceptable Use</Link></li></ul></div>
             </div>

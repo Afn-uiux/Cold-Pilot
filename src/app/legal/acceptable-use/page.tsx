@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Acceptable Use Policy",
   description:
     "Coldpilot's acceptable use policy — the rules for compliant, permission-based cold email outreach on our platform.",
+  alternates: { canonical: "/legal/acceptable-use" },
 };
 
 const SECTIONS: LegalSection[] = [

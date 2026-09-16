@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
     "Coldpilot's privacy policy — how we collect, use, and protect your personal data when you use our cold email outreach platform.",
+  alternates: { canonical: "/legal/privacy" },
 };
 
 const SECTIONS: LegalSection[] = [

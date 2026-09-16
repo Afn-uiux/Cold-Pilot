@@ -24,9 +24,6 @@ export const metadata: Metadata = {
     template: "%s | Coldpilot",
   },
   description: "AI-powered cold email that lands in the inbox, not the spam folder. Warmup, verification, and sending handled automatically.",
-  alternates: {
-    canonical: siteUrl,
-  },
   openGraph: {
     title: "Coldpilot — AI cold email that lands in the inbox",
     description: "AI-powered cold email that lands in the inbox, not the spam folder. Warmup, verification, and sending handled automatically.",

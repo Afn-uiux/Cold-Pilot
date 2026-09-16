@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Sales teams — Coldpilot",
+  title: "Sales teams",
   description: "Distribute sends across reps and surface the positives. Cold email for sales teams.",
+  alternates: { canonical: "/use-cases/sales" },
 };
 
 export default function SalesPage() {

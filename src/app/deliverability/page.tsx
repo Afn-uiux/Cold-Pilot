@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Deliverability monitor — Coldpilot",
+  title: "Deliverability monitor",
   description: "A spam-score check runs before every send, so you catch a flagged domain or spammy subject line before your leads do.",
+  alternates: { canonical: "/deliverability" },
 };
 
 export default function DeliverabilityPage() {

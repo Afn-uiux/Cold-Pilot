@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Founders — Coldpilot",
+  title: "Founders",
   description: "Run intro sequences without burning founder@. Cold email for solo founders and small teams.",
+  alternates: { canonical: "/use-cases/founders" },
 };
 
 export default function FoundersPage() {
