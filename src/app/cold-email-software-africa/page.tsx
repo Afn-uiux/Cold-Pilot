@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
-  title: "Cold Email Software for Africa",
+  title: "Cold Email Software for Africa — Multi-Currency & Local Time — Cold Pilot",
   description:
-    "Cold email software for African teams — multi-currency billing, warmup on your time zone, and rotation across Gmail and Outlook inboxes.",
+    "Cold email software for African founders and sales teams — multi-currency billing (NGN/USD), warmup scheduled to your time zone, and rotation across Gmail and Outlook inboxes.",
   alternates: { canonical: "/cold-email-software-africa" },
 };
 
