@@ -9,7 +9,7 @@ export class TrialExpiredError extends Error {
   daysLeft = 0;
 
   constructor(daysLeft = 0) {
-    super("Your 14-day trial has ended. Upgrade to keep using Coldpilot.");
+    super("Your 14-day trial has ended. Upgrade to keep using ColdPilot.");
     this.name = "TrialExpiredError";
     this.daysLeft = daysLeft;
   }

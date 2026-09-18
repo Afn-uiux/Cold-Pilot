@@ -57,6 +57,11 @@ logs/
 *.db-shm
 *.db-wal
 *.db.bak-*
+*.db.backup*
+*.sqlite
+# local dumps / exports
+/backups/
+/data-export/
 
 # OS files
 .DS_Store

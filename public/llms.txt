@@ -1,14 +1,14 @@
-# Coldpilot
+# ColdPilot
 
 > Cold email that lands in the inbox. Warm-up, rotation, reply detection,
 > verification and analytics — all in one place.
 
-Coldpilot is a cold email platform for solo founders, sales teams and agencies.
+ColdPilot is a cold email platform for solo founders, sales teams and agencies.
 It automates outbound campaigns end to end: multi-layer email verification,
 inbox warm-up, multi-inbox rotation, smart scheduling, AI email writing, reply
 detection that auto-stops sequences, and domain reputation monitoring.
 
-## What Coldpilot does
+## What ColdPilot does
 
 - **Email verification** — multi-layer checks (disposable domain detection,
   typosquat catching, DNS MX validation, SMTP-level probes) so you never send
@@ -46,7 +46,7 @@ Cold email is a sales outreach channel where you send an unsolicited but
 relevant first message to a prospect. Done properly it means: verified,
 targeted addresses; low per-domain sending volume; authentic sender
 infrastructure; clear unsubscribe and opt-outs; and content that is personal
-and non-promotional. Coldpilot is designed to help senders do exactly that
+and non-promotional. ColdPilot is designed to help senders do exactly that
 while protecting inboxes and deliverability.
 
 ## Getting started

@@ -17,7 +17,7 @@ export default function RecruitersPage() {
       <section className="mp-body">
         <div className="wrap mp-body-inner">
           <h2>Talent won&apos;t reply to a sender in spam.</h2>
-          <p>Recruiters send from personal mailboxes, which makes deliverability fragile. Coldpilot warms that address, rotates the load, and watches for replies so your next steps come from a human, not an autoresponder.</p>
+          <p>Recruiters send from personal mailboxes, which makes deliverability fragile. ColdPilot warms that address, rotates the load, and watches for replies so your next steps come from a human, not an autoresponder.</p>
           <ul>
             <li>Warm the address you actually recruit from</li>
             <li>Sequence stops the instant a candidate replies</li>

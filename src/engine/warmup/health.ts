@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { sendEmailSafe } from "@/lib/email/send";
 
 export type WarmupHealthState = "healthy" | "watch" | "throttled";
 
@@ -169,25 +168,6 @@ export async function saveHealthLog(mailboxId: string): Promise<void> {
   if (!mailbox) return;
 
   const health = await calculateHealthScore(mailboxId);
-
-  // Send warmup health warning if state degraded. Only when there was actual
-  // warmup traffic in the window (sentInWindow > 0): with zero sends the score
-  // is 0/"watch" by nothing-measured-yet, not by a real decline — alerting on
-  // that produces the "fake health drop" emails for users not running warmup.
-  const fullMailbox = await prisma.emailAccount.findUnique({
-    where: { id: mailboxId },
-    select: { userId: true, email: true, healthState: true, healthScore: true },
-  });
-  const degraded = health.healthState !== "healthy" && health.sentInWindow > 0;
-  if (fullMailbox && degraded && fullMailbox.healthState === "healthy") {
-    const user = await prisma.user.findUnique({ where: { id: fullMailbox.userId }, select: { email: true } });
-    if (user?.email) {
-      sendEmailSafe(user.email, "warmup-health-dropped", {
-        current_score: Math.round(health.healthScore),
-        previous_score: Math.round(fullMailbox.healthScore ?? 0),
-      });
-    }
-  }
 
   // Increment warmupWeek based on days since warmupStartedAt
   let warmupWeek = mailbox.warmupWeek || 1;

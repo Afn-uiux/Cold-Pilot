@@ -399,7 +399,7 @@ export default function PricingPage() {
               <div className="foot-col"><h4>Legal</h4><ul><li><Link href="/legal/privacy">Privacy</Link></li><li><Link href="/legal/terms">Terms</Link></li><li><Link href="/legal/acceptable-use">Acceptable Use</Link></li></ul></div>
             </div>
           </div>
-          <div className="foot-bottom"><span>&copy; 2026 Coldpilot.</span><span>Made for the inbox, not the spam folder.</span></div>
+          <div className="foot-bottom"><span>&copy; 2026 ColdPilot.</span><span>Made for the inbox, not the spam folder.</span></div>
         </div>
       </footer>
     </div>

@@ -1,6 +1,6 @@
-# Coldpilot — Leads: import, verification, and suppressions
+# ColdPilot — Leads: import, verification, and suppressions
 
-Leads are the contacts you email. Coldpilot imports, dedupes, verifies, and
+Leads are the contacts you email. ColdPilot imports, dedupes, verifies, and
 tracks leads so you only send to real addresses.
 
 ## Importing leads
@@ -25,7 +25,7 @@ tracks leads so you only send to real addresses.
 
 ## Deduplication
 
-- Coldpilot deduplicates automatically on import, so the same contact isn't
+- ColdPilot deduplicates automatically on import, so the same contact isn't
   added twice.
 
 ## Verification
@@ -36,7 +36,7 @@ tracks leads so you only send to real addresses.
 - Verifying one lead costs **0.25 credits**.
 - Each lead gets a verification status:
   - **Valid** — safe to send to.
-  - **Invalid** — hard-bad; Coldpilot won't send to these.
+  - **Invalid** — hard-bad; ColdPilot won't send to these.
   - **Risky** — uncertain; sent only if you opted in to risky sends.
   - **Unknown / flagged** — not confirmable; treated conservatively.
 
@@ -49,7 +49,7 @@ tracks leads so you only send to real addresses.
 
 ## Bounces
 
-- When a send bounces, Coldpilot records the **bounce type** (hard / soft /
+- When a send bounces, ColdPilot records the **bounce type** (hard / soft /
   connection / auth / suppressed) and links it to the lead.
 - Repeated hard bounces on an inbox hurt its health score and may auto-pause it.
 

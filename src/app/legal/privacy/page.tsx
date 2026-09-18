@@ -4,7 +4,7 @@ import LegalLayout, { type LegalSection } from "@/components/legal-layout";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "Coldpilot's privacy policy — how we collect, use, and protect your personal data when you use our cold email outreach platform.",
+    "ColdPilot's privacy policy — how we collect, use, and protect your personal data when you use our cold email outreach platform.",
   alternates: { canonical: "/legal/privacy" },
 };
 
@@ -33,7 +33,7 @@ export default function PrivacyPage() {
       <p className="effective-date">Effective Date: September 5, 2026</p>
 
       <p>
-        Coldpilot, Inc. (&ldquo;Coldpilot&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) provides cold email
+        ColdPilot, Inc. (&ldquo;ColdPilot&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) provides cold email
         outreach software &mdash; campaign management, inbox warm-up, rotation, reply detection, verification, and analytics
         (the &ldquo;Services&rdquo;). We are committed to protecting your personal data and being transparent about how we handle it.
       </p>
@@ -50,7 +50,7 @@ export default function PrivacyPage() {
 
       <div className="section" id="who-we-are">
         <h2>1. Who We Are</h2>
-        <p>Coldpilot, Inc. is a cold email outreach platform. For data protection purposes:</p>
+        <p>ColdPilot, Inc. is a cold email outreach platform. For data protection purposes:</p>
         <ul>
           <li>
             When you send outreach campaigns through our platform, you are the <strong>Data Controller</strong> and we act as a{" "}
@@ -61,7 +61,7 @@ export default function PrivacyPage() {
             <strong>Data Controller</strong>.
           </li>
           <li>
-            If you are a recipient of an email sent through Coldpilot, your primary relationship is with the sender who contacted you.
+            If you are a recipient of an email sent through ColdPilot, your primary relationship is with the sender who contacted you.
             Please review that sender&apos;s privacy policy for information about their data practices. We process recipient data only as
             necessary to provide email delivery, reply detection, and deliverability services to our Users.
           </li>
@@ -154,14 +154,14 @@ export default function PrivacyPage() {
           <li><strong>Business transfers:</strong> in connection with a merger, acquisition, financing, or sale of our business, with
           notice to affected parties as required by law.</li>
           <li><strong>Protection of rights and safety:</strong> where necessary to prevent fraud, protect platform security, or protect
-          the rights and safety of Coldpilot, our Users, or the public.</li>
+          the rights and safety of ColdPilot, our Users, or the public.</li>
         </ul>
       </div>
 
       <div className="section" id="google-data">
         <h2>6. Use of Google Gmail Data</h2>
         <p>
-          Coldpilot&apos;s use and transfer of information received from Google APIs will adhere to the{" "}
+          ColdPilot&apos;s use and transfer of information received from Google APIs will adhere to the{" "}
           <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer" target="_blank">
             Google API Services User Data Policy
           </a>
@@ -179,7 +179,7 @@ export default function PrivacyPage() {
           encrypted servers) or as required by law.
         </p>
         <p>
-          Gmail data is used only for providing and improving the Coldpilot service. You can disconnect your Gmail account at any time
+          Gmail data is used only for providing and improving the ColdPilot service. You can disconnect your Gmail account at any time
           from your dashboard. Data may be retained while your account is active or as required for legal and security purposes, and is
           deleted when you close your account or remove the connected mailbox.
         </p>
@@ -234,7 +234,7 @@ export default function PrivacyPage() {
       <div className="section" id="transfers">
         <h2>10. International Data Transfers</h2>
         <p>
-          Coldpilot is headquartered in the United States. In the course of providing our Services, personal data may be transferred to
+          ColdPilot is headquartered in the United States. In the course of providing our Services, personal data may be transferred to
           and processed in other countries where our infrastructure, email delivery, and service providers are located. Where required,
           these transfers rely on contractual safeguards, including standard contractual clauses, or other approved transfer mechanisms.
         </p>

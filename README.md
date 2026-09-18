@@ -1,14 +1,14 @@
-# Coldpilot
+# ColdPilot
 
 All-in-one sales outreach platform designed to help businesses automate cold email campaigns at scale. It combines campaign management, email verification, and AI-powered tools for businesses running high-volume outbound sales.
 
 ## What it does
 
-Coldpilot handles the full outbound workflow — from finding and verifying leads to sending personalized sequences and tracking what works.
+ColdPilot handles the full outbound workflow — from finding and verifying leads to sending personalized sequences and tracking what works.
 
 ### Lead management
 
-- **Lead import** — Upload CSVs or add leads manually. Coldpilot deduplicates automatically and validates emails on import.
+- **Lead import** — Upload CSVs or add leads manually. ColdPilot deduplicates automatically and validates emails on import.
 - **Email verification** — Multi-layer verification catches bad emails before you send: disposable domain detection (129,000+ known domains), typosquat detection for common misspellings, DNS MX validation, and SMTP-level checks.
 - **Domain reputation** — Track sender reputation per domain. Get alerts when bounce rates climb or reputation drops.
 - **CRM basics** — Manage leads with tags, notes, and deal tracking. No need for a separate tool when you're getting started.
@@ -17,7 +17,7 @@ Coldpilot handles the full outbound workflow — from finding and verifying lead
 
 - **Multi-step sequences** — Build multi-step campaigns with personalized subject lines and body text using custom fields (first name, company, etc.).
 - **A/B testing** — Test subject lines and body variants to find what converts.
-- **Smart scheduling** — Set send windows, timezones, and daily limits. Coldpilot spaces sends with natural delays so your patterns look human.
+- **Smart scheduling** — Set send windows, timezones, and daily limits. ColdPilot spaces sends with natural delays so your patterns look human.
 - **Multi-inbox rotation** — Connect unlimited email accounts. Sends rotate across all of them so no single address carries the volume — or the risk.
 - **Stop on reply** — The moment a lead replies, books, or bounces, their sequence stops. No awkward follow-up.
 
@@ -148,7 +148,7 @@ coldpilot/
 
 ## Pricing
 
-Coldpilot is free to start. Connect your inboxes, send your first sequence, and scale when you're ready.
+ColdPilot is free to start. Connect your inboxes, send your first sequence, and scale when you're ready.
 
 ## License
 
@@ -156,4 +156,4 @@ Proprietary. All rights reserved.
 
 ## Built by
 
-[Coldpilot](mailto:hello@mail.usecoldpilot.com) — built for the inbox, not the spam folder.
+[ColdPilot](mailto:hello@mail.usecoldpilot.com) — built for the inbox, not the spam folder.

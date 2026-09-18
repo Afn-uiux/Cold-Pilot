@@ -46,7 +46,7 @@ export async function dispatchWebhookEvent(event: WebhookEvent) {
       const res = await fetch(wh.url, {
         method: "POST",
         redirect: "manual",
-        headers: { "Content-Type": "application/json", "X-Webhook-Signature": signature, "User-Agent": "Coldpilot-Webhook/1.0" },
+        headers: { "Content-Type": "application/json", "X-Webhook-Signature": signature, "User-Agent": "ColdPilot-Webhook/1.0" },
         body: payload,
         signal: AbortSignal.timeout(10_000),
       });

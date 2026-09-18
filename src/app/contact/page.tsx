@@ -4,7 +4,7 @@ import SiteHeader from "@/components/site-header";
 export const metadata: Metadata = {
   title: "Contact",
   description:
-    "Questions about Coldpilot plans, credits, billing or deliverability? Email hello@mail.usecoldpilot.com and we'll reply within one business day.",
+    "Questions about ColdPilot plans, credits, billing or deliverability? Email hello@mail.usecoldpilot.com and we'll reply within one business day.",
   alternates: { canonical: "/contact" },
 };
 
@@ -14,7 +14,7 @@ export default function ContactPage() {
       <SiteHeader />
       <main style={{ maxWidth: 680, margin: "0 auto", padding: "40px clamp(20px,4vw,40px) 80px" }}>
         <h1 style={{ fontSize: "clamp(28px,4vw,36px)", fontWeight: 400, letterSpacing: "-0.02em", marginBottom: 8 }}>Contact</h1>
-        <p style={{ fontSize: 13, color: "#8A9BB5", marginBottom: 40 }}>Get in touch with the Coldpilot team</p>
+        <p style={{ fontSize: 13, color: "#8A9BB5", marginBottom: 40 }}>Get in touch with the ColdPilot team</p>
 
         <div style={{ fontSize: 15, color: "#374151", lineHeight: 1.8 }}>
           <p style={{ marginBottom: 24 }}>Email us at <a href="mailto:hello@mail.usecoldpilot.com" style={{ color: "#0F1929", borderBottom: "1px solid rgba(15,25,41,0.15)" }}>hello@mail.usecoldpilot.com</a> and we&apos;ll get back to you within one business day.</p>

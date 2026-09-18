@@ -17,7 +17,7 @@ export default function FoundersPage() {
       <section className="mp-body">
         <div className="wrap mp-body-inner">
           <h2>Your inbox is your biggest asset. Keep it healthy.</h2>
-          <p>Founders send from their own address — which is also the address investors, customers, and partners write to. Coldpilot keeps it out of spam while you run intro and follow-up sequences.</p>
+          <p>Founders send from their own address — which is also the address investors, customers, and partners write to. ColdPilot keeps it out of spam while you run intro and follow-up sequences.</p>
           <ul>
             <li>Warm your real inbox before the first sequence</li>
             <li>Rotate sends so founder@ never carries full volume</li>

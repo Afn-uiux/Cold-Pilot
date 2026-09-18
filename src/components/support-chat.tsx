@@ -84,7 +84,7 @@ export default function SupportChat() {
               {
                 role: "assistant",
                 content:
-                  "Hi there! I'm Ava, your Coldpilot assistant. Ask me anything — plans, credits, warmup, campaigns, connecting inboxes, whatever you need. How can I help?",
+                  "Hi there! I'm Ava, your ColdPilot assistant. Ask me anything — plans, credits, warmup, campaigns, connecting inboxes, whatever you need. How can I help?",
               },
             ]);
           }
@@ -132,7 +132,7 @@ export default function SupportChat() {
               <Message01Icon size={16} className="text-white" />
             </div>
             <div>
-              <p className="text-sm font-medium leading-tight">Ava · Coldpilot Support</p>
+              <p className="text-sm font-medium leading-tight">Ava · ColdPilot Support</p>
               <p className="text-[11px] text-blue-100 leading-tight">Usually replies instantly</p>
             </div>
           </div>

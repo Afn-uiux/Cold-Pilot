@@ -1,20 +1,20 @@
-# Coldpilot — What it is & the core workflow
+# ColdPilot — What it is & the core workflow
 
-Coldpilot is a cold-email automation platform. It helps sales teams and agencies
+ColdPilot is a cold-email automation platform. It helps sales teams and agencies
 build, send, and warm up cold outreach at scale while keeping their domains and
 inboxes out of the spam folder.
 
 ## The core workflow (top to bottom)
 
-1. **Connect inboxes** (email accounts) — the mailboxes Coldpilot sends from.
+1. **Connect inboxes** (email accounts) — the mailboxes ColdPilot sends from.
 2. **Warm up those inboxes** — build sender reputation before you send real
    campaigns, so your cold emails land in the main folder, not spam.
 3. **Import leads** — the people you want to reach (CSV or manually).
-4. **Verify leads** — Coldpilot checks email addresses are real before you risk
+4. **Verify leads** — ColdPilot checks email addresses are real before you risk
    a send (data is deduped and validated in multiple layers).
 5. **Build a campaign** — a sequence of emails (a first outreach email plus
    optional follow-ups), with scheduling and sending limits.
-6. **Launch and track** — Coldpilot sends on your schedule, tracks opens/clicks
+6. **Launch and track** — ColdPilot sends on your schedule, tracks opens/clicks
    and bounces, and reports back in the dashboard.
 
 ## What everything does

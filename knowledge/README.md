@@ -1,10 +1,10 @@
-# Coldpilot — Support Knowledge Base
+# ColdPilot — Support Knowledge Base
 
 This directory is the source of truth the AI support chat draws from to answer
 user questions. Each `.md` file covers one topic. Keep entries plain, factual,
 and up to date as the product changes.
 
-- `core.md` — what Coldpilot is and the high-level workflow
+- `core.md` — what ColdPilot is and the high-level workflow
 - `plans.md` — plans, limits, trial, pay-as-you-go, expiry
 - `credits.md` — credits: what costs credits, spending, top-ups, refunds
 - `email-accounts.md` — connecting/moving Gmail & Outlook inboxes, warmup

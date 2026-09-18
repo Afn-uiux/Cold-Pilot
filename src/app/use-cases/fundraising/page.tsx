@@ -17,7 +17,7 @@ export default function FundraisingPage() {
       <section className="mp-body">
         <div className="wrap mp-body-inner">
           <h2>Your warmup fund is founder@. Spend it wisely.</h2>
-          <p>Fundraising runs on a small list and a big reputation. Coldpilot keeps your domain clean so the first email to a partner actually arrives, and stops the sequence the second anyone replies.</p>
+          <p>Fundraising runs on a small list and a big reputation. ColdPilot keeps your domain clean so the first email to a partner actually arrives, and stops the sequence the second anyone replies.</p>
           <ul>
             <li>Warm your domain before the first outreach</li>
             <li>Personalization for each fund and partner</li>

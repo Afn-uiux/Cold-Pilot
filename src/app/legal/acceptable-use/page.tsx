@@ -4,7 +4,7 @@ import LegalLayout, { type LegalSection } from "@/components/legal-layout";
 export const metadata: Metadata = {
   title: "Acceptable Use Policy",
   description:
-    "Coldpilot's acceptable use policy — the rules for compliant, permission-based cold email outreach on our platform.",
+    "ColdPilot's acceptable use policy — the rules for compliant, permission-based cold email outreach on our platform.",
   alternates: { canonical: "/legal/acceptable-use" },
 };
 
@@ -29,19 +29,19 @@ export default function AcceptableUsePage() {
       <p className="effective-date">Effective Date: September 5, 2026</p>
 
       <p>
-        Coldpilot, Inc. (&ldquo;Coldpilot&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) provides cold email outreach
+        ColdPilot, Inc. (&ldquo;ColdPilot&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) provides cold email outreach
         software. This Acceptable Use Policy (&ldquo;AUP&rdquo;) sets out the standards you must follow when using our Services. It
         applies to all users, free and paid, and forms part of our <a href="/legal/terms">Terms of Service</a>.
       </p>
       <p>
-        Coldpilot is built to help businesses run professional, compliant outreach that protects both senders and recipients. We take
+        ColdPilot is built to help businesses run professional, compliant outreach that protects both senders and recipients. We take
         spam, deception, and abuse seriously. We review activity on our platform and enforce this policy consistently.
       </p>
 
       <div className="section" id="overview">
         <h2>1. Overview</h2>
         <p>
-          In short: use Coldpilot to send relevant, honest outreach to people who may reasonably expect to hear from you, honor every
+          In short: use ColdPilot to send relevant, honest outreach to people who may reasonably expect to hear from you, honor every
           opt-out, and never use our platform to mislead, harass, or harm anyone. If your practices would get your own domain blacklisted,
           they have no place on our platform.
         </p>
@@ -63,7 +63,7 @@ export default function AcceptableUsePage() {
       <div className="section" id="spam">
         <h2>3. No Spam or Unsolicited Lists</h2>
         <ul>
-          <li>You may not use Coldpilot to send unsolicited bulk email, chain mail, or spam of any kind.</li>
+          <li>You may not use ColdPilot to send unsolicited bulk email, chain mail, or spam of any kind.</li>
           <li>You may not purchase, rent, scrape, or otherwise import recipient lists unless you have a lawful basis and reasonable
           grounds to contact every person on the list.</li>
           <li>You may not use the Services to harvest email addresses or build lists from data you do not own or legitimately license.</li>
@@ -84,7 +84,7 @@ export default function AcceptableUsePage() {
           <li>Pornography, sexualized content, or content exploiting minors;</li>
           <li>Hate speech, harassment, threats, or content promoting violence or discrimination;</li>
           <li>Material that violates the intellectual property, privacy, or other rights of any third party;</li>
-          <li>Content that is otherwise unlawful, or that would bring Coldpilot&apos;s infrastructure or reputation into disrepute.</li>
+          <li>Content that is otherwise unlawful, or that would bring ColdPilot&apos;s infrastructure or reputation into disrepute.</li>
         </ul>
       </div>
 
@@ -108,7 +108,7 @@ export default function AcceptableUsePage() {
           requests promptly and permanently.</li>
           <li>Your sending must not continue to contact recipients who have unsubscribed, bounced, replied with &ldquo;stop&rdquo; or
           &ldquo;take me off&rdquo;, or otherwise signaled they do not want to hear from you.</li>
-          <li>Coldpilot&apos;s suppression and reply-detection tools are provided to help you honor these requests; you are responsible
+          <li>ColdPilot&apos;s suppression and reply-detection tools are provided to help you honor these requests; you are responsible
           for using them.</li>
         </ul>
       </div>
@@ -142,7 +142,7 @@ export default function AcceptableUsePage() {
         <ul>
           <li>You may not resell, sublicense, lease, or provide the Services to third parties as a hosted or white-label service without
           our prior written consent.</li>
-          <li>You may not use the Services to mirror or replicate Coldpilot&apos;s functionality for a competing service.</li>
+          <li>You may not use the Services to mirror or replicate ColdPilot&apos;s functionality for a competing service.</li>
           <li>You may not scrape our website, dashboard, or API beyond normal use of the Services.</li>
         </ul>
       </div>

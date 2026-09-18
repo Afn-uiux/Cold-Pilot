@@ -1,6 +1,6 @@
-# Coldpilot — Credits
+# ColdPilot — Credits
 
-Credits are the metered unit that powers Coldpilot. Every paid action consumes
+Credits are the metered unit that powers ColdPilot. Every paid action consumes
 credits; your balance is shown in the dashboard.
 
 ## What costs credits

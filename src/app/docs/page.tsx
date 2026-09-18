@@ -3,7 +3,7 @@ import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
   title: "Docs",
-  description: "Documentation for Coldpilot: connecting inboxes, warm-up, rotation, and deliverability.",
+  description: "Documentation for ColdPilot: connecting inboxes, warm-up, rotation, and deliverability.",
   alternates: { canonical: "/docs" },
 };
 

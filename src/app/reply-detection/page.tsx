@@ -17,7 +17,7 @@ export default function ReplyDetectionPage() {
       <section className="mp-body">
         <div className="wrap mp-body-inner">
           <h2>Your leads talk. You just stop sending.</h2>
-          <p>Coldpilot watches every connected inbox. When a contact responds — or bounces — the engine pauses their sequence instantly, so follow-ups never stack on top of a conversation that&apos;s already happening.</p>
+          <p>ColdPilot watches every connected inbox. When a contact responds — or bounces — the engine pauses their sequence instantly, so follow-ups never stack on top of a conversation that&apos;s already happening.</p>
           <ul>
             <li>Reply detection on Gmail &amp; Outlook automatically</li>
             <li>Sequence stops for a lead the second they respond</li>

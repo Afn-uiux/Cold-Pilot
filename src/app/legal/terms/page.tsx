@@ -4,7 +4,7 @@ import LegalLayout, { type LegalSection } from "@/components/legal-layout";
 export const metadata: Metadata = {
   title: "Terms of Service",
   description:
-    "Coldpilot's terms of service — the rules and conditions governing the use of our cold email outreach platform.",
+    "ColdPilot's terms of service — the rules and conditions governing the use of our cold email outreach platform.",
   alternates: { canonical: "/legal/terms" },
 };
 
@@ -42,8 +42,8 @@ export default function TermsPage() {
       <p className="effective-date">Effective Date: September 5, 2026</p>
 
       <p>
-        These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of the Coldpilot platform, website, APIs, and all
-        related services (collectively, the &ldquo;Services&rdquo;). Coldpilot, Inc. (&ldquo;Coldpilot&rdquo;, &ldquo;we&rdquo;,
+        These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of the ColdPilot platform, website, APIs, and all
+        related services (collectively, the &ldquo;Services&rdquo;). ColdPilot, Inc. (&ldquo;ColdPilot&rdquo;, &ldquo;we&rdquo;,
         &ldquo;us&rdquo;, or &ldquo;our&rdquo;) provides cold email outreach software designed to help businesses run compliant,
         deliverable outreach at scale.
       </p>
@@ -66,12 +66,12 @@ export default function TermsPage() {
         <h2>2. Definitions</h2>
         <ul>
           <li><strong>&ldquo;Account&rdquo;</strong> means the registered account you create to access the Services.</li>
-          <li><strong>&ldquo;Coldpilot&rdquo;</strong>, <strong>&ldquo;we&rdquo;</strong>, <strong>&ldquo;us&rdquo;</strong>, or{" "}
-          <strong>&ldquo;our&rdquo;</strong> means Coldpilot, Inc.</li>
+          <li><strong>&ldquo;ColdPilot&rdquo;</strong>, <strong>&ldquo;we&rdquo;</strong>, <strong>&ldquo;us&rdquo;</strong>, or{" "}
+          <strong>&ldquo;our&rdquo;</strong> means ColdPilot, Inc.</li>
           <li><strong>&ldquo;User&rdquo;</strong>, <strong>&ldquo;you&rdquo;</strong>, or <strong>&ldquo;your&rdquo;</strong> means the
           individual or entity using the Services.</li>
           <li><strong>&ldquo;Services&rdquo;</strong> means all software, websites, dashboards, APIs, tools, content, and documentation
-          provided by Coldpilot.</li>
+          provided by ColdPilot.</li>
           <li><strong>&ldquo;Connected Account&rdquo;</strong> means an email account (Gmail, Google Workspace, Outlook, or an SMTP host)
           that you connect to the Services to send and receive email.</li>
           <li><strong>&ldquo;Campaign&rdquo;</strong> means an outreach sequence, warm-up, rotation, or related workflow you create using
@@ -97,7 +97,7 @@ export default function TermsPage() {
 
       <div className="section" id="the-service">
         <h2>4. Our Services</h2>
-        <p>Coldpilot provides cold email outreach tools, including but not limited to:</p>
+        <p>ColdPilot provides cold email outreach tools, including but not limited to:</p>
         <ul>
           <li>Campaign creation, sequencing, scheduling, and management;</li>
           <li>Inbox warm-up to improve sender reputation and deliverability;</li>
@@ -193,7 +193,7 @@ export default function TermsPage() {
           <li><strong>Processing:</strong> we process Recipient Data solely to provide the Services to you: sending campaigns, detecting
           replies, verifying addresses, and reporting analytics.</li>
           <li><strong>Representations:</strong> you represent that you hold Recipient Data lawfully and have any necessary rights,
-          permissions, and lawful bases to process it, including contacting recipients via Coldpilot.</li>
+          permissions, and lawful bases to process it, including contacting recipients via ColdPilot.</li>
           <li><strong>Sensitive data:</strong> you will not upload sensitive or special-category personal data (e.g., health, biometric,
           or government identifiers) without our prior written consent.</li>
           <li><strong>Deletion:</strong> you can delete Recipient Data from your dashboard at any time. After account closure, we will
@@ -227,7 +227,7 @@ export default function TermsPage() {
         <h2>12. Intellectual Property</h2>
         <ul>
           <li><strong>Our IP:</strong> the Services, including all software, design, text, graphics, logos, documentation, and
-          underlying technology, are owned by Coldpilot or its licensors and are protected by intellectual property laws. We grant you a
+          underlying technology, are owned by ColdPilot or its licensors and are protected by intellectual property laws. We grant you a
           limited, non-exclusive, non-transferable, revocable license to use the Services for your internal business purposes, subject to
           these Terms.</li>
           <li><strong>Your IP:</strong> you retain all rights to your Campaign content and your Recipient Data. By using the Services,
@@ -293,10 +293,10 @@ export default function TermsPage() {
       <div className="section" id="liability">
         <h2>18. Limitation of Liability</h2>
         <ul>
-          <li>To the maximum extent permitted by law, Coldpilot&apos;s aggregate liability for all claims arising out of or relating to
+          <li>To the maximum extent permitted by law, ColdPilot&apos;s aggregate liability for all claims arising out of or relating to
           these Terms or your use of the Services is limited to the amounts you paid to us in the twelve (12) months preceding the event
           giving rise to the claim.</li>
-          <li>In no event will Coldpilot be liable for any indirect, incidental, special, consequential, or punitive damages, or for lost
+          <li>In no event will ColdPilot be liable for any indirect, incidental, special, consequential, or punitive damages, or for lost
           profits, data, goodwill, or business opportunities, even if advised of the possibility of such damages.</li>
           <li>To the extent applicable law does not permit these limitations, liability will be limited to the maximum extent permitted.</li>
         </ul>
@@ -305,7 +305,7 @@ export default function TermsPage() {
       <div className="section" id="indemnity">
         <h2>19. Indemnity</h2>
         <p>
-          You will defend, indemnify, and hold harmless Coldpilot and its officers, directors, employees, and agents from and against any
+          You will defend, indemnify, and hold harmless ColdPilot and its officers, directors, employees, and agents from and against any
           claims, damages, liabilities, costs, and expenses (including reasonable legal fees) arising out of or relating to: (a) your use
           of the Services; (b) your Campaigns or Recipient Data; (c) your breach of these Terms or the Acceptable Use Policy; or
           (d) your violation of Applicable Law or the rights of any third party.
@@ -345,7 +345,7 @@ export default function TermsPage() {
         <h2>23. General Terms</h2>
         <ul>
           <li><strong>Entire agreement:</strong> these Terms, together with the Privacy Policy and Acceptable Use Policy, constitute the
-          entire agreement between you and Coldpilot regarding the Services.</li>
+          entire agreement between you and ColdPilot regarding the Services.</li>
           <li><strong>Severability:</strong> if any provision is held invalid or unenforceable, the remainder will continue in full force
           and effect.</li>
           <li><strong>Waiver:</strong> our failure to enforce a provision is not a waiver of that provision.</li>

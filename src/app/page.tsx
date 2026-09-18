@@ -26,19 +26,19 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL 
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Coldpilot | Cold Email Outreach & Email Warmup",
+    absolute: "ColdPilot | Cold Email Outreach & Email Warmup",
   },
   description:
-    "Coldpilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
+    "ColdPilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Coldpilot | Cold Email Outreach & Email Warmup",
+    title: "ColdPilot | Cold Email Outreach & Email Warmup",
     description:
-      "Coldpilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
+      "ColdPilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
     url: siteUrl,
-    siteName: "Coldpilot",
+    siteName: "ColdPilot",
     type: "website",
     locale: "en_US",
     images: [
@@ -46,15 +46,15 @@ export const metadata: Metadata = {
         url: `${siteUrl}/opengraph-image.png`,
         width: 1200,
         height: 630,
-        alt: "Coldpilot — cold email outreach with built-in warmup",
+        alt: "ColdPilot — cold email outreach with built-in warmup",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Coldpilot | Cold Email Outreach & Email Warmup",
+    title: "ColdPilot | Cold Email Outreach & Email Warmup",
     description:
-      "Coldpilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
+      "ColdPilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
   },
 };
 
@@ -62,10 +62,10 @@ const softwareSchema = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "@id": `${siteUrl}/#software`,
-  name: "Coldpilot",
+  name: "ColdPilot",
   url: siteUrl,
   description:
-    "Coldpilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
+    "ColdPilot is a cold email outreach platform with built-in email warmup, mailbox rotation, automated campaigns, and reply tracking.",
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web",
   image: `${siteUrl}/opengraph-image.png`,
@@ -462,7 +462,7 @@ export default async function Home() {
           </div>
           <div className="pricing-layout" id="compare">
             <div className="price-main">
-              <span className="label">Coldpilot</span>
+              <span className="label">ColdPilot</span>
               <div className="amount" style={{fontFamily:"'Geist',system-ui,sans-serif",fontSize:"clamp(56px,10vw,80px)",lineHeight:1,marginTop:16}}>{formatPrice(PLANS.free.price, currency)}<span style={{fontSize:"clamp(16px,2vw,20px)",fontFamily:"'JetBrains Mono',monospace",color:"var(--muted-2)"}}> /mo</span></div>
               <p className="desc">Free — 2 inboxes, 300 leads, and 1,000 credits on signup. No credit card needed. Upgrade whenever you&apos;re ready.</p>
               <ul className="price-includes">
@@ -490,7 +490,7 @@ export default async function Home() {
 
       <div className="wrap">
         <div className="quote-block">
-          <blockquote>Cold email shouldn't require a sales team, a big budget, or a spreadsheet of workarounds. I built Coldpilot so a solo founder can connect an inbox and start a sequence the same afternoon.</blockquote>
+          <blockquote>Cold email shouldn't require a sales team, a big budget, or a spreadsheet of workarounds. I built ColdPilot so a solo founder can connect an inbox and start a sequence the same afternoon.</blockquote>
           <p className="quote-attr">— Founder's note</p>
         </div>
       </div>
@@ -518,7 +518,7 @@ export default async function Home() {
               <div className="foot-col"><h4>Legal</h4><ul><li><Link href="/legal/privacy">Privacy</Link></li><li><Link href="/legal/terms">Terms</Link></li><li><Link href="/legal/acceptable-use">Acceptable Use</Link></li></ul></div>
             </div>
           </div>
-          <div className="foot-bottom"><span>&copy; 2026 Coldpilot.</span><span>Made for the inbox, not the spam folder.</span></div>
+          <div className="foot-bottom"><span>&copy; 2026 ColdPilot.</span><span>Made for the inbox, not the spam folder.</span></div>
         </div>
       </footer>
 

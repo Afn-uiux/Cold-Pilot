@@ -23,7 +23,7 @@ export default function Logo({ height = 20, className, linkClassName }: LogoProp
   return (
     <Image
       src="/coldpilot-logo.png"
-      alt="Coldpilot"
+      alt="ColdPilot"
       width={955}
       height={231}
       quality={100}

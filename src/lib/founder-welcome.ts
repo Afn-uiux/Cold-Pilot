@@ -1,5 +1,5 @@
 // Founder-email sweeps. Together they replace the old instant founder-welcome
-// with a short delay between the auth welcome ("Welcome to Coldpilot") and the
+// with a short delay between the auth welcome ("Welcome to ColdPilot") and the
 // personal note from Yemi, so the founder mail lands a few minutes later
 // instead of competing with the system welcome for the same attention spike.
 //

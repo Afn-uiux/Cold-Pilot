@@ -603,7 +603,7 @@ async function executeCampaignInner(campaignId: string) {
 
         let fupSubject = firstSubject
           ? firstSubject
-          : step.subject || "Re: Your conversation with Coldpilot";
+          : step.subject || "Re: Your conversation with ColdPilot";
         let fupBody = step.bodyHtml || "";
         const fupVars = leadVars(lead, accountSignature);
         fupSubject = personalizeText(fupSubject, fupVars, seedFromId(lead.id)).replace(/\{\{[^{}]+\}\}/g, "");
@@ -842,7 +842,7 @@ export async function checkForReplies(userId: string) {
 }
 
 // A sent message from the user's real email app/site that continues a
-// conversation Coldpilot already tracks. `recordSentMessages` is the shared
+// conversation ColdPilot already tracks. `recordSentMessages` is the shared
 // matching + insert core; `recordGmailSentActivity` and `recordImapSentActivity`
 // feed it candidates from the Gmail SENT label / IMAP Sent folder.
 type SentCandidate = {
@@ -860,7 +860,7 @@ type SentCandidate = {
 // records them as outgoing email logs. Matching is strict: it only fires when
 // the message's In-Reply-To/References reference a message-id we already have
 // on file for this account (i.e. an existing campaign conversation). Dedup
-// skips any message whose own message-id is already logged, so Coldpilot's own
+// skips any message whose own message-id is already logged, so ColdPilot's own
 // sends (campaign + Coldbox replies) are never double-recorded.
 async function recordSentMessages(account: any, candidates: SentCandidate[]): Promise<number> {
   if (candidates.length === 0) return 0;

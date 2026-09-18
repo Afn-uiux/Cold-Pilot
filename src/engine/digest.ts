@@ -77,7 +77,7 @@ function weeklySignoff(s: DigestStats): string {
 function monthlySignoff(s: DigestStats): string {
   let line: string;
   if (s.trackingEnabled) {
-    line = `Strong month — ${fmt(s.sent)} emails sent with a ${pct(s.openRate)}% open rate and ${pct(s.replyRate)}% reply rate. You're outperforming most Coldpilot users. Keep it up.`;
+    line = `Strong month — ${fmt(s.sent)} emails sent with a ${pct(s.openRate)}% open rate and ${pct(s.replyRate)}% reply rate. You're outperforming most ColdPilot users. Keep it up.`;
   } else {
     line = `Strong month — ${fmt(s.sent)} emails sent and ${fmt(s.replied)} replied (${pct(s.replyRate)}% reply rate). Enable open tracking on your campaigns to see open rates.`;
   }

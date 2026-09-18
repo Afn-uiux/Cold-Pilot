@@ -1,4 +1,4 @@
-# Coldpilot — Production Deployment & Security Checklist
+# ColdPilot — Production Deployment & Security Checklist
 
 Run through in order. Skip nothing before pointing real traffic at the server.
 

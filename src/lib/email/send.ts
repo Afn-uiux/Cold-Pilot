@@ -122,8 +122,8 @@ export async function sendTransactionalEmail({ to, template, data, fromFounder }
   const apiKey = fromFounder ? process.env.RESEND_FOUNDER_API_KEY : process.env.RESEND_API_KEY;
   const fromAddress =
     fromFounder && apiKey
-      ? "Yemi from Coldpilot <yemi@me.usecoldpilot.com>"
-      : "Coldpilot <hello@mail.usecoldpilot.com>";
+      ? "Yemi from ColdPilot <yemi@me.usecoldpilot.com>"
+      : "ColdPilot <hello@mail.usecoldpilot.com>";
 
   if (apiKey) {
     const { Resend } = await import("resend");

@@ -1,4 +1,4 @@
-# Coldpilot — Account signup, verification, and login
+# ColdPilot — Account signup, verification, and login
 
 ## Creating an account
 
@@ -13,7 +13,7 @@
 - **Every new account must verify their email** before they can use the
   product.
 - A verification email with a link is sent when you sign up.
-- **If you don't verify and try to log in, Coldpilot re-sends a fresh
+- **If you don't verify and try to log in, ColdPilot re-sends a fresh
   verification link automatically** on every login attempt — so you never get
   stuck without a link.
 - Google signups are also required to verify their email before the first
@@ -36,14 +36,14 @@
 ## Security
 
 - Passwords are hashed and never stored in plain text.
-- Coldpilot has anti-abuse protections (device/IP fingerprinting, mailbox
+- ColdPilot has anti-abuse protections (device/IP fingerprinting, mailbox
   fingerprinting) that may flag genuinely suspicious signup patterns — the
   verification gate is part of this.
 
 ## Why do I have to verify?
 
 - It confirms your email address actually belongs to you.
-- It protects Coldpilot's sending reputation (spam prevention) and stops fake
+- It protects ColdPilot's sending reputation (spam prevention) and stops fake
   accounts from claiming signal credits.
 - Once verified you keep full access; verification only needs to happen once.
 

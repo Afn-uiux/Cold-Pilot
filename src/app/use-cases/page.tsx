@@ -14,7 +14,7 @@ const items = [
   { href: "/use-cases/sales", title: "Sales teams", desc: "Distribute sends across every rep, stop on reply, and never trample an active conversation." },
   { href: "/use-cases/recruiters", title: "Recruiters", desc: "Candidate outreach from personal mailboxes, with deliverability that survives inbox rotation." },
   { href: "/use-cases/fundraising", title: "Fundraising", desc: "A focused sequence that lands in the inbox and stops the moment an investor replies." },
-  { href: "/auth/signup", title: "And more", desc: "Freelancers, growth, e-commerce, consultants, non-profits — Coldpilot works for any solo cold sender." },
+  { href: "/auth/signup", title: "And more", desc: "Freelancers, growth, e-commerce, consultants, non-profits — ColdPilot works for any solo cold sender." },
 ];
 
 export default function UseCasesPage() {

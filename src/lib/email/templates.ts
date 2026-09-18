@@ -9,8 +9,8 @@ export interface EmailTemplate {
 
 export const EMAIL_TEMPLATES: EmailTemplate[] = [
   // Auth & Account
-  { id: "welcome", subject: "Welcome to Coldpilot", category: "Auth & Account", filename: "auth-welcome.html" },
-  { id: "founder-welcome", subject: "Hey {{name}}, welcome to Coldpilot", category: "Auth & Account", filename: "founder-welcome.html" },
+  { id: "welcome", subject: "Welcome to ColdPilot", category: "Auth & Account", filename: "auth-welcome.html" },
+  { id: "founder-welcome", subject: "Hey {{name}}, welcome to ColdPilot", category: "Auth & Account", filename: "founder-welcome.html" },
   { id: "founder-trial-expiring", subject: "Hey {{name}}, your trial's wrapping up", category: "Auth & Account", filename: "founder-trial-expiring.html" },
   { id: "founder-trial-expired", subject: "Hey {{name}}, your trial ended", category: "Auth & Account", filename: "founder-trial-expired.html" },
   { id: "founder-billing-followup", subject: "Hey {{name}}, checking in on the plans", category: "Auth & Account", filename: "founder-billing-followup.html" },

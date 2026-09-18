@@ -38,7 +38,7 @@ export default function SiteFooter() {
             </ul></div>
           </div>
         </div>
-        <div className="sf-bottom"><span>&copy; 2026 Coldpilot.</span><span>Made for the inbox, not the spam folder.</span></div>
+        <div className="sf-bottom"><span>&copy; 2026 ColdPilot.</span><span>Made for the inbox, not the spam folder.</span></div>
       </div>
       <style>{`
         .sf{--cream:#FAFAF8;--ink:#0F0D14;--muted:#6B6578;--muted-2:#9B94A8;--border:rgba(15,13,20,0.08);padding:48px 0 32px;border-top:1px solid var(--border);font-family:'Geist',system-ui,sans-serif;background:var(--cream);color:var(--ink)}

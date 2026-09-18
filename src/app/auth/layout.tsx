@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: {
     default: "Log in",
-    template: "%s | Coldpilot",
+    template: "%s | ColdPilot",
   },
   robots: {
     index: false,

@@ -56,7 +56,7 @@ const PROGRESS = [
   { width: "30%", credits: "300 of 1,000 credits", sub: "+150 credits unlocked. Keep going." },
   { width: "50%", credits: "500 of 1,000 credits", sub: "+200 credits unlocked. Keep going." },
   { width: "70%", credits: "700 of 1,000 credits", sub: "Last step — 300 credits still to unlock." },
-  { width: "100%", credits: "1,000 of 1,000 credits", sub: "1,000 free Coldpilot credits unlocked" },
+  { width: "100%", credits: "1,000 of 1,000 credits", sub: "1,000 free ColdPilot credits unlocked" },
 ];
 
 // The animated-icons skill pattern: every glyph is a motion icon exposing an
@@ -360,7 +360,7 @@ export default function OnboardingWizard() {
             </div>
           )}
 
-          {/* Step 2 — Coldpilot AI intro */}
+          {/* Step 2 — ColdPilot AI intro */}
           {step === 2 && (
             <div className="text-center">
               <div className="mb-6 flex justify-center">
@@ -370,7 +370,7 @@ export default function OnboardingWizard() {
                   </IconTarget>
                 </div>
               </div>
-              <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-2">Hey there, I&apos;m Coldpilot AI</h2>
+              <h2 className="text-2xl md:text-3xl font-semibold text-ink mb-2">Hey there, I&apos;m ColdPilot AI</h2>
               <p className="text-muted mb-8 text-sm max-w-lg mx-auto">
                 I&apos;m your AI sales assistant for finding leads, crafting campaigns, and closing deals faster. Here is what I can help you with:
               </p>

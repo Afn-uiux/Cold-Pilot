@@ -126,7 +126,7 @@ export default function LegalLayout({
         </div>
 
         <div style={{ marginTop: 64, paddingTop: 24, borderTop: "1px solid #E8E5E0", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, fontSize: 13, color: "#8A9BB5" }}>
-          <span>&copy; 2026 Coldpilot, Inc.</span>
+          <span>&copy; 2026 ColdPilot, Inc.</span>
           <span>Made for the inbox, not the spam folder.</span>
         </div>
       </main>

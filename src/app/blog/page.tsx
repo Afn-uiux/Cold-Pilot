@@ -3,7 +3,7 @@ import MarketingPage from "@/components/marketing-page";
 
 export const metadata: Metadata = {
   title: "Blog",
-  description: "Notes on cold email, deliverability, and building Coldpilot in public.",
+  description: "Notes on cold email, deliverability, and building ColdPilot in public.",
   alternates: { canonical: "/blog" },
 };
 
@@ -19,7 +19,7 @@ export default function BlogPage() {
     <MarketingPage
       label="Blog"
       title={<>Notes from the inbox.</>}
-      desc="Cold email, deliverability, and building Coldpilot in public. The first posts are on the way — tell us what to write first."
+      desc="Cold email, deliverability, and building ColdPilot in public. The first posts are on the way — tell us what to write first."
     >
       <section className="mp-body">
         <div className="wrap mp-body-inner">

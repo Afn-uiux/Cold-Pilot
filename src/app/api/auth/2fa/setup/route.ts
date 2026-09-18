@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
   await prisma.user.update({ where: { id: session.user.id }, data: { totpSecret: secret } });
 
-  const keyuri = `otpauth://totp/Coldpilot:${session.user.email}?secret=${base32}&issuer=Coldpilot`;
+  const keyuri = `otpauth://totp/ColdPilot:${session.user.email}?secret=${base32}&issuer=ColdPilot`;
 
   return NextResponse.json({ secret: base32, keyuri });
 }

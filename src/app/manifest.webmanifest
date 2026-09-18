@@ -1,6 +1,6 @@
 {
-  "name": "Coldpilot — Cold email that lands in the inbox",
-  "short_name": "Coldpilot",
+  "name": "ColdPilot — Cold email that lands in the inbox",
+  "short_name": "ColdPilot",
   "description": "Send campaigns that land in inboxes, not spam folders. Warm-up, rotation, reply detection — all in one place.",
   "start_url": "/",
   "display": "standalone",

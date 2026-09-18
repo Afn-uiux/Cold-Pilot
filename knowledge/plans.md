@@ -1,4 +1,4 @@
-# Coldpilot — Plans, trial, pay-as-you-go, and plan expiry
+# ColdPilot — Plans, trial, pay-as-you-go, and plan expiry
 
 ## The plans
 
@@ -39,7 +39,7 @@
 - Paid plans are purchased as a **one-time charge that lasts 30 days**, then
   expire back to the Free tier (this is not an automatic recurring card
   charge today).
-- Coldpilot reminds you **3 days** and **1 day** before your plan ends.
+- ColdPilot reminds you **3 days** and **1 day** before your plan ends.
 - When it ends, your account drops back to Free, but **all your data and
   credits stay** — only plan-gated extras are revoked.
 - To keep a plan, buy it again before it expires.

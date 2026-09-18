@@ -1,6 +1,6 @@
-# Coldpilot — Inbox warmup
+# ColdPilot — Inbox warmup
 
-Inbox warmup is Coldpilot's way of building a connected mailbox's sender
+Inbox warmup is ColdPilot's way of building a connected mailbox's sender
 reputation gradually, so your real cold emails land in the main folder instead
 of spam.
 

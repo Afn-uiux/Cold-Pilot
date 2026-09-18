@@ -20,15 +20,15 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: {
-    default: "Coldpilot — AI cold email that lands in the inbox",
-    template: "%s | Coldpilot",
+    default: "ColdPilot — AI cold email that lands in the inbox",
+    template: "%s | ColdPilot",
   },
   description: "AI-powered cold email that lands in the inbox, not the spam folder. Warmup, verification, and sending handled automatically.",
   openGraph: {
-    title: "Coldpilot — AI cold email that lands in the inbox",
+    title: "ColdPilot — AI cold email that lands in the inbox",
     description: "AI-powered cold email that lands in the inbox, not the spam folder. Warmup, verification, and sending handled automatically.",
     url: siteUrl,
-    siteName: "Coldpilot",
+    siteName: "ColdPilot",
     type: "website",
     locale: "en_US",
     images: [
@@ -36,13 +36,13 @@ export const metadata: Metadata = {
         url: `${siteUrl}/opengraph-image.png`,
         width: 1200,
         height: 630,
-        alt: "Coldpilot — cold email that lands in the inbox",
+        alt: "ColdPilot — cold email that lands in the inbox",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Coldpilot — AI cold email that lands in the inbox",
+    title: "ColdPilot — AI cold email that lands in the inbox",
     description: "AI-powered cold email that lands in the inbox, not the spam folder. Warmup, verification, and sending handled automatically.",
     images: [`${siteUrl}/opengraph-image.png`],
   },
@@ -59,7 +59,7 @@ const orgSchema = {
     {
       "@type": "Organization",
       "@id": `${siteUrl}/#organization`,
-      name: "Coldpilot",
+      name: "ColdPilot",
       url: siteUrl,
       logo: `${siteUrl}/coldpilot-logo.png`,
       description:
@@ -69,7 +69,7 @@ const orgSchema = {
       "@type": "WebSite",
       "@id": `${siteUrl}/#website`,
       url: siteUrl,
-      name: "Coldpilot",
+      name: "ColdPilot",
       inLanguage: "en",
       publisher: { "@id": `${siteUrl}/#organization` },
     },
